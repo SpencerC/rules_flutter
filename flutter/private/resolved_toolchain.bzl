@@ -12,7 +12,6 @@ def _resolved_toolchain_impl(ctx):
     toolchain_info = ctx.toolchains["//flutter:toolchain_type"]
     return [
         toolchain_info,
-        toolchain_info.default,
         toolchain_info.flutterinfo,
         toolchain_info.template_variables,
     ]
