@@ -9,3 +9,8 @@ gazelle(
     name = "gazelle",
     gazelle = "gazelle_bin",
 )
+
+sh_binary(
+    name = "update_tool_versions",
+    srcs = ["update_tool_versions.sh"],
+)
