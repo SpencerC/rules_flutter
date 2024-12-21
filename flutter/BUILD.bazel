@@ -21,14 +21,6 @@ flutter_bin_runner(
     visibility = ["//visibility:public"],
 )
 
-# Runs the Flutter SDK's `flutter-dev` executable.
-flutter_bin_runner(
-    name = "flutter-dev",
-    tool = "flutter_dev",
-    toolchain = ":resolved_toolchain",
-    visibility = ["//visibility:public"],
-)
-
 # This is the target rule authors should put in their "toolchains"
 # attribute in order to get a runtime for the correct platform.
 # See https://docs.bazel.build/versions/main/toolchains.html#writing-rules-that-use-toolchains

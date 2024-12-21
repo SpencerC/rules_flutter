@@ -72,10 +72,8 @@ flutter_toolchain(
         "@bazel_tools//src/conditions:host_windows": "bin/dart.bat",
         "//conditions:default": "bin/dart",
     }),
-    flutter_dev_tool = select({
-        "@bazel_tools//src/conditions:host_windows": "bin/flutter-dev.bat",
-        "//conditions:default": "bin/flutter-dev",
-    }),
+    cache_folder = "bin/cache",
+    internal_folder = "bin/internal",
 )
 """
 
