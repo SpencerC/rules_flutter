@@ -17,3 +17,13 @@ bzl_library(
     srcs = ["resolved_toolchain.bzl"],
     visibility = ["//flutter:__subpackages__"],
 )
+
+bzl_library(
+    name = "context",
+    srcs = ["context.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+    deps = [
+        "//flutter:providers",
+        "@bazel_skylib//lib:shell",
+    ],
+)

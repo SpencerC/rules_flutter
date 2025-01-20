@@ -1,0 +1,18 @@
+@echo off
+setlocal enabledelayedexpansion
+
+set FLUTTER=%~dp0@@FLUTTER@@
+set ARGS=@@ARGS@@
+
+set OUTPUT_PATH=@@OUTPUT_PATH@@
+if not "%OUTPUT_PATH%"=="" (
+    for %%I in ("%OUTPUT_PATH%") do set OUTPUT_PATH=%%~fI
+)
+
+cd /d "@@APP_DIR@@"
+
+if not "%OUTPUT_PATH%"=="" (
+    %FLUTTER% --suppress-analytics %ARGS% >> "%OUTPUT_PATH%"
+) else (
+    %FLUTTER% --suppress-analytics %ARGS%
+)

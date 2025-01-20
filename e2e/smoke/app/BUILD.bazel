@@ -1,0 +1,9 @@
+load("@rules_flutter//flutter:defs.bzl", "flutter_app")
+
+flutter_app(
+    name = "app",
+    srcs = glob(["lib/**"]),
+    pubspec = "pubspec.yaml",
+    pubspec_lock = "pubspec.lock",
+    test_files = glob(["test/**"]),
+)

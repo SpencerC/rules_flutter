@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+FLUTTER=$(realpath @@FLUTTER@@)
+ARGS=@@ARGS@@
+export PATH=$(dirname @@FLUTTER_BIN@@):$PATH
+export PUB_CACHE=$(realpath @@PUB_CACHE@@)
+
+OUTPUT_PATH=@@OUTPUT_PATH@@
+if [[ -n "$OUTPUT_PATH" ]]; then
+   touch $OUTPUT_PATH
+   OUTPUT_PATH=$(realpath $OUTPUT_PATH)
+fi
+
+cd "@@APP_DIR@@"
+
+$FLUTTER config --no-analytics >> /dev/null
+
+if [[ -n "$OUTPUT_PATH" ]]; then
+  $FLUTTER "${ARGS[@]}" >> "$OUTPUT_PATH"
+else
+  $FLUTTER "${ARGS[@]}"
+fi
