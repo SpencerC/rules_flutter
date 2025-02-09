@@ -13,9 +13,14 @@ def _flutter_toolchain_impl(ctx):
     flutter = FlutterToolchainInfo(
         flutter = ctx.executable.flutter_tool,
         dart = ctx.executable.dart_tool,
+        deps = depset(
+            [
+                ctx.executable.flutter_tool,
+                ctx.executable.dart_tool,
+                ctx.files.runner_template[0],
+            ] + ctx.files.bin + ctx.files.packages,
+        ),
         internal = struct(
-            bin = ctx.files.bin,
-            packages = ctx.files.packages,
             runner_template = ctx.files.runner_template[0],
         ),
     )

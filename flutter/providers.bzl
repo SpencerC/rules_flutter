@@ -5,6 +5,7 @@ FlutterToolchainInfo = provider(
     fields = {
         "flutter": "The Flutter tool executable.",
         "dart": "The Dart tool executable.",
+        "deps": "The dependencies of the toolchain.",
         "internal": "Internal information.",
     },
 )
@@ -15,5 +16,7 @@ FlutterContextInfo = provider(
         "pub_cache": "The pub cache directory.",
         "pubspec": "The pubspec.yaml file.",
         "pubspec_lock": "The pubspec.lock file.",
+        "deps": "The dependencies of the context.",
+        "pub_cache_deps": "The dependencies of the pub cache.",
     },
 )
