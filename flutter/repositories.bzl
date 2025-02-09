@@ -67,6 +67,11 @@ filegroup(
     srcs = glob(["bin/**"]),
 )
 
+filegroup(
+    name = "packages",
+    srcs = glob(["packages/**"]),
+)
+
 flutter_toolchain(
     name = "flutter_toolchain",
     flutter_tool = select({
@@ -82,6 +87,7 @@ flutter_toolchain(
         "//conditions:default": "@rules_flutter//flutter:runner.bash.template",
     }),
     bin = ":bin",
+    packages = ":packages",
 )
 """
 

@@ -13,8 +13,9 @@ def _flutter_toolchain_impl(ctx):
     flutter = FlutterToolchainInfo(
         flutter = ctx.executable.flutter_tool,
         dart = ctx.executable.dart_tool,
-        bin = ctx.files.bin,
         internal = struct(
+            bin = ctx.files.bin,
+            packages = ctx.files.packages,
             runner_template = ctx.files.runner_template[0],
         ),
     )
@@ -49,6 +50,10 @@ flutter_toolchain = rule(
         ),
         "bin": attr.label(
             doc = "The files in the bin directory.",
+            mandatory = True,
+        ),
+        "packages": attr.label(
+            doc = "The files in the packages directory.",
             mandatory = True,
         ),
         "runner_template": attr.label(

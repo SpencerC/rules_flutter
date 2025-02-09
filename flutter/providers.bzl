@@ -5,7 +5,6 @@ FlutterToolchainInfo = provider(
     fields = {
         "flutter": "The Flutter tool executable.",
         "dart": "The Dart tool executable.",
-        "bin": "The files in the bin directory.",
         "internal": "Internal information.",
     },
 )

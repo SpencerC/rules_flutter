@@ -70,7 +70,7 @@ def _make_flutter_runner(ctx, toolchain, flutter_ctx, args, executable, inputs =
     )
     files = depset(
         [flutter, flutter_ctx.pubspec, flutter_ctx.pubspec_lock] +
-        toolchain.flutter.bin + inputs +
+        toolchain.flutter.internal.bin + toolchain.flutter.internal.packages + inputs +
         ([flutter_ctx.pub_cache] if include_pub_cache else []),
     )
     return runner, files
