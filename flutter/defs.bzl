@@ -14,7 +14,7 @@ def _flutter_test_impl(ctx):
     )
     return DefaultInfo(
         files = files,
-        runfiles = ctx.runfiles(files = files.to_list()),
+        runfiles = ctx.runfiles(files = files.to_list() + ctx.files.data),
         executable = runner,
     )
 
@@ -27,6 +27,10 @@ flutter_test = rule(
             doc = "The context to run the test command.",
             providers = [FlutterContextInfo],
             mandatory = True,
+        ),
+        "data": attr.label_list(
+            allow_files = True,
+            doc = "Additional files to include in the test run.",
         ),
     },
     test = True,
