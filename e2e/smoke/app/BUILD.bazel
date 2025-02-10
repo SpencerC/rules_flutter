@@ -1,9 +1,27 @@
-load("@rules_flutter//flutter:defs.bzl", "flutter_app")
+load(
+    "@rules_flutter//flutter:defs.bzl",
+    "flutter_build",
+    "flutter_context",
+    "flutter_test",
+)
 
-flutter_app(
-    name = "app",
-    srcs = glob(["lib/**"]),
+flutter_context(
+    name = "app_context",
     pubspec = "pubspec.yaml",
     pubspec_lock = "pubspec.lock",
-    test_files = glob(["test/**"]),
+)
+
+flutter_test(
+    name = "app_test",
+    srcs = glob(["lib/**"]) + glob(["test/**"]),
+    context = ":app_context",
+)
+
+flutter_build(
+    name = "ios",
+    cmd = [
+        "ios",
+        "--config-only",
+    ],
+    context = ":app_context",
 )

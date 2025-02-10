@@ -1,20 +1,9 @@
 "Public API re-exports"
 
 load("//flutter:providers.bzl", "FlutterContextInfo")
-load("//flutter/private:context.bzl", "flutter_context", "make_flutter_runner")
+load("//flutter/private:context.bzl", "make_flutter_runner", _flutter_context = "flutter_context")
 
-def flutter_app(name, pubspec, pubspec_lock, srcs, test_files = []):
-    """Flutter app target."""
-    flutter_context(
-        name = name + "_flutter_context",
-        pubspec = pubspec,
-        pubspec_lock = pubspec_lock,
-    )
-    flutter_test(
-        name = name + "_test",
-        srcs = srcs + test_files,
-        context = ":" + name + "_flutter_context",
-    )
+flutter_context = _flutter_context
 
 def _flutter_test_impl(ctx):
     runner, files = make_flutter_runner(
@@ -41,5 +30,59 @@ flutter_test = rule(
         ),
     },
     test = True,
+    toolchains = ["@rules_flutter//flutter:toolchain_type"],
+)
+
+def _flutter_packages_run_impl(ctx):
+    runner, files = make_flutter_runner(
+        ctx = ctx,
+        args = ["packages", "run"] + ctx.attr.cmd,
+        executable = True,
+        run_in_workspace = True,
+    )
+    return DefaultInfo(
+        files = files,
+        runfiles = ctx.runfiles(files = files.to_list()),
+        executable = runner,
+    )
+
+flutter_packages_run = rule(
+    implementation = _flutter_packages_run_impl,
+    attrs = {
+        "cmd": attr.string_list(mandatory = True),
+        "context": attr.label(
+            doc = "The context to run the command.",
+            providers = [FlutterContextInfo],
+            mandatory = True,
+        ),
+    },
+    executable = True,
+    toolchains = ["@rules_flutter//flutter:toolchain_type"],
+)
+
+def _flutter_build_impl(ctx):
+    runner, files = make_flutter_runner(
+        ctx = ctx,
+        args = ["build"] + ctx.attr.cmd,
+        executable = True,
+        run_in_workspace = True,
+    )
+    return DefaultInfo(
+        files = files,
+        runfiles = ctx.runfiles(files = files.to_list()),
+        executable = runner,
+    )
+
+flutter_build = rule(
+    implementation = _flutter_build_impl,
+    attrs = {
+        "cmd": attr.string_list(mandatory = True),
+        "context": attr.label(
+            doc = "The context to run the build command.",
+            providers = [FlutterContextInfo],
+            mandatory = True,
+        ),
+    },
+    executable = True,
     toolchains = ["@rules_flutter//flutter:toolchain_type"],
 )

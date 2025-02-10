@@ -4,6 +4,7 @@ set -euo pipefail
 
 FLUTTER=$(realpath @@FLUTTER@@)
 ARGS=@@ARGS@@
+RUN_IN_WORKSPACE=@@RUN_IN_WORKSPACE@@
 export PATH=$(dirname @@FLUTTER_BIN@@):$PATH
 export PUB_CACHE=$(realpath @@PUB_CACHE@@)
 
@@ -13,7 +14,12 @@ if [[ -n "$OUTPUT_PATH" ]]; then
    OUTPUT_PATH=$(realpath $OUTPUT_PATH)
 fi
 
-cd "@@APP_DIR@@"
+# if run in workspace is 1, then cd to the workspace directory
+if [[ $RUN_IN_WORKSPACE -eq 1 ]]; then
+  cd "$BUILD_WORKSPACE_DIRECTORY/@@APP_DIR@@"
+else
+  cd "@@APP_DIR@@"
+fi
 
 $FLUTTER config --no-analytics >> /dev/null
 
