@@ -2,11 +2,21 @@
 
 set -euo pipefail
 
-FLUTTER=$(realpath @@FLUTTER@@)
+EXTRA_ARGS=("${@:-}")
+echo "$@"
+
+TOOL=$(realpath @@TOOL@@)
 ARGS=@@ARGS@@
 RUN_IN_WORKSPACE=@@RUN_IN_WORKSPACE@@
 export PATH=$(dirname @@FLUTTER_BIN@@):$PATH
-export PUB_CACHE=$(realpath @@PUB_CACHE@@)
+
+PUB_CACHE=@@PUB_CACHE@@
+echo "PUB_CACHE: @@PUB_CACHE@@"
+if [[ -n "$PUB_CACHE" ]]; then
+  export PUB_CACHE=$(realpath $PUB_CACHE)
+else
+  export PUB_CACHE="$HOME/.pub-cache"
+fi
 
 OUTPUT_PATH=@@OUTPUT_PATH@@
 if [[ -n "$OUTPUT_PATH" ]]; then
@@ -21,10 +31,9 @@ else
   cd "@@APP_DIR@@"
 fi
 
-$FLUTTER config --no-analytics >> /dev/null
-
+echo "$TOOL" "${ARGS[@]:-}" "${EXTRA_ARGS[@]}"
 if [[ -n "$OUTPUT_PATH" ]]; then
-  $FLUTTER "${ARGS[@]}" >> "$OUTPUT_PATH"
+  $TOOL ${ARGS[@]:-} ${EXTRA_ARGS[@]} >> "$OUTPUT_PATH"
 else
-  $FLUTTER "${ARGS[@]}"
+  $TOOL ${ARGS[@]:-} ${EXTRA_ARGS[@]}
 fi

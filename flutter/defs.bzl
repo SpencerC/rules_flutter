@@ -1,12 +1,12 @@
 "Public API re-exports"
 
 load("//flutter:providers.bzl", "FlutterPackageInfo")
-load("//flutter/private:package.bzl", "make_flutter_runner", _flutter_package = "flutter_package")
+load("//flutter/private:package.bzl", "make_tool_runner", _flutter_package = "flutter_package")
 
 flutter_package = _flutter_package
 
 def _flutter_test_impl(ctx):
-    runner, files = make_flutter_runner(
+    runner, files = make_tool_runner(
         ctx = ctx,
         args = ["test", "--reporter", "expanded"],
         inputs = ctx.files.srcs + ctx.files.deps,
@@ -38,7 +38,7 @@ flutter_test = rule(
 )
 
 def _flutter_packages_run_impl(ctx):
-    runner, files = make_flutter_runner(
+    runner, files = make_tool_runner(
         ctx = ctx,
         args = ["packages", "run"] + ctx.attr.cmd,
         executable = True,
@@ -65,7 +65,7 @@ flutter_packages_run = rule(
 )
 
 def _flutter_build_impl(ctx):
-    runner, files = make_flutter_runner(
+    runner, files = make_tool_runner(
         ctx = ctx,
         args = ["build"] + ctx.attr.cmd,
         executable = True,
