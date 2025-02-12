@@ -1,9 +1,9 @@
 "Public API re-exports"
 
-load("//flutter:providers.bzl", "FlutterContextInfo")
-load("//flutter/private:context.bzl", "make_flutter_runner", _flutter_context = "flutter_context")
+load("//flutter:providers.bzl", "FlutterPackageInfo")
+load("//flutter/private:package.bzl", "make_flutter_runner", _flutter_package = "flutter_package")
 
-flutter_context = _flutter_context
+flutter_package = _flutter_package
 
 def _flutter_test_impl(ctx):
     runner, files = make_flutter_runner(
@@ -23,9 +23,9 @@ flutter_test = rule(
     attrs = {
         "srcs": attr.label_list(allow_files = True),
         "deps": attr.label_list(),
-        "context": attr.label(
-            doc = "The context to run the test command.",
-            providers = [FlutterContextInfo],
+        "package": attr.label(
+            doc = "The package with which to run the test command.",
+            providers = [FlutterPackageInfo],
             mandatory = True,
         ),
         "data": attr.label_list(
@@ -54,9 +54,9 @@ flutter_packages_run = rule(
     implementation = _flutter_packages_run_impl,
     attrs = {
         "cmd": attr.string_list(mandatory = True),
-        "context": attr.label(
-            doc = "The context to run the command.",
-            providers = [FlutterContextInfo],
+        "package": attr.label(
+            doc = "The package with which to run the command.",
+            providers = [FlutterPackageInfo],
             mandatory = True,
         ),
     },
@@ -81,9 +81,9 @@ flutter_build = rule(
     implementation = _flutter_build_impl,
     attrs = {
         "cmd": attr.string_list(mandatory = True),
-        "context": attr.label(
-            doc = "The context to run the build command.",
-            providers = [FlutterContextInfo],
+        "package": attr.label(
+            doc = "The package with which to run the build command.",
+            providers = [FlutterPackageInfo],
             mandatory = True,
         ),
     },

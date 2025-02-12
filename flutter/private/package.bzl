@@ -3,22 +3,34 @@ Runs an executable in the Flutter SDK.
 """
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
-load("//flutter:providers.bzl", "FlutterContextInfo")
+load("//flutter:providers.bzl", "FlutterPackageInfo")
 
-def _flutter_context(ctx):
+def flutter_package(name):
+    _flutter_package(
+        name = name,
+        pubspec = "pubspec.yaml",
+        pubspec_lock = "pubspec.lock",
+        lib = native.glob(["lib/**"]),
+        bin = native.glob(["bin/**"], allow_empty = True),
+        visibility = ["//visibility:public"],
+    )
+
+def _flutter_package_impl(ctx):
     pub_cache = ctx.actions.declare_directory("pub_cache")
-    deps = depset(
-        [ctx.files.pubspec[0], ctx.files.pubspec_lock[0]],
+    pre_pub_cache_deps = depset(
+        ctx.files.pubspec + ctx.files.pubspec_lock + ctx.files.lib + ctx.files.bin,
         transitive = [ctx.toolchains["@rules_flutter//flutter:toolchain_type"].flutter.deps],
     )
-    info = FlutterContextInfo(
+    info = FlutterPackageInfo(
         pub_cache = pub_cache,
         pubspec = ctx.files.pubspec[0],
         pubspec_lock = ctx.files.pubspec_lock[0],
-        deps = deps,
-        pub_cache_deps = depset(
+        lib = ctx.files.lib,
+        bin = ctx.files.bin,
+        pre_pub_cache_deps = pre_pub_cache_deps,
+        deps = depset(
             [pub_cache],
-            transitive = [deps],
+            transitive = [pre_pub_cache_deps],
         ),
     )
 
@@ -35,12 +47,13 @@ def _flutter_context(ctx):
         outputs = [pub_cache],
         executable = runner,
         inputs = files,
+        mnemonic = "FlutterPubGet",
     )
 
     return info
 
-flutter_context = rule(
-    implementation = _flutter_context,
+_flutter_package = rule(
+    implementation = _flutter_package_impl,
     attrs = {
         "pubspec": attr.label(
             doc = "The pubspec.yaml file .",
@@ -50,7 +63,13 @@ flutter_context = rule(
         "pubspec_lock": attr.label(
             doc = "The pubspec.lock file.",
             allow_single_file = True,
+        ),
+        "lib": attr.label_list(
+            allow_files = True,
             mandatory = True,
+        ),
+        "bin": attr.label_list(
+            allow_files = True,
         ),
     },
     toolchains = ["@rules_flutter//flutter:toolchain_type"],
@@ -80,14 +99,14 @@ def _make_flutter_runner(ctx, toolchain, flutter_ctx, args, executable, run_in_w
     )
     files = depset(
         inputs,
-        transitive = [toolchain.flutter.deps, flutter_ctx.pub_cache_deps if include_pub_cache else flutter_ctx.deps],
+        transitive = [toolchain.flutter.deps, flutter_ctx.deps if include_pub_cache else flutter_ctx.pre_pub_cache_deps],
     )
     return runner, files
 
 def make_flutter_runner(ctx, args, executable, run_in_workspace = False, inputs = [], output = None):
     return _make_flutter_runner(
         ctx = ctx,
-        flutter_ctx = ctx.attr.context[FlutterContextInfo],
+        flutter_ctx = ctx.attr.package[FlutterPackageInfo],
         toolchain = ctx.toolchains["@rules_flutter//flutter:toolchain_type"],
         executable = executable,
         run_in_workspace = run_in_workspace,
