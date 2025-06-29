@@ -39,6 +39,6 @@ cat <<EOF > flutter/private/versions.bzl
 
 TODO: generate this file from GitHub API"""
 
-# To update, run bazel run update_flutter_versions
+# To update, run `bazel build update_tool_versions`, then `./bazel-bin/update_tool_versions`
 TOOL_VERSIONS = $RESULT
 EOF
