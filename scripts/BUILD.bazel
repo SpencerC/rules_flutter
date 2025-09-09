@@ -1,0 +1,5 @@
+"""Scripts for maintaining rules_flutter"""
+
+exports_files([
+    "update_flutter_versions.sh",
+])

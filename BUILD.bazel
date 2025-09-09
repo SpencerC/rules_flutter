@@ -9,3 +9,10 @@ gazelle(
     name = "gazelle",
     gazelle = "gazelle_bin",
 )
+
+# Convenience alias for updating Flutter SDK versions
+alias(
+    name = "update_flutter_versions",
+    actual = "//tools:update_flutter_versions",
+    visibility = ["//visibility:public"],
+)

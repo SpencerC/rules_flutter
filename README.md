@@ -13,7 +13,7 @@ Build Flutter applications with Bazel! This repository provides Bazel rules for 
 
 ## Installation
 
-**⚠️ Development Status**: This project is currently in active development. The Flutter build rules (`flutter_app`, `flutter_test`) are placeholder implementations that validate toolchain resolution but do not yet perform actual Flutter builds. Flutter SDK downloads require valid integrity hashes which are not yet configured. For development/testing purposes, integrity checking is disabled.
+**⚠️ Development Status**: This project is currently in active development. The Flutter build rules (`flutter_app`, `flutter_test`) are placeholder implementations that validate toolchain resolution but do not yet perform actual Flutter builds. Flutter SDK downloads now use real integrity hashes from Flutter's official releases.
 
 From the release you wish to use:
 <https://github.com/spencerc/rules_flutter/releases>
@@ -194,6 +194,20 @@ bazel test //flutter/tests:versions_test
 bazel test //e2e/smoke:smoke_test
 ```
 
+### Updating Flutter SDK Versions
+
+To update the supported Flutter SDK versions and their integrity hashes:
+
+```bash
+# Update Flutter SDK versions from official releases
+bazel run //tools:update_flutter_versions
+
+# Or run the script directly
+./scripts/update_flutter_versions.sh
+```
+
+This script automatically fetches the latest release information from Flutter's official APIs and updates the integrity hashes in `flutter/private/versions.bzl`. The script supports Flutter versions 3.24.0, 3.27.0, and 3.29.0 across macOS, Linux, and Windows platforms.
+
 ### Prerequisites
 
 - Bazel 6.0+
@@ -220,7 +234,7 @@ This section outlines the planned development phases and features for rules_flut
 - ✅ **Complete**: Flutter SDK version management and download URLs
 - ✅ **Complete**: Placeholder build rules (`flutter_app`, `flutter_test`, `dart_library`)
 - ✅ **Complete**: Comprehensive testing framework
-- 🔄 **In Progress**: Real Flutter SDK integrity hashes
+- ✅ **Complete**: Real Flutter SDK integrity hashes
 
 ### 🎯 Phase 2: Core Functionality (Next)
 
@@ -250,11 +264,10 @@ This section outlines the planned development phases and features for rules_flut
 
 We welcome contributions in these areas (in order of priority):
 
-1. **Flutter SDK integrity hashes** - Help us get real SHA-384 hashes for releases
-2. **Real build implementations** - Replace placeholder rules with actual Flutter commands
-3. **Pub dependency resolution** - Integrate with Flutter's package ecosystem
-4. **Platform-specific builds** - Android SDK and iOS build chain integration
-5. **Documentation and examples** - More comprehensive usage examples
+1. **Real build implementations** - Replace placeholder rules with actual Flutter commands
+2. **Pub dependency resolution** - Integrate with Flutter's package ecosystem
+3. **Platform-specific builds** - Android SDK and iOS build chain integration
+4. **Documentation and examples** - More comprehensive usage examples
 
 ### 📊 Success Metrics
 

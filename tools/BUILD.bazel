@@ -1,0 +1,17 @@
+"""Development tools for rules_flutter"""
+
+sh_binary(
+    name = "update_flutter_versions",
+    srcs = ["//scripts:update_flutter_versions.sh"],
+    data = [
+        "//flutter/private:versions.bzl",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# Alias for convenience
+alias(
+    name = "update_versions",
+    actual = ":update_flutter_versions",
+    visibility = ["//visibility:public"],
+)
