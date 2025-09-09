@@ -210,6 +210,59 @@ pre-commit install
 bazel run @buildifier_prebuilt//:buildifier
 ```
 
+## Development Roadmap
+
+This section outlines the planned development phases and features for rules_flutter:
+
+### 🚧 Phase 1: Foundation (Current)
+
+- ✅ **Complete**: Basic project structure and toolchain setup
+- ✅ **Complete**: Flutter SDK version management and download URLs
+- ✅ **Complete**: Placeholder build rules (`flutter_app`, `flutter_test`, `dart_library`)
+- ✅ **Complete**: Comprehensive testing framework
+- 🔄 **In Progress**: Real Flutter SDK integrity hashes
+
+### 🎯 Phase 2: Core Functionality (Next)
+
+- 🔲 **Implement real Flutter builds**: Replace placeholder implementations
+- 🔲 **Source directory handling**: Proper Flutter project structure support
+- 🔲 **Pub dependency management**: Integration with pub.dev packages
+- 🔲 **Hot reload support**: Development workflow improvements
+- 🔲 **Build caching**: Leverage Bazel's incremental builds
+
+### 🚀 Phase 3: Platform Support (Future)
+
+- 🔲 **Android builds**: Full APK/AAB generation with SDK integration
+- 🔲 **iOS builds**: IPA generation with Xcode integration
+- 🔲 **Desktop platforms**: Native Windows, macOS, Linux builds
+- 🔲 **Web optimization**: Advanced web build configurations
+- 🔲 **CI/CD templates**: GitHub Actions and other CI integrations
+
+### 🌟 Phase 4: Advanced Features (Long-term)
+
+- 🔲 **Code generation**: Build-time code gen (JSON serialization, etc.)
+- 🔲 **Asset management**: Images, fonts, and localization
+- 🔲 **Testing enhancements**: Widget testing, integration testing
+- 🔲 **Performance profiling**: Build-time Flutter performance analysis
+- 🔲 **Plugin ecosystem**: Support for Flutter plugins and native modules
+
+### 💡 Contributing Priorities
+
+We welcome contributions in these areas (in order of priority):
+
+1. **Flutter SDK integrity hashes** - Help us get real SHA-384 hashes for releases
+2. **Real build implementations** - Replace placeholder rules with actual Flutter commands
+3. **Pub dependency resolution** - Integrate with Flutter's package ecosystem
+4. **Platform-specific builds** - Android SDK and iOS build chain integration
+5. **Documentation and examples** - More comprehensive usage examples
+
+### 📊 Success Metrics
+
+- ✅ **Basic functionality**: All tests passing
+- 🎯 **Alpha release**: Real Flutter web builds working
+- 🎯 **Beta release**: Android/iOS builds functional
+- 🎯 **1.0 release**: Production-ready with full platform support
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
