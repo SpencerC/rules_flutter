@@ -3,15 +3,19 @@ Add a basic smoke-test target below.
 """
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-# load("@com_myorg_rules_mylang//mylang:defs.bzl", "...")
+load("@com_github_spencerc_rules_flutter//flutter:defs.bzl", "dart_library")
 
-# Replace with a usage of your rule/macro
-filegroup(name = "empty")
+# Test basic rule functionality
+dart_library(
+    name = "test_dart_lib",
+    srcs = ["test_lib.dart"],
+)
 
 build_test(
     name = "smoke_test",
     targets = [
-        # targets you add above
-        ":empty",
+        ":test_dart_lib",
+        # Test that we can load the main rules
+        "@com_github_spencerc_rules_flutter//flutter:resolved_toolchain",
     ],
 )

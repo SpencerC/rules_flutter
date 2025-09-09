@@ -1,0 +1,25 @@
+load(":versions_test.bzl", "versions_test_suite")
+
+# Unit test for versions
+versions_test_suite(name = "versions_test")
+
+# Integration tests for Flutter rules
+test_suite(
+    name = "integration_tests",
+    tests = [
+        "//flutter/tests/flutter_app:hello_world_build_test",
+        "//flutter/tests/flutter_app:hello_world_tests",
+        "//flutter/tests/multiplatform:multiplatform_build_test",
+        "//flutter/tests/toolchain:dart_library_test",
+        "//flutter/tests/toolchain:toolchain_resolution_test",
+    ],
+)
+
+# All tests
+test_suite(
+    name = "all_tests",
+    tests = [
+        ":integration_tests",
+        ":versions_test",
+    ],
+)
