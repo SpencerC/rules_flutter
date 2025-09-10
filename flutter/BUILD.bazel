@@ -36,7 +36,10 @@ bzl_library(
     name = "defs",
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
-    deps = [":toolchain"],
+    deps = [
+        ":toolchain",
+        "//flutter/private:flutter_actions",
+    ],
 )
 
 bzl_library(

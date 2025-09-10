@@ -21,3 +21,9 @@ bzl_library(
     srcs = ["resolved_toolchain.bzl"],
     visibility = ["//flutter:__subpackages__"],
 )
+
+bzl_library(
+    name = "flutter_actions",
+    srcs = ["flutter_actions.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)

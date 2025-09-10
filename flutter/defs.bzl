@@ -1,15 +1,18 @@
 """Public API for Flutter build rules"""
 
+load(
+    "//flutter/private:flutter_actions.bzl",
+    "create_flutter_working_dir",
+    "flutter_build_action",
+    "flutter_pub_get_action",
+    "flutter_test_action",
+)
+
 def _flutter_app_impl(ctx):
     """Implementation for flutter_app rule"""
 
     # Get the Flutter toolchain
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    flutter_bin = flutter_toolchain.flutterinfo.target_tool_path
-
-    # For now, create an improved placeholder that validates the toolchain works
-    # and creates a structured output that demonstrates the implementation is working
-    output_file = ctx.actions.declare_file(ctx.label.name + "_built.json")
 
     # Find pubspec.yaml in sources
     pubspec_file = None
@@ -27,24 +30,40 @@ def _flutter_app_impl(ctx):
     if not pubspec_file:
         fail("flutter_app requires a pubspec.yaml file in srcs")
 
-    # Create build result information
-    build_info = {
-        "app_name": ctx.label.name,
-        "target": ctx.attr.target,
-        "flutter_binary": flutter_bin,
-        "pubspec_found": pubspec_file.path if pubspec_file else "None",
-        "dart_files": [f.path for f in dart_files],
-        "other_files": [f.path for f in other_files],
-        "status": "SUCCESS - Real Flutter toolchain resolved, project structure validated",
-        "note": "This is an enhanced placeholder that validates real Flutter builds are possible",
-    }
-
-    ctx.actions.write(
-        output = output_file,
-        content = str(build_info).replace("'", '"'),
+    # Create Flutter working directory
+    working_dir, _ = create_flutter_working_dir(
+        ctx,
+        flutter_toolchain,
+        pubspec_file,
+        dart_files,
+        other_files,
     )
 
-    return [DefaultInfo(files = depset([output_file]))]
+    # Execute flutter pub get
+    pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir = flutter_pub_get_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        pubspec_file,
+    )
+
+    # Execute flutter build
+    build_output, build_artifacts = flutter_build_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        ctx.attr.target,
+        pub_cache_dir,
+        dart_tool_dir,
+    )
+
+    # Return all outputs
+    output_files = [pub_get_output, build_output, pubspec_lock]
+
+    return [DefaultInfo(
+        files = depset(output_files + [build_artifacts]),
+        runfiles = ctx.runfiles(files = output_files),
+    )]
 
 flutter_app = rule(
     implementation = _flutter_app_impl,
@@ -68,65 +87,107 @@ def _flutter_test_impl(ctx):
 
     # Get the Flutter toolchain
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    flutter_bin = flutter_toolchain.flutterinfo.target_tool_path
-
-    # Create enhanced test script that validates the toolchain and project structure
-    test_script = ctx.actions.declare_file(ctx.label.name + "_test.sh")
 
     # Find pubspec.yaml and test files in sources
     pubspec_file = None
     dart_files = []
-    test_files = []
+    other_files = []
 
     for src in ctx.files.srcs:
         if src.basename == "pubspec.yaml":
             pubspec_file = src
         elif src.extension == "dart":
-            if "/test/" in src.path or src.path.endswith("_test.dart"):
-                test_files.append(src)
-            else:
-                dart_files.append(src)
+            dart_files.append(src)
+        else:
+            other_files.append(src)
 
     if not pubspec_file:
         fail("flutter_test requires a pubspec.yaml file in srcs")
 
-    test_content = """#!/bin/bash
+    # Create Flutter working directory
+    working_dir, _ = create_flutter_working_dir(
+        ctx,
+        flutter_toolchain,
+        pubspec_file,
+        dart_files,
+        other_files,
+    )
+
+    # Execute flutter pub get
+    pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir = flutter_pub_get_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        pubspec_file,
+    )
+
+    # Execute flutter test
+    test_output = flutter_test_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        ctx.attr.test_files,
+        pub_cache_dir,
+        dart_tool_dir,
+    )
+
+    # Create test runner script that exits with the appropriate code
+    test_runner = ctx.actions.declare_file(ctx.label.name + "_test_runner.sh")
+
+    test_runner_content = """#!/bin/bash
 set -euo pipefail
 
-echo "=== Flutter Test Execution ==="
+# Use runfiles-relative path for the test log
+TEST_LOG="{test_log}"
+
+# Print test results
+echo "=== Flutter Test Results ==="
 echo "Test name: {test_name}"
-echo "Flutter binary: {flutter_bin}"
-echo "Pubspec file: {pubspec_file}"
-echo "Dart source files: {dart_count}"
-echo "Test files: {test_count}"
-echo "Test file patterns: {test_patterns}"
+echo "Test files: {test_patterns}"
 echo ""
-echo "✓ Flutter toolchain resolved successfully"
-echo "✓ Project structure validated"
-echo "✓ Test files found and ready for execution"
+
+echo "Looking for test log at: $TEST_LOG"
+echo "Current directory: $(pwd)"
+echo "Available files in current directory:"
+ls -la . || true
 echo ""
-echo "Status: SUCCESS - Real Flutter test execution is ready"
-echo "Note: Enhanced placeholder demonstrating Flutter test infrastructure"
-exit 0
+
+if [ -f "$TEST_LOG" ]; then
+    echo "Test log found, displaying contents:"
+    cat "$TEST_LOG"
+    # Check if test passed by looking at the log content
+    if grep -q "✓.*completed successfully" "$TEST_LOG" && ! grep -q "✗.*failed" "$TEST_LOG"; then
+        echo ""
+        echo "All tests completed successfully!"
+        exit 0
+    else
+        echo ""
+        echo "Some tests failed!"
+        exit 1
+    fi
+else
+    echo "Test log not found at: $TEST_LOG"
+    echo "Current working directory: $(pwd)"
+    echo "Attempting to find test log files:"
+    find . -name "*test*log*" 2>/dev/null || echo "No test log files found"
+    exit 1
+fi
 """.format(
+        test_log = test_output.short_path,
         test_name = ctx.label.name,
-        flutter_bin = flutter_bin,
-        pubspec_file = pubspec_file.path if pubspec_file else "None",
-        dart_count = len(dart_files),
-        test_count = len(test_files),
-        test_patterns = " ".join(ctx.attr.test_files) if ctx.attr.test_files else "all tests",
+        test_patterns = ", ".join(ctx.attr.test_files) if ctx.attr.test_files else "all tests",
     )
 
     ctx.actions.write(
-        output = test_script,
-        content = test_content,
+        output = test_runner,
+        content = test_runner_content,
         is_executable = True,
     )
 
     return [DefaultInfo(
-        executable = test_script,
-        files = depset([test_script]),
-        runfiles = ctx.runfiles(files = ctx.files.srcs),
+        executable = test_runner,
+        files = depset([test_runner, test_output, pub_get_output, pubspec_lock]),
+        runfiles = ctx.runfiles(files = [test_output, pub_get_output, pubspec_lock]),
     )]
 
 flutter_test = rule(

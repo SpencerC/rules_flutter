@@ -8,6 +8,7 @@ FlutterInfo = provider(
         "tool_files": """Files required in runfiles to make the tool executable available.
 
 May be empty if the target_tool_path points to a locally installed tool binary.""",
+        "sdk_files": "All Flutter SDK files needed for the tool to work properly.",
     },
 )
 
@@ -40,9 +41,16 @@ def _flutter_toolchain_impl(ctx):
         files = depset(tool_files),
         runfiles = ctx.runfiles(files = tool_files),
     )
+
+    # Get SDK files if provided
+    sdk_files = []
+    if ctx.attr.sdk_files:
+        sdk_files = ctx.attr.sdk_files.files.to_list()
+
     flutterinfo = FlutterInfo(
         target_tool_path = target_tool_path,
         tool_files = tool_files,
+        sdk_files = sdk_files,
     )
 
     # Export all the providers inside our ToolchainInfo
@@ -69,6 +77,11 @@ flutter_toolchain = rule(
         "target_tool_path": attr.string(
             doc = "Path to an existing executable for the target platform.",
             mandatory = False,
+        ),
+        "sdk_files": attr.label(
+            doc = "Flutter SDK files needed for the tool to work properly.",
+            mandatory = False,
+            allow_files = True,
         ),
     },
     doc = """Defines a flutter compiler/runtime toolchain.

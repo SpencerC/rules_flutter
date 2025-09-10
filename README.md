@@ -239,11 +239,11 @@ This section outlines the planned development phases and features for rules_flut
 
 ### 🚧 Phase 2: Core Functionality (Current)
 
-- 🔄 **In Progress**: Execute actual Flutter commands (`pub get`, `flutter build`, `flutter test`)
-- 🔲 **Pub dependency management**: Integration with pub.dev packages and dependency caching
-- 🔲 **Hot reload support**: Development workflow improvements
-- 🔲 **Build caching**: Leverage Bazel's incremental builds for Flutter projects
+- ✅ **Complete**: Execute actual Flutter commands (`pub get`, `flutter build`, `flutter test`)
+- 🔄 **In Progress**: **Pub dependency management**: Integration with pub.dev packages and dependency caching
+- 🔄 **In Progress**: **Build caching**: Leverage Bazel's incremental builds for Flutter projects
 - 🔲 **Error handling**: Comprehensive error messages and build diagnostics
+- 🔲 **Hot reload support**: Development workflow improvements
 
 ### 🚀 Phase 3: Platform Support (Future)
 
