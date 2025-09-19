@@ -5,3 +5,12 @@ local_path_override(
     module_name = "com_github_spencerc_rules_flutter",
     path = "../..",
 )
+
+# Pub.dev dependencies
+pub = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "pub")
+pub.package(
+    name = "pub_fixnum",
+    package = "fixnum",
+    version = "1.1.0",
+)
+use_repo(pub, "pub_fixnum")

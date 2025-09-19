@@ -20,6 +20,7 @@ _ATTRS = {
 def _pub_dev_repository_impl(repository_ctx):
     """Implementation of pub_dev_repository rule."""
     package_name = repository_ctx.attr.package
+    version = repository_ctx.attr.version
     pub_dev_url = repository_ctx.attr.pub_dev_url
 
     # Fetch package metadata from pub.dev API
@@ -39,7 +40,7 @@ def _pub_dev_repository_impl(repository_ctx):
 
     # Construct the archive URL
     # pub.dev uses the format: https://pub.dev/packages/{package}/versions/{version}.tar.gz
-    archive_url = "{}/packages/{}/versions/{}.tar.gz".format(pub_dev_url, package_name, repository_ctx.attr.version)
+    archive_url = "{}/packages/{}/versions/{}.tar.gz".format(pub_dev_url, package_name, version)
 
     # Download and extract the package archive
     repository_ctx.download_and_extract(
