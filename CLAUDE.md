@@ -65,7 +65,30 @@ bazel run //:gazelle
 
 # Install pre-commit hooks (recommended for development)
 pre-commit install
+
+# Run all pre-commit hooks manually (required before completing tasks)
+pre-commit run --all-files --verbose
 ```
+
+### Task Completion Requirements
+
+**CRITICAL**: Before completing any task, you MUST run the following commands and fix any problems:
+
+```bash
+# 1. Run all pre-commit hooks and fix any issues
+pre-commit run --all-files --verbose
+
+# 2. Run all tests to ensure nothing is broken
+bazel test //...
+
+# 3. Run buildifier to ensure code formatting
+bazel run @buildifier_prebuilt//:buildifier
+
+# 4. Update BUILD targets if needed
+bazel run //:gazelle
+```
+
+If any of these commands fail, you MUST fix the issues before considering the task complete. This ensures code quality and prevents breaking changes from being introduced.
 
 ### Development Setup
 
