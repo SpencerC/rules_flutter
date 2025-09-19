@@ -10,6 +10,7 @@ names (the latest version will be picked for each name) and can register them as
 effectively overriding the default named toolchain due to toolchain resolution precedence.
 """
 
+load("//flutter/private:pub_repository.bzl", "pub_dev_repository")
 load(":repositories.bzl", "flutter_register_toolchains")
 
 _DEFAULT_NAME = "flutter"
@@ -53,4 +54,26 @@ def _toolchain_extension(module_ctx):
 flutter = module_extension(
     implementation = _toolchain_extension,
     tag_classes = {"toolchain": flutter_toolchain},
+)
+
+# Pub.dev package management extension
+pub_package = tag_class(attrs = {
+    "name": attr.string(doc = "Repository name for the package", mandatory = True),
+    "package": attr.string(doc = "Package name on pub.dev", mandatory = True),
+    "version": attr.string(doc = "Package version"),
+})
+
+def _pub_extension(module_ctx):
+    """Extension implementation for pub.dev packages"""
+    for mod in module_ctx.modules:
+        for pkg in mod.tags.package:
+            pub_dev_repository(
+                name = pkg.name,
+                package = pkg.package,
+                version = pkg.version,
+            )
+
+pub = module_extension(
+    implementation = _pub_extension,
+    tag_classes = {"package": pub_package},
 )
