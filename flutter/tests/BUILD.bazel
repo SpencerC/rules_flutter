@@ -7,8 +7,8 @@ versions_test_suite(name = "versions_test")
 test_suite(
     name = "integration_tests",
     tests = [
+        "//flutter/tests/flutter_app:hello_world_app_test",
         "//flutter/tests/flutter_app:hello_world_build_test",
-        "//flutter/tests/flutter_app:hello_world_tests",
         "//flutter/tests/multiplatform:multiplatform_build_test",
         "//flutter/tests/toolchain:dart_library_test",
         "//flutter/tests/toolchain:toolchain_resolution_test",

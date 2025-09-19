@@ -1,0 +1,29 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//flutter:defs.bzl", "flutter_app", "flutter_test")
+
+# Flutter app in the same directory as pubspec.yaml
+flutter_app(
+    name = "hello_world_app",
+    srcs = glob(["**/*"]),
+    target = "web",
+    visibility = [
+        "//flutter/tests:__pkg__",
+        "//flutter/tests/flutter_app:__pkg__",
+    ],
+)
+
+build_test(
+    name = "hello_world_build_test",
+    targets = [":hello_world_app"],
+)
+
+# Flutter tests in the same directory as pubspec.yaml
+flutter_test(
+    name = "hello_world_app_test",
+    srcs = glob(["**/*"]),
+    test_files = ["test/widget_test.dart"],
+    visibility = [
+        "//flutter/tests:__pkg__",
+        "//flutter/tests/flutter_app:__pkg__",
+    ],
+)

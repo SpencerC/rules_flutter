@@ -28,12 +28,11 @@ def _flutter_app_impl(ctx):
             other_files.append(src)
 
     if not pubspec_file:
-        fail("flutter_app requires a pubspec.yaml file in srcs")
+        fail("flutter_app requires a pubspec.yaml file in srcs or current directory")
 
     # Create Flutter working directory
     working_dir, _ = create_flutter_working_dir(
         ctx,
-        flutter_toolchain,
         pubspec_file,
         dart_files,
         other_files,
@@ -70,7 +69,7 @@ flutter_app = rule(
     attrs = {
         "srcs": attr.label_list(
             allow_files = True,
-            doc = "Flutter project source files",
+            doc = "Flutter project source files. If empty, will look for pubspec.yaml, lib/, test/, etc. in the current directory.",
         ),
         "target": attr.string(
             default = "web",
@@ -79,7 +78,10 @@ flutter_app = rule(
         ),
     },
     toolchains = ["//flutter:toolchain_type"],
-    doc = "Builds a Flutter application for the specified target platform",
+    doc = """Builds a Flutter application for the specified target platform.
+
+    Place this rule in the same directory as pubspec.yaml and use:
+    flutter_app(name = "my_app", srcs = glob(["**/*"])) or similar patterns.""",
 )
 
 def _flutter_test_impl(ctx):
@@ -107,7 +109,6 @@ def _flutter_test_impl(ctx):
     # Create Flutter working directory
     working_dir, _ = create_flutter_working_dir(
         ctx,
-        flutter_toolchain,
         pubspec_file,
         dart_files,
         other_files,
@@ -195,7 +196,7 @@ flutter_test = rule(
     attrs = {
         "srcs": attr.label_list(
             allow_files = True,
-            doc = "Flutter project source files",
+            doc = "Flutter project source files. Should include pubspec.yaml and test files.",
         ),
         "test_files": attr.string_list(
             default = ["test/"],
@@ -204,7 +205,10 @@ flutter_test = rule(
     },
     test = True,
     toolchains = ["//flutter:toolchain_type"],
-    doc = "Runs Flutter tests",
+    doc = """Runs Flutter tests.
+
+    Place this rule in the same directory as pubspec.yaml and use:
+    flutter_test(name = "my_tests", srcs = glob(["**/*"])) or similar patterns.""",
 )
 
 DartLibraryInfo = provider(
