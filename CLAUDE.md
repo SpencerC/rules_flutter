@@ -14,7 +14,6 @@ bazel test //...
 bazel test //flutter/tests:all_tests          # All Flutter tests
 bazel test //flutter/tests:integration_tests   # Integration tests only
 bazel test //flutter/tests:versions_test       # Unit tests for versions
-bazel test //e2e/smoke:smoke_test             # Smoke tests
 
 # Build specific targets
 bazel build //:update_flutter_versions        # Build update script target
@@ -24,6 +23,36 @@ bazel build //flutter/tests/flutter_app:hello_world_app
 bazel run //tools:update_flutter_versions
 # Or run directly: ./scripts/update_flutter_versions.sh
 ```
+
+### End-to-End Integration Testing
+
+The `e2e/` directory contains separate Bazel projects that test rules_flutter end-to-end as external consumers would use it.
+
+**IMPORTANT**: Always `cd` into the e2e subdirectory before running integration tests:
+
+```bash
+# Navigate to e2e directory for integration testing
+cd e2e/smoke
+
+# Run integration tests from within e2e directory
+bazel test //...                              # All integration tests
+bazel build //...                             # All integration targets
+bazel run //:example_app                      # Run example application
+
+# Test pub.dev dependency integration
+bazel test //:pub_integration_test            # Test pub package usage
+bazel build //:flutter_app_with_deps          # Build app with dependencies
+
+# Return to root for main development
+cd ../..
+```
+
+**Integration Test Structure**:
+
+- Each `e2e/` subdirectory is a standalone Bazel workspace
+- Uses `local_repository` to reference the rules_flutter under development
+- Tests real-world usage scenarios as external consumers would experience
+- Validates the public API and user experience
 
 ### Code Quality
 
@@ -80,9 +109,12 @@ echo "common $OVERRIDE" >> ~/.bazelrc
 
 ### Test Organization
 
-- **Unit tests**: `flutter/tests/versions_test.bzl` - validates version dictionary structure
-- **Integration tests**: `flutter/tests/` - tests for build rules, toolchain resolution, multiplatform
-- **Smoke tests**: `e2e/smoke/` - standalone example workspace (ignored by main build)
+- **Unit tests**: `flutter/tests/versions_test.bzl` - validates version dictionary structure and internal logic
+- **Integration tests**: `flutter/tests/` - tests build rules, toolchain resolution, etc.
+- **End-to-end tests**: `e2e/smoke/` - standalone Bazel workspace testing rules_flutter as external users would consume it
+  - **CRITICAL**: Always `cd e2e/smoke` before running e2e tests
+  - Tests complete workflows: Flutter app creation, pub dependencies, multi-platform builds
+  - Validates public API usability and real-world scenarios
 
 ### Important Implementation Details
 
