@@ -56,7 +56,7 @@ toolchain(
     name = "{platform}_toolchain",
     exec_compatible_with = {compatible_with},
     toolchain = "@{user_repository_name}_{platform}//:flutter_toolchain",
-    toolchain_type = "@com_github_spencerc_rules_flutter//flutter:toolchain_type",
+    toolchain_type = "@rules_flutter//flutter:toolchain_type",
 )
 """.format(
             platform = platform,

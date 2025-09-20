@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@com_github_spencerc_rules_flutter//flutter:defs.bzl", "dart_library")
+load("@rules_flutter//flutter:defs.bzl", "dart_library")
 
 # Test library that uses the fixnum package
 dart_library(

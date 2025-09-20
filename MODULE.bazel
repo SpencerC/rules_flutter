@@ -1,7 +1,7 @@
 "Bazel dependencies"
 
 module(
-    name = "com_github_spencerc_rules_flutter",
+    name = "rules_flutter",
     version = "0.0.0",
     compatibility_level = 1,
 )

@@ -136,37 +136,37 @@
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
-    "@@com_github_spencerc_rules_flutter+//flutter:extensions.bzl%flutter": {
+    "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "E4Gi+w8i/jIwr67su4Q2q9u4/WEatw/+08hgDNkUvMo=",
-        "usagesDigest": "CvfBMs0+2exzwHRTPF+cayrS+7AetiGz6IL5mhB6I2Y=",
+        "bzlTransitiveDigest": "kGoanpM2M4Swgb/Vv+SC50lpjHBnRIBsCu+iYu5AFlI=",
+        "usagesDigest": "7ZMGz+5FzhV1fcmwtaA3d92th77v56W53oOfVYm0GfE=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
         "generatedRepoSpecs": {
           "flutter_macos": {
-            "repoRuleId": "@@com_github_spencerc_rules_flutter+//flutter:repositories.bzl%flutter_repositories",
+            "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "macos",
               "flutter_version": "3.24.0"
             }
           },
           "flutter_linux": {
-            "repoRuleId": "@@com_github_spencerc_rules_flutter+//flutter:repositories.bzl%flutter_repositories",
+            "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "linux",
               "flutter_version": "3.24.0"
             }
           },
           "flutter_windows": {
-            "repoRuleId": "@@com_github_spencerc_rules_flutter+//flutter:repositories.bzl%flutter_repositories",
+            "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "windows",
               "flutter_version": "3.24.0"
             }
           },
           "flutter_toolchains": {
-            "repoRuleId": "@@com_github_spencerc_rules_flutter+//flutter/private:toolchains_repo.bzl%toolchains_repo",
+            "repoRuleId": "@@rules_flutter+//flutter/private:toolchains_repo.bzl%toolchains_repo",
             "attributes": {
               "user_repository_name": "flutter"
             }
@@ -174,23 +174,23 @@
         },
         "recordedRepoMappingEntries": [
           [
-            "com_github_spencerc_rules_flutter+",
+            "rules_flutter+",
             "bazel_tools",
             "bazel_tools"
           ]
         ]
       }
     },
-    "@@com_github_spencerc_rules_flutter+//flutter:extensions.bzl%pub": {
+    "@@rules_flutter+//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "E4Gi+w8i/jIwr67su4Q2q9u4/WEatw/+08hgDNkUvMo=",
-        "usagesDigest": "1ag/xgUjQtGplxZiUMurBzzKgdepb0XtEl5giht9k+E=",
+        "bzlTransitiveDigest": "kGoanpM2M4Swgb/Vv+SC50lpjHBnRIBsCu+iYu5AFlI=",
+        "usagesDigest": "OP/758v71R5lRS1ZZSXyQPu+a45Pd6VnyVjNj4Wyho0=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
         "generatedRepoSpecs": {
           "pub_fixnum": {
-            "repoRuleId": "@@com_github_spencerc_rules_flutter+//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "repoRuleId": "@@rules_flutter+//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "fixnum",
               "version": "1.1.0"
@@ -199,7 +199,7 @@
         },
         "recordedRepoMappingEntries": [
           [
-            "com_github_spencerc_rules_flutter+",
+            "rules_flutter+",
             "bazel_tools",
             "bazel_tools"
           ]

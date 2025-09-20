@@ -1,6 +1,6 @@
 # Override http_archive for local testing
 local_repository(
-    name = "com_github_spencerc_rules_flutter",
+    name = "rules_flutter",
     path = "../..",
 )
 
@@ -14,14 +14,14 @@ local_repository(
 # you should fetch it *before* calling this.
 # Alternatively, you can skip calling this function, so long as you've
 # already fetched all the dependencies.
-load("@com_github_spencerc_rules_flutter//flutter:repositories.bzl", "rules_flutter_dependencies")
+load("@rules_flutter//flutter:repositories.bzl", "rules_flutter_dependencies")
 
 rules_flutter_dependencies()
 
 ###############################
 # Pub.dev package management #
 ###############################
-load("@com_github_spencerc_rules_flutter//flutter:pub.bzl", "pub_dev_repository")
+load("@rules_flutter//flutter:pub.bzl", "pub_dev_repository")
 
 # Example: Download the fixnum package from pub.dev
 pub_dev_repository(

@@ -70,7 +70,7 @@ def _generate_build_file(package_name, version):
     build_content = '''# Generated BUILD file for pub.dev package: {package}
 # Version: {version}
 
-load("@com_github_spencerc_rules_flutter//flutter:defs.bzl", "dart_library")
+load("@rules_flutter//flutter:defs.bzl", "dart_library")
 
 # Main library target
 dart_library(
