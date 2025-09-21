@@ -60,7 +60,7 @@ flutter = module_extension(
 pub_package = tag_class(attrs = {
     "name": attr.string(doc = "Repository name for the package", mandatory = True),
     "package": attr.string(doc = "Package name on pub.dev", mandatory = True),
-    "version": attr.string(doc = "Package version"),
+    "version": attr.string(doc = "Package version (optional, defaults to latest)"),
 })
 
 def _pub_extension(module_ctx):
