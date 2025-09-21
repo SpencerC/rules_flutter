@@ -4,14 +4,15 @@
 
 - Root: `MODULE.bazel`, `.bazelrc`, `BUILD.bazel`, `WORKSPACE.bazel`.
 - Rules: `flutter/*.bzl` (public), `flutter/private/*` (internal helpers, toolchains).
-- Tests: `flutter/tests/*` (unit/integration), `e2e/smoke/*` (external workspace smoke test).
+- Tests: `flutter/tests/*` (unit/toolchain), `e2e/smoke/*` (integration & smoke tests).
 - Tooling: `tools/` (Bazel-run binaries), `scripts/` (maintenance scripts), `docs/` (generated API docs).
 
 ## Build, Test, and Development Commands
 
 - `bazel build //...` — Build all rules and examples.
 - `bazel test //...` — Run all tests.
-- `bazel test //flutter/tests:all_tests` — Core rule test suite.
+- `bazel test //flutter/tests:all_tests` — Core unit/toolchain test suite (run from repo root).
+- `cd e2e/smoke && bazel test //:integration_tests` — Integration tests in external workspace.
 - `bazel test //e2e/smoke:smoke_test` — External smoke test.
 - `bazel run //tools:update_flutter_versions` — Refresh Flutter SDK versions/hashes.
 - `bazel run //:gazelle` — Regenerate `bzl_library` targets.
@@ -34,9 +35,12 @@
 ## Testing Guidelines
 
 - Frameworks: `@bazel_skylib//lib:unittest` and `@bazel_skylib//rules:build_test.bzl`.
-- Add new tests under `flutter/tests/*`; extend suites in `flutter/tests/BUILD.bazel`.
+- Always `cd e2e/smoke` before running any integration tests.
+- Add new unit/toolchain tests under `flutter/tests/*`; extend suites in `flutter/tests/BUILD.bazel`.
+- Add new integration tests under `e2e/smoke/*`; wire them into `//:integration_tests`.
+- AGENTS: **only** create or modify integration tests inside `e2e/smoke/`.
 - Keep tests hermetic (no network, no host-specific SDKs). Use toolchains and declared inputs only.
-- Run selective suites, e.g., `bazel test //flutter/tests:integration_tests`.
+- Run selective suites, e.g., `cd e2e/smoke && bazel test //:integration_tests`.
 
 ## Commit & Pull Request Guidelines
 

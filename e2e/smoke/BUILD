@@ -19,3 +19,13 @@ build_test(
         "@rules_flutter//flutter:resolved_toolchain",
     ],
 )
+
+test_suite(
+    name = "integration_tests",
+    tests = [
+        ":smoke_test",
+        "//flutter_app:hello_world_app_test",
+        "//flutter_app:hello_world_build_test",
+        "//multiplatform:multiplatform_build_test",
+    ],
+)

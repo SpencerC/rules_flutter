@@ -11,13 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 bazel test //...
 
 # Run specific test suites
-bazel test //flutter/tests:all_tests          # All Flutter tests
-bazel test //flutter/tests:integration_tests   # Integration tests only
+bazel test //flutter/tests:all_tests          # Unit/toolchain tests in main workspace
+cd e2e/smoke && bazel test //:integration_tests  # Integration tests (external workspace)
 bazel test //flutter/tests:versions_test       # Unit tests for versions
 
 # Build specific targets
 bazel build //:update_flutter_versions        # Build update script target
-bazel build //flutter/tests/flutter_app:hello_world_app
+cd e2e/smoke && bazel build //flutter_app:hello_world_app
 
 # Update Flutter SDK versions with real integrity hashes
 bazel run //tools:update_flutter_versions
@@ -35,9 +35,10 @@ The `e2e/` directory contains separate Bazel projects that test rules_flutter en
 cd e2e/smoke
 
 # Run integration tests from within e2e directory
+bazel test //:integration_tests               # Integration test suite
 bazel test //...                              # All integration tests
 bazel build //...                             # All integration targets
-bazel run //:example_app                      # Run example application
+# Example app targets are defined per e2e workspace package
 
 # Test pub.dev dependency integration
 bazel test //:pub_integration_test            # Test pub package usage
@@ -133,8 +134,8 @@ echo "common $OVERRIDE" >> ~/.bazelrc
 ### Test Organization
 
 - **Unit tests**: `flutter/tests/versions_test.bzl` - validates version dictionary structure and internal logic
-- **Integration tests**: `flutter/tests/` - tests build rules, toolchain resolution, etc.
-- **End-to-end tests**: `e2e/smoke/` - standalone Bazel workspace testing rules_flutter as external users would consume it
+- **Toolchain tests**: `flutter/tests/toolchain/` - Dart library and toolchain validation smoke tests
+- **Integration tests**: `e2e/smoke/` - standalone Bazel workspace testing rules_flutter as external users would consume it
   - **CRITICAL**: Always `cd e2e/smoke` before running e2e tests
   - Tests complete workflows: Flutter app creation, pub dependencies, multi-platform builds
   - Validates public API usability and real-world scenarios

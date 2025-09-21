@@ -1,12 +1,12 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//flutter:defs.bzl", "flutter_app")
+load("@rules_flutter//flutter:defs.bzl", "flutter_app")
 
 # Flutter app in the same directory as pubspec.yaml
 flutter_app(
     name = "multiplatform_web",
     srcs = glob(["**/*"]),
     target = "web",
-    visibility = ["//flutter/tests/multiplatform:__pkg__"],
+    visibility = ["//visibility:public"],
 )
 
 # TODO: Enable APK builds once Android SDK is set up in CI
@@ -14,7 +14,7 @@ flutter_app(
 #     name = "multiplatform_apk",
 #     srcs = glob(["**/*"]),
 #     target = "apk",
-#     visibility = ["//flutter/tests/multiplatform:__pkg__"],
+#     visibility = ["//visibility:public"],
 # )
 
 # Test that the apps build successfully

@@ -167,11 +167,11 @@ The following platforms are supported for Flutter SDK downloads:
 
 Check out the [e2e smoke test](e2e/smoke/) for a complete working example of an external workspace using rules_flutter.
 
-For comprehensive test examples, see the [Flutter tests](flutter/tests/) directory:
+For comprehensive test examples, see:
 
-- [Flutter App Test](flutter/tests/flutter_app_test/) - Basic Flutter app with widget tests
-- [Multi-platform Test](flutter/tests/multiplatform_test/) - Building for multiple targets
-- [Toolchain Test](flutter/tests/toolchain_test/) - Dart library and toolchain integration
+- [Flutter App Integration](e2e/smoke/flutter_app/) - Basic Flutter app with widget tests
+- [Multi-platform Integration](e2e/smoke/multiplatform/) - Building for multiple targets
+- [Toolchain Tests](flutter/tests/toolchain/) - Dart library and toolchain integration
 
 ## Development
 
@@ -185,13 +185,13 @@ bazel test //...
 bazel test //flutter/tests:all_tests
 
 # Run integration tests
-bazel test //flutter/tests:integration_tests
+cd e2e/smoke && bazel test //:integration_tests
 
 # Run unit tests
 bazel test //flutter/tests:versions_test
 
 # Run smoke tests
-bazel test //e2e/smoke:smoke_test
+cd e2e/smoke && bazel test //:smoke_test
 ```
 
 ### Updating Flutter SDK Versions
