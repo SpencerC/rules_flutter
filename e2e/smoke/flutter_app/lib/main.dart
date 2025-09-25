@@ -1,3 +1,4 @@
+import 'package:fixnum/fixnum.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -30,11 +31,12 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  // Use fixnum to exercise dependency resolution in the smoke test.
+  Int64 _counter = Int64.ZERO;
 
   void _incrementCounter() {
     setState(() {
-      _counter++;
+      _counter += Int64.ONE;
     });
   }
 
