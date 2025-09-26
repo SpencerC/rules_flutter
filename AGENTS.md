@@ -22,7 +22,7 @@
 
 - Install hooks once: `pre-commit install`.
 - Before pushing or completing a task, run `pre-commit run --all-files`; fix all reported issues and re-run until clean.
-- Ensure BUILD/Starlark are formatted: `bazel run @buildifier_prebuilt//:buildifier`.
+- Before pushing or completing a task, ensure BUILD/Starlark are formatted: `bazel run @buildifier_prebuilt//:buildifier`.
 - CI enforces the same hooks and tests; PRs must be green.
 
 ## Coding Style & Naming Conventions
