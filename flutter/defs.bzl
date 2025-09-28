@@ -86,7 +86,7 @@ def _flutter_library_impl(ctx):
         ),
     ]
 
-flutter_library = rule(
+_flutter_library_rule = rule(
     implementation = _flutter_library_impl,
     attrs = {
         "srcs": attr.label_list(
@@ -108,6 +108,187 @@ flutter_library = rule(
 The generated workspace, pub cache, and other pub outputs are reused by
 flutter_app and flutter_test via the embed attribute.""",
 )
+
+def _flutter_library_update_impl(ctx):
+    """Implementation for the flutter_library.update helper."""
+
+    library_info = ctx.attr.library[FlutterLibraryInfo]
+    workspace_name = ctx.attr.library.label.workspace_name
+    if not workspace_name:
+        workspace_name = "__main__"
+
+    pubspec_rel = library_info.pubspec.short_path
+    pubspec_lock_rel = library_info.pubspec_lock.short_path
+
+    update_script = ctx.actions.declare_file(ctx.label.name + "_update.sh")
+
+    script_content = """#!/bin/bash
+set -euo pipefail
+
+resolve_path() {{
+    local rel="$1"
+    local fallback="$2"
+    local candidate
+    if [ -n "$rel" ]; then
+        candidate="$WORKSPACE_ROOT/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+        candidate="$RUNFILES_ROOT/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    fi
+    if [ -n "$fallback" ] && [ -e "$fallback" ]; then
+        echo "$fallback"
+        return 0
+    fi
+    if [ -n "$rel" ] && [ -e "$rel" ]; then
+        echo "$rel"
+        return 0
+    fi
+    echo ""
+    return 1
+}}
+
+RUNFILES_ROOT="${{RUNFILES_DIR:-$PWD}}"
+WORKSPACE_ROOT="$RUNFILES_ROOT/{workspace_root}"
+if [ ! -d "$WORKSPACE_ROOT" ]; then
+    if [ -d "$RUNFILES_ROOT/__main__" ]; then
+        WORKSPACE_ROOT="$RUNFILES_ROOT/__main__"
+    elif [ -d "$RUNFILES_ROOT/_main" ]; then
+        WORKSPACE_ROOT="$RUNFILES_ROOT/_main"
+    else
+        WORKSPACE_ROOT="$RUNFILES_ROOT"
+    fi
+fi
+
+PUBSPEC_LOCK_REL="{pubspec_lock_rel}"
+PUBSPEC_LOCK_FALLBACK="{pubspec_lock_path}"
+
+PUBSPEC_LOCK_SRC="$(resolve_path "$PUBSPEC_LOCK_REL" "$PUBSPEC_LOCK_FALLBACK")"
+if [ -z "$PUBSPEC_LOCK_SRC" ]; then
+    echo "✗ Unable to locate generated pubspec.lock: $PUBSPEC_LOCK_REL" >&2
+    exit 1
+fi
+
+if [ ! -f "$PUBSPEC_LOCK_SRC" ]; then
+    echo "✗ pubspec.lock source missing: $PUBSPEC_LOCK_SRC" >&2
+    exit 1
+fi
+
+WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
+    exit 1
+fi
+
+PUBSPEC_REL="{pubspec_rel}"
+DEST_DIR="$WORKSPACE_DIR"
+if [ -n "$PUBSPEC_REL" ]; then
+    DEST_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
+fi
+
+mkdir -p "$DEST_DIR"
+
+DEST_FILE="$DEST_DIR/pubspec.lock"
+
+if [ -f "$DEST_FILE" ] && cmp -s "$PUBSPEC_LOCK_SRC" "$DEST_FILE"; then
+    echo "✓ pubspec.lock already up to date at $DEST_FILE"
+    exit 0
+fi
+
+cp "$PUBSPEC_LOCK_SRC" "$DEST_FILE"
+chmod 0644 "$DEST_FILE" 2>/dev/null || true
+
+echo "✓ Updated $DEST_FILE"
+""".format(
+        workspace_root = workspace_name,
+        pubspec_lock_rel = pubspec_lock_rel,
+        pubspec_lock_path = library_info.pubspec_lock.path,
+        pubspec_rel = pubspec_rel,
+    )
+
+    ctx.actions.write(
+        output = update_script,
+        content = script_content,
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = update_script,
+            files = depset([update_script]),
+            runfiles = ctx.runfiles(
+                files = [
+                    update_script,
+                    library_info.pubspec_lock,
+                ],
+            ),
+        ),
+    ]
+
+_flutter_library_update = rule(
+    implementation = _flutter_library_update_impl,
+    attrs = {
+        "library": attr.label(
+            mandatory = True,
+            providers = [FlutterLibraryInfo],
+            doc = "flutter_library target whose pubspec.lock should be synced to the workspace.",
+        ),
+    },
+    executable = True,
+    doc = "Creates an executable that syncs a flutter_library pubspec.lock into the source workspace.",
+)
+
+def flutter_library(
+        name,
+        create_update_target = True,
+        update_visibility = None,
+        update_tags = None,
+        **kwargs):
+    """Defines a flutter_library target and optional .update helper.
+
+    Args:
+      name: Target name for the flutter_library rule.
+      create_update_target: Whether to emit the runnable `.update` helper.
+      update_visibility: Optional visibility override for the `.update` target.
+      update_tags: Optional tag list override for the `.update` target.
+      **kwargs: Forwarded to the underlying flutter_library rule.
+    """
+
+    _flutter_library_rule(
+        name = name,
+        **kwargs
+    )
+
+    if not create_update_target:
+        return
+
+    update_args = {
+        "name": name + ".update",
+        "library": ":" + name,
+    }
+
+    if update_visibility != None:
+        update_args["visibility"] = update_visibility
+    elif "visibility" in kwargs:
+        update_args["visibility"] = kwargs["visibility"]
+
+    tags = None
+    if update_tags != None:
+        tags = update_tags
+    elif "tags" in kwargs:
+        tags = kwargs["tags"]
+    if tags != None:
+        update_args["tags"] = tags
+
+    if kwargs.get("testonly", False):
+        update_args["testonly"] = True
+
+    _flutter_library_update(**update_args)
 
 def _flutter_app_impl(ctx):
     """Implementation for flutter_app rule."""

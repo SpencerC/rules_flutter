@@ -88,6 +88,9 @@ workspace, pub cache, and `pubspec.lock`. Both `flutter_app` and `flutter_test`
 reuse those outputs via the `embed` attribute, keeping builds and tests fast and
 hermetic.
 
+Whenever dependencies change, run `bazel run //:app_lib.update` to copy the
+fresh `pubspec.lock` into your workspace next to `pubspec.yaml`.
+
 ### 2. Build your app
 
 ```bash
