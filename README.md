@@ -57,19 +57,36 @@ rules_flutter_dependencies()
 Create a `BUILD` file in your Flutter project:
 
 ```starlark
-load("@com_github_spencerc_rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_test")
+load(
+    "@com_github_spencerc_rules_flutter//flutter:defs.bzl",
+    "flutter_app",
+    "flutter_library",
+    "flutter_test",
+)
+
+flutter_library(
+    name = "app_lib",
+    srcs = glob(["lib/**"]),
+    pubspec = "pubspec.yaml",
+)
 
 flutter_app(
     name = "my_app",
-    srcs = glob(["lib/**/*.dart", "pubspec.yaml", "web/**/*"]),
+    embed = [":app_lib"],
     target = "web",  # Options: web, apk, ios, macos, linux, windows
 )
 
 flutter_test(
     name = "my_app_test",
-    srcs = glob(["lib/**/*.dart", "pubspec.yaml", "test/**/*.dart"]),
+    srcs = glob(["test/**"]),
+    embed = [":app_lib"],
 )
 ```
+
+`flutter_library` runs `flutter pub get` once and exposes the generated
+workspace, pub cache, and `pubspec.lock`. Both `flutter_app` and `flutter_test`
+reuse those outputs via the `embed` attribute, keeping builds and tests fast and
+hermetic.
 
 ### 2. Build your app
 
@@ -87,26 +104,48 @@ bazel test //:my_app_test
 ### 3. Multi-platform builds
 
 ```starlark
+flutter_library(
+    name = "app_lib",
+    srcs = glob(["lib/**"]),
+    pubspec = "pubspec.yaml",
+)
+
 flutter_app(
     name = "my_app_web",
-    srcs = glob(["lib/**/*.dart", "pubspec.yaml", "web/**/*"]),
+    embed = [":app_lib"],
+    srcs = glob(["web/**"]),
     target = "web",
 )
 
 flutter_app(
     name = "my_app_android",
-    srcs = glob(["lib/**/*.dart", "pubspec.yaml", "android/**/*"]),
+    embed = [":app_lib"],
+    srcs = glob(["android/**"]),
     target = "apk",
 )
 
 flutter_app(
     name = "my_app_ios",
-    srcs = glob(["lib/**/*.dart", "pubspec.yaml", "ios/**/*"]),
+    embed = [":app_lib"],
+    srcs = glob(["ios/**"]),
     target = "ios",
 )
 ```
 
 ## Rules
+
+### flutter_library
+
+Prepares a Flutter package by running `flutter pub get` once and exposing the
+workspace, pub cache, and pubspec outputs to other rules.
+
+**Attributes:**
+
+| Name      | Description                       | Type         | Mandatory | Default |
+| --------- | --------------------------------- | ------------ | --------- | ------- |
+| `srcs`    | Flutter sources and resources     | `label_list` |           |         |
+| `pubspec` | `pubspec.yaml` for the package    | `label`      | ✅        |         |
+| `deps`    | Additional `flutter_library` deps | `label_list` |           |         |
 
 ### flutter_app
 
@@ -114,10 +153,11 @@ Builds a Flutter application for the specified target platform.
 
 **Attributes:**
 
-| Name     | Description                   | Type         | Mandatory | Default |
-| -------- | ----------------------------- | ------------ | --------- | ------- |
-| `srcs`   | Flutter project source files  | `label_list` | ✅        |         |
-| `target` | Flutter build target platform | `string`     |           | `"web"` |
+| Name     | Description                                | Type         | Mandatory | Default |
+| -------- | ------------------------------------------ | ------------ | --------- | ------- |
+| `embed`  | Prepared `flutter_library` targets to use  | `label_list` | ✅        |         |
+| `srcs`   | Additional source files to overlay per app | `label_list` |           |         |
+| `target` | Flutter build target platform              | `string`     |           | `"web"` |
 
 **Supported targets:** `web`, `apk`, `ios`, `macos`, `linux`, `windows`
 
@@ -127,10 +167,11 @@ Runs Flutter tests.
 
 **Attributes:**
 
-| Name         | Description                      | Type          | Mandatory | Default     |
-| ------------ | -------------------------------- | ------------- | --------- | ----------- |
-| `srcs`       | Flutter project source files     | `label_list`  | ✅        |             |
-| `test_files` | Test files or directories to run | `string_list` |           | `["test/"]` |
+| Name         | Description                                 | Type          | Mandatory | Default     |
+| ------------ | ------------------------------------------- | ------------- | --------- | ----------- |
+| `embed`      | Prepared `flutter_library` targets to use   | `label_list`  | ✅        |             |
+| `srcs`       | Test source files copied into the workspace | `label_list`  |           |             |
+| `test_files` | Test files or directories to run            | `string_list` |           | `["test/"]` |
 
 ### dart_library
 

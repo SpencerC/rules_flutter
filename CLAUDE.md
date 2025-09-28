@@ -121,10 +121,11 @@ echo "common $OVERRIDE" >> ~/.bazelrc
 
 3. **Build Rules** (`flutter/defs.bzl`)
 
-   - `flutter_app`: Placeholder that creates dummy output files, supports targets: web, apk, ios, macos, linux, windows
-   - `flutter_test`: Placeholder test rule that always passes
+   - `flutter_library`: Runs `flutter pub get` once and shares outputs with dependents
+   - `flutter_app`: Reuses `flutter_library` workspaces and pub caches to build targets (web, apk, ios, macos, linux, windows)
+   - `flutter_test`: Launches `flutter test` using the prepared workspace from `flutter_library`
    - `dart_library`: Pass-through rule for Dart source files
-   - All rules use toolchain resolution but don't invoke Flutter SDK yet
+   - Rules resolve the Flutter toolchain and perform real command invocations
 
 4. **Version Management** (`scripts/update_flutter_versions.sh`)
    - Automated script fetching from `storage.googleapis.com/flutter_infra_release/releases/`

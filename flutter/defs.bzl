@@ -7,29 +7,46 @@ load(
     "flutter_pub_get_action",
 )
 
-def _flutter_app_impl(ctx):
-    """Implementation for flutter_app rule"""
+FlutterLibraryInfo = provider(
+    doc = "Outputs from flutter_library needed to build or test Flutter targets.",
+    fields = {
+        "workspace": "Prepared Flutter workspace tree artifact containing project sources and pub outputs.",
+        "pub_get_log": "Captured log from flutter pub get execution.",
+        "pub_cache": "Tree artifact containing the pub cache used during pub get.",
+        "pubspec_lock": "pubspec.lock file produced by pub get.",
+        "dart_tool": "Tree artifact containing the .dart_tool directory from pub get.",
+        "pubspec": "The pubspec.yaml file for this library.",
+        "dart_sources": "Depset of Dart source files that make up the library.",
+        "other_sources": "Depset of non-Dart source files bundled with the library.",
+    },
+)
 
-    # Get the Flutter toolchain
+def _compute_relative_to_package(ctx, file):
+    """Return file path relative to the package directory."""
+
+    package = ctx.label.package
+    short_path = file.short_path
+
+    if package:
+        prefix = package + "/"
+        if short_path.startswith(prefix):
+            return short_path[len(prefix):]
+
+    return file.basename
+
+def _flutter_library_impl(ctx):
+    """Implementation for flutter_library rule."""
+
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-
-    # Find pubspec.yaml in sources
-    pubspec_file = None
-    dart_files = []
-    other_files = []
-
-    for src in ctx.files.srcs:
-        if src.basename == "pubspec.yaml":
-            pubspec_file = src
-        elif src.extension == "dart":
-            dart_files.append(src)
-        else:
-            other_files.append(src)
+    pubspec_file = ctx.file.pubspec
 
     if not pubspec_file:
-        fail("flutter_app requires a pubspec.yaml file in srcs or current directory")
+        fail("flutter_library requires the 'pubspec' attribute to be set")
 
-    # Create Flutter working directory
+    source_files = list(ctx.files.srcs)
+    dart_files = [f for f in source_files if f.extension == "dart"]
+    other_files = [f for f in source_files if f.extension != "dart"]
+
     working_dir, _ = create_flutter_working_dir(
         ctx,
         pubspec_file,
@@ -37,7 +54,6 @@ def _flutter_app_impl(ctx):
         other_files,
     )
 
-    # Execute flutter pub get
     pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir = flutter_pub_get_action(
         ctx,
         flutter_toolchain,
@@ -45,30 +61,168 @@ def _flutter_app_impl(ctx):
         pubspec_file,
     )
 
-    # Execute flutter build
+    output_files = [
+        pub_get_output,
+        pubspec_lock,
+        working_dir,
+        pub_cache_dir,
+        dart_tool_dir,
+    ]
+
+    return [
+        DefaultInfo(
+            files = depset(output_files + [pubspec_file]),
+            runfiles = ctx.runfiles(files = output_files + [pubspec_file]),
+        ),
+        FlutterLibraryInfo(
+            workspace = working_dir,
+            pub_get_log = pub_get_output,
+            pub_cache = pub_cache_dir,
+            pubspec_lock = pubspec_lock,
+            dart_tool = dart_tool_dir,
+            pubspec = pubspec_file,
+            dart_sources = depset(dart_files),
+            other_sources = depset(other_files),
+        ),
+    ]
+
+flutter_library = rule(
+    implementation = _flutter_library_impl,
+    attrs = {
+        "srcs": attr.label_list(
+            allow_files = True,
+            doc = "Source files that make up the Flutter library (lib/, assets, etc).",
+        ),
+        "pubspec": attr.label(
+            allow_single_file = True,
+            mandatory = True,
+            doc = "pubspec.yaml describing this Flutter package.",
+        ),
+        "deps": attr.label_list(
+            doc = "Additional flutter_library dependencies.",
+        ),
+    },
+    toolchains = ["//flutter:toolchain_type"],
+    doc = """Prepares a Flutter library by running flutter pub get once.
+
+The generated workspace, pub cache, and other pub outputs are reused by
+flutter_app and flutter_test via the embed attribute.""",
+)
+
+def _flutter_app_impl(ctx):
+    """Implementation for flutter_app rule."""
+
+    if not ctx.attr.embed:
+        fail("flutter_app requires at least one flutter_library in embed")
+
+    if len(ctx.attr.embed) != 1:
+        fail("flutter_app currently supports exactly one entry in embed")
+
+    library_target = ctx.attr.embed[0]
+    library_info = library_target[FlutterLibraryInfo]
+
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+
+    # Prepare a dedicated workspace for this build by copying the library workspace
+    prepared_workspace = ctx.actions.declare_directory(ctx.label.name + "_workspace")
+    manifest = ctx.actions.declare_file(ctx.label.name + "_app_overlay.manifest")
+
+    overlay_entries = [
+        "{}|{}".format(_compute_relative_to_package(ctx, f), f.path)
+        for f in ctx.files.srcs
+    ]
+
+    ctx.actions.write(
+        output = manifest,
+        content = "\n".join(overlay_entries),
+    )
+
+    copy_script = """#!/bin/bash
+set -euo pipefail
+
+DEST="$1"
+SRC_WORKSPACE="$2"
+MANIFEST="$3"
+PUBSPEC_LOCK_SRC="$4"
+
+rm -rf "$DEST"
+mkdir -p "$DEST"
+
+if command -v rsync >/dev/null 2>&1; then
+    rsync -aL "$SRC_WORKSPACE/" "$DEST/"
+else
+    cp -RL "$SRC_WORKSPACE/." "$DEST/"
+fi
+
+if [ -f "$PUBSPEC_LOCK_SRC" ]; then
+    cp "$PUBSPEC_LOCK_SRC" "$DEST/pubspec.lock"
+fi
+
+if [ -s "$MANIFEST" ]; then
+    while IFS='|' read -r rel src; do
+        if [ -z "$rel" ]; then
+            continue
+        fi
+        dest_path="$DEST/$rel"
+        mkdir -p "$(dirname "$dest_path")"
+        cp -RL "$src" "$dest_path"
+    done < "$MANIFEST"
+fi
+"""
+
+    ctx.actions.run_shell(
+        inputs = [
+            library_info.workspace,
+            library_info.pubspec_lock,
+            manifest,
+        ] + ctx.files.srcs,
+        outputs = [prepared_workspace],
+        arguments = [
+            prepared_workspace.path,
+            library_info.workspace.path,
+            manifest.path,
+            library_info.pubspec_lock.path,
+        ],
+        command = copy_script,
+        mnemonic = "PrepareFlutterAppWorkspace",
+        progress_message = "Preparing Flutter workspace for %s" % ctx.label.name,
+    )
+
     build_output, build_artifacts = flutter_build_action(
         ctx,
         flutter_toolchain,
-        working_dir,
+        prepared_workspace,
         ctx.attr.target,
-        pub_cache_dir,
-        dart_tool_dir,
+        library_info.pub_cache,
+        library_info.dart_tool,
     )
 
-    # Return all outputs
-    output_files = [pub_get_output, build_output, pubspec_lock]
+    output_files = [build_output]
 
-    return [DefaultInfo(
-        files = depset(output_files + [build_artifacts]),
-        runfiles = ctx.runfiles(files = output_files),
-    )]
+    return [
+        DefaultInfo(
+            files = depset(output_files + [build_artifacts]),
+            runfiles = ctx.runfiles(
+                files = [
+                    build_output,
+                    library_info.pubspec_lock,
+                    library_info.pub_cache,
+                    library_info.dart_tool,
+                ],
+            ),
+        ),
+    ]
 
 flutter_app = rule(
     implementation = _flutter_app_impl,
     attrs = {
+        "embed": attr.label_list(
+            providers = [FlutterLibraryInfo],
+            doc = "flutter_library targets that provide pub outputs for this app.",
+        ),
         "srcs": attr.label_list(
             allow_files = True,
-            doc = "Flutter project source files. If empty, will look for pubspec.yaml, lib/, test/, etc. in the current directory.",
+            doc = "Additional source files to overlay (e.g. web/ directories).",
         ),
         "target": attr.string(
             default = "web",
@@ -79,55 +233,80 @@ flutter_app = rule(
     toolchains = ["//flutter:toolchain_type"],
     doc = """Builds a Flutter application for the specified target platform.
 
-    Place this rule in the same directory as pubspec.yaml and use:
-    flutter_app(name = "my_app", srcs = glob(["**/*"])) or similar patterns.""",
+    Define a flutter_library in the same package and reference it via `embed`.
+    Use `srcs` to layer platform-specific resources (for example `web/**`).""",
 )
 
 def _flutter_test_impl(ctx):
-    """Implementation for flutter_test rule"""
+    """Implementation for flutter_test rule."""
 
-    # Get the Flutter toolchain
+    if not ctx.attr.embed:
+        fail("flutter_test requires at least one flutter_library in embed")
+
+    if len(ctx.attr.embed) != 1:
+        fail("flutter_test currently supports exactly one entry in embed")
+
+    library_target = ctx.attr.embed[0]
+    library_info = library_target[FlutterLibraryInfo]
+
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-
-    # Find pubspec.yaml and test files in sources
-    pubspec_file = None
-    dart_files = []
-    other_files = []
-
-    for src in ctx.files.srcs:
-        if src.basename == "pubspec.yaml":
-            pubspec_file = src
-        elif src.extension == "dart":
-            dart_files.append(src)
-        else:
-            other_files.append(src)
-
-    if not pubspec_file:
-        fail("flutter_test requires a pubspec.yaml file in srcs")
-
-    # Create Flutter working directory
-    working_dir, _ = create_flutter_working_dir(
-        ctx,
-        pubspec_file,
-        dart_files,
-        other_files,
-    )
-
-    # Execute flutter pub get
-    pub_get_output, pub_cache_dir, pubspec_lock, _ = flutter_pub_get_action(
-        ctx,
-        flutter_toolchain,
-        working_dir,
-        pubspec_file,
-    )
-
     if not flutter_toolchain.flutterinfo.tool_files:
         fail("No tool files found in Flutter toolchain")
 
     flutter_bin = flutter_toolchain.flutterinfo.tool_files[0].path
-    workspace_short = working_dir.short_path
-    pub_cache_short = pub_cache_dir.short_path
-    pubspec_lock_short = pubspec_lock.short_path
+
+    test_manifest = ctx.actions.declare_file(ctx.label.name + "_test_sources.manifest")
+    manifest_entries = [
+        "{}|{}".format(_compute_relative_to_package(ctx, f), f.path)
+        for f in ctx.files.srcs
+    ]
+
+    ctx.actions.write(
+        output = test_manifest,
+        content = "\n".join(manifest_entries),
+    )
+
+    prepared_workspace = ctx.actions.declare_directory(ctx.label.name + "_test_workspace")
+
+    copy_script = """#!/bin/bash
+set -euo pipefail
+
+DEST="$1"
+SRC_WORKSPACE="$2"
+MANIFEST="$3"
+
+rm -rf "$DEST"
+mkdir -p "$DEST"
+
+if command -v rsync >/dev/null 2>&1; then
+    rsync -aL "$SRC_WORKSPACE/" "$DEST/"
+else
+    cp -RL "$SRC_WORKSPACE/." "$DEST/"
+fi
+
+if [ -s "$MANIFEST" ]; then
+    while IFS='|' read -r rel abs; do
+        if [ -z "$rel" ]; then
+            continue
+        fi
+        mkdir -p "$DEST/$(dirname "$rel")"
+        cp -RL "$abs" "$DEST/$rel"
+    done < "$MANIFEST"
+fi
+"""
+
+    ctx.actions.run_shell(
+        inputs = [library_info.workspace, test_manifest] + ctx.files.srcs,
+        outputs = [prepared_workspace],
+        arguments = [
+            prepared_workspace.path,
+            library_info.workspace.path,
+            test_manifest.path,
+        ],
+        command = copy_script,
+        mnemonic = "PrepareFlutterTestWorkspace",
+        progress_message = "Preparing Flutter test workspace for %s" % ctx.label.name,
+    )
 
     def _escape_pattern(pattern):
         return pattern.replace("\\", "\\\\").replace("'", "\\'")
@@ -150,6 +329,34 @@ copy_tree() {{
     fi
 }}
 
+resolve_path() {{
+    local rel="$1"
+    local fallback="$2"
+    local candidate
+    if [ -n "$rel" ]; then
+        candidate="$WORKSPACE_ROOT/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+        candidate="$RUNFILES_ROOT/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    fi
+    if [ -n "$fallback" ] && [ -e "$fallback" ]; then
+        echo "$fallback"
+        return 0
+    fi
+    if [ -n "$rel" ] && [ -e "$rel" ]; then
+        echo "$rel"
+        return 0
+    fi
+    echo ""
+    return 1
+}}
+
 RUNFILES_ROOT="${{RUNFILES_DIR:-$PWD}}"
 WORKSPACE_ROOT="$RUNFILES_ROOT/${{TEST_WORKSPACE:-__main__}}"
 if [ ! -d "$WORKSPACE_ROOT" ]; then
@@ -163,6 +370,7 @@ fi
 WORKSPACE_SRC="{workspace_short}"
 PUB_CACHE_SRC="{pub_cache_short}"
 PUBSPEC_LOCK_SRC="{pubspec_lock_short}"
+DART_TOOL_SRC="{dart_tool_short}"
 FLUTTER_BIN_REL="{flutter_bin}"
 
 FLUTTER_BIN_ABS="$RUNFILES_ROOT/$FLUTTER_BIN_REL"
@@ -190,41 +398,15 @@ if [ ! -f "$FLUTTER_BIN_ABS" ]; then
     exit 1
 fi
 
-WORKSPACE_ABS="$WORKSPACE_ROOT/$WORKSPACE_SRC"
-PUB_CACHE_ABS="$WORKSPACE_ROOT/$PUB_CACHE_SRC"
-PUBSPEC_LOCK_ABS="$WORKSPACE_ROOT/$PUBSPEC_LOCK_SRC"
-
-if [ ! -e "$WORKSPACE_ABS" ]; then
-    POSSIBLE_WORKSPACE="{workspace_path}"
-    if [ -e "$RUNFILES_ROOT/$POSSIBLE_WORKSPACE" ]; then
-        WORKSPACE_ABS="$RUNFILES_ROOT/$POSSIBLE_WORKSPACE"
-    elif [ -e "$POSSIBLE_WORKSPACE" ]; then
-        WORKSPACE_ABS="$POSSIBLE_WORKSPACE"
-    else
-        echo "✗ Unable to locate prepared Flutter workspace: $WORKSPACE_SRC" >&2
-        exit 1
-    fi
+WORKSPACE_ABS="$(resolve_path "$WORKSPACE_SRC" "{workspace_path}")"
+if [ -z "$WORKSPACE_ABS" ]; then
+    echo "✗ Unable to locate prepared Flutter workspace: $WORKSPACE_SRC" >&2
+    exit 1
 fi
 
-if [ ! -d "$PUB_CACHE_ABS" ]; then
-    if [ -d "{pub_cache_path}" ]; then
-        PUB_CACHE_ABS="{pub_cache_path}"
-    elif [ -d "$RUNFILES_ROOT/{pub_cache_path}" ]; then
-        PUB_CACHE_ABS="$RUNFILES_ROOT/{pub_cache_path}"
-    else
-        PUB_CACHE_ABS=""
-    fi
-fi
-
-if [ ! -f "$PUBSPEC_LOCK_ABS" ]; then
-    if [ -f "{pubspec_lock_path}" ]; then
-        PUBSPEC_LOCK_ABS="{pubspec_lock_path}"
-    elif [ -f "$RUNFILES_ROOT/{pubspec_lock_path}" ]; then
-        PUBSPEC_LOCK_ABS="$RUNFILES_ROOT/{pubspec_lock_path}"
-    else
-        PUBSPEC_LOCK_ABS=""
-    fi
-fi
+PUB_CACHE_ABS="$(resolve_path "$PUB_CACHE_SRC" "{pub_cache_path}")"
+PUBSPEC_LOCK_ABS="$(resolve_path "$PUBSPEC_LOCK_SRC" "{pubspec_lock_path}")"
+DART_TOOL_ABS="$(resolve_path "$DART_TOOL_SRC" "{dart_tool_path}")"
 
 if [[ -z "${{TEST_TMPDIR:-}}" ]]; then
     echo "✗ TEST_TMPDIR is not set"
@@ -236,6 +418,9 @@ RUNTIME_PUB_CACHE="${{TEST_TMPDIR}}/pub_cache"
 LOG_ROOT="${{TEST_UNDECLARED_OUTPUTS_DIR:-${{TEST_TMPDIR}}/test_outputs}}"
 TEST_LOG="$LOG_ROOT/flutter_test.log"
 
+mkdir -p "$LOG_ROOT"
+: > "$TEST_LOG"
+
 rm -rf "$RUNTIME_WORKSPACE"
 mkdir -p "$RUNTIME_WORKSPACE"
 copy_tree "$WORKSPACE_ABS" "$RUNTIME_WORKSPACE"
@@ -246,6 +431,12 @@ if [ -n "$PUB_CACHE_ABS" ] && [ -d "$PUB_CACHE_ABS" ] && [ -n "$(ls -A "$PUB_CAC
     copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
 fi
 chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+
+if [ -n "$DART_TOOL_ABS" ] && [ -d "$DART_TOOL_ABS" ]; then
+    mkdir -p "$RUNTIME_WORKSPACE/.dart_tool"
+    copy_tree "$DART_TOOL_ABS" "$RUNTIME_WORKSPACE/.dart_tool"
+    chmod -R u+w "$RUNTIME_WORKSPACE/.dart_tool" 2>/dev/null || true
+fi
 
 if [ -n "$PUBSPEC_LOCK_ABS" ] && [ -f "$PUBSPEC_LOCK_ABS" ]; then
     cp "$PUBSPEC_LOCK_ABS" "$RUNTIME_WORKSPACE/pubspec.lock"
@@ -263,24 +454,6 @@ export ANDROID_HOME=""
 export ANDROID_SDK_ROOT=""
 export FLUTTER_ROOT
 export PATH="$FLUTTER_BIN_DIR:$PATH"
-
-mkdir -p "$LOG_ROOT"
-: > "$TEST_LOG"
-
-pushd "$RUNTIME_WORKSPACE" >/dev/null
-
-set +e
-"$FLUTTER_BIN_ABS" --suppress-analytics pub get 2>&1 | tee -a "$TEST_LOG"
-PUB_GET_RESULT=${{PIPESTATUS[0]}}
-set -e
-
-if [ "$PUB_GET_RESULT" -ne 0 ]; then
-    echo "✗ flutter pub get failed inside test runner" >> "$TEST_LOG"
-    cat "$TEST_LOG"
-    exit "$PUB_GET_RESULT"
-fi
-
-popd >/dev/null
 
 CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "test")
 IFS=$'\n'
@@ -310,12 +483,14 @@ fi
 cat "$TEST_LOG"
 exit "$RESULT"
 """.format(
-        workspace_short = workspace_short,
-        pub_cache_short = pub_cache_short,
-        pubspec_lock_short = pubspec_lock_short,
-        workspace_path = working_dir.path,
-        pub_cache_path = pub_cache_dir.path,
-        pubspec_lock_path = pubspec_lock.path,
+        workspace_short = prepared_workspace.short_path,
+        pub_cache_short = library_info.pub_cache.short_path,
+        pubspec_lock_short = library_info.pubspec_lock.short_path,
+        dart_tool_short = library_info.dart_tool.short_path,
+        workspace_path = prepared_workspace.path,
+        pub_cache_path = library_info.pub_cache.path,
+        pubspec_lock_path = library_info.pubspec_lock.path,
+        dart_tool_path = library_info.dart_tool.path,
         flutter_bin = flutter_bin,
         test_patterns = test_patterns_literal,
     )
@@ -326,18 +501,32 @@ exit "$RESULT"
         is_executable = True,
     )
 
-    return [DefaultInfo(
-        executable = test_runner,
-        files = depset([test_runner, pub_get_output, pubspec_lock]),
-        runfiles = ctx.runfiles(files = [pub_get_output, pubspec_lock, working_dir, pub_cache_dir]),
-    )]
+    return [
+        DefaultInfo(
+            executable = test_runner,
+            files = depset([test_runner]),
+            runfiles = ctx.runfiles(
+                files = [
+                    test_runner,
+                    prepared_workspace,
+                    library_info.pub_cache,
+                    library_info.pubspec_lock,
+                    library_info.dart_tool,
+                ],
+            ),
+        ),
+    ]
 
 flutter_test = rule(
     implementation = _flutter_test_impl,
     attrs = {
+        "embed": attr.label_list(
+            providers = [FlutterLibraryInfo],
+            doc = "flutter_library targets to embed for testing.",
+        ),
         "srcs": attr.label_list(
             allow_files = True,
-            doc = "Flutter project source files. Should include pubspec.yaml and test files.",
+            doc = "Test source files to copy into the runtime workspace.",
         ),
         "test_files": attr.string_list(
             default = ["test/"],
@@ -346,10 +535,7 @@ flutter_test = rule(
     },
     test = True,
     toolchains = ["//flutter:toolchain_type"],
-    doc = """Runs Flutter tests.
-
-    Place this rule in the same directory as pubspec.yaml and use:
-    flutter_test(name = "my_tests", srcs = glob(["**/*"])) or similar patterns.""",
+    doc = """Runs Flutter tests using a prepared flutter_library workspace.""",
 )
 
 DartLibraryInfo = provider(
