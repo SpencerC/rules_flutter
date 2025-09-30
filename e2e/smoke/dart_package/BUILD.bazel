@@ -1,0 +1,14 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@rules_flutter//flutter:defs.bzl", "dart_library")
+
+build_test(
+    name = "dart_package_test",
+    targets = [":lib"],
+)
+
+dart_library(
+    name = "lib",
+    srcs = glob(["lib/**"]),
+    pubspec = "pubspec.yaml",
+    deps = ["@pub_fixnum//:fixnum"],
+)

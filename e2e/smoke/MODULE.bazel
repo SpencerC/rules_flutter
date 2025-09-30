@@ -1,6 +1,11 @@
 bazel_dep(name = "rules_flutter", version = "0.0.0", dev_dependency = True)
 bazel_dep(name = "bazel_skylib", version = "1.7.1", dev_dependency = True)
 
+bazel_dep(name = "rules_go", version = "0.46.0")
+bazel_dep(name = "gazelle", version = "0.35.0", repo_name = "bazel_gazelle")
+
+bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
+
 local_path_override(
     module_name = "rules_flutter",
     path = "../..",
@@ -8,4 +13,9 @@ local_path_override(
 
 # Pub.dev dependencies
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
-use_repo(pub, "pub_fixnum")
+use_repo(pub, "pub_fixnum", "pub_vector_math")
+
+# Go dependencies for gazelle plugin
+go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
+go_deps.from_file(go_mod = "@rules_flutter//gazelle:go.mod")
+use_repo(go_deps, "in_gopkg_yaml_v3")

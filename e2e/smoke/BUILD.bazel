@@ -2,8 +2,22 @@
 Add a basic smoke-test target below.
 """
 
+load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
+
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = [
+        "@bazel_skylib_gazelle_plugin//bzl",
+        "@rules_flutter//gazelle/flutter",
+    ],
+)
+
+gazelle(
+    name = "gazelle",
+    gazelle = "gazelle_bin",
+)
 
 # Test basic rule functionality
 dart_library(
@@ -24,8 +38,8 @@ test_suite(
     name = "integration_tests",
     tests = [
         ":smoke_test",
+        "//dart_package:dart_package_test",
         "//flutter_app:app_build_test",
-        "//flutter_app:hello_world_app_test",
         "//multiplatform:multiplatform_build_test",
     ],
 )

@@ -3,18 +3,17 @@ load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flut
 
 flutter_library(
     name = "lib",
-    srcs = glob(["lib/**"]),
+    srcs = glob([
+        "lib/**",
+        "web/**",
+    ]),
     pubspec = "pubspec.yaml",
-    deps = [
-        "@pub_fixnum//:fixnum",
-        "@pub_vector_math//:vector_math",
-    ],
 )
 
 # Flutter tests in the same directory as pubspec.yaml
 flutter_test(
-    name = "hello_world_app_test",
-    srcs = glob(["test/*"]),
+    name = "app_test",
+    srcs = glob(["test/**"]),
     embed = [":lib"],
     visibility = ["//visibility:public"],
 )

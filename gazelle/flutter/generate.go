@@ -64,10 +64,33 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
-	// Generate flutter_library rule
-	r := rule.NewRule("flutter_library", fc.LibraryName)
+	// Parse pubspec.yaml to determine rule type
+	pubspecYamlPath := filepath.Join(args.Dir, "pubspec.yaml")
+	pubspecYaml, err := ParsePubspecYaml(pubspecYamlPath)
+	if err != nil {
+		// If we can't parse, default to flutter_library
+		pubspecYaml = nil
+	}
 
-	// Set pubspec attribute
+	// Determine rule kind based on environment
+	// If environment.flutter is set -> flutter_library
+	// If only environment.sdk is set -> dart_library
+	ruleKind := "flutter_library"
+	if pubspecYaml != nil {
+		hasFlutter := HasFlutterEnvironment(pubspecYaml)
+		hasSDK := HasSDKEnvironment(pubspecYaml)
+
+		if !hasFlutter && hasSDK {
+			// Pure Dart package
+			ruleKind = "dart_library"
+		}
+	}
+
+	// Generate the appropriate rule
+	r := rule.NewRule(ruleKind, fc.LibraryName)
+
+	// Set pubspec attribute for both flutter_library and dart_library
+	// (dart_library uses it optionally for pub get)
 	r.SetAttr("pubspec", "pubspec.yaml")
 
 	// Set srcs attribute - only include lib/**
@@ -84,9 +107,13 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
+	// Must return same number of imports as rules
+	// Since we have 1 rule, return 1 empty import
+	imports := []interface{}{[]resolve.ImportSpec{}}
+
 	return language.GenerateResult{
 		Gen:     []*rule.Rule{r},
-		Imports: []interface{}{},  // No imports needed for now
+		Imports: imports,
 	}
 }
 
@@ -135,7 +162,7 @@ func sortStrings(s []string) {
 func (fl *flutterLang) Imports(c *config.Config, r *rule.Rule, f *rule.File) []resolve.ImportSpec {
 	// For now, we don't need to parse Dart imports
 	// The dependencies are extracted from pubspec.lock
-	return nil
+	return []resolve.ImportSpec{}
 }
 
 // Embeds is not used for Flutter

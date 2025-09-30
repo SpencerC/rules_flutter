@@ -24,6 +24,7 @@ type PubPackage struct {
 type PubspecYaml struct {
 	Name         string                 `yaml:"name"`
 	Dependencies map[string]interface{} `yaml:"dependencies"`
+	Environment  map[string]interface{} `yaml:"environment"`
 }
 
 // ParsePubspecLock parses a pubspec.lock file and returns the parsed structure
@@ -105,4 +106,26 @@ func SanitizeRepoName(pkg string) string {
 	}
 
 	return result.String()
+}
+
+// HasFlutterEnvironment checks if pubspec.yaml has environment.flutter set
+func HasFlutterEnvironment(pubspec *PubspecYaml) bool {
+	if pubspec == nil || pubspec.Environment == nil {
+		return false
+	}
+
+	// Check if flutter key exists in environment
+	_, hasFlutter := pubspec.Environment["flutter"]
+	return hasFlutter
+}
+
+// HasSDKEnvironment checks if pubspec.yaml has environment.sdk set
+func HasSDKEnvironment(pubspec *PubspecYaml) bool {
+	if pubspec == nil || pubspec.Environment == nil {
+		return false
+	}
+
+	// Check if sdk key exists in environment
+	_, hasSDK := pubspec.Environment["sdk"]
+	return hasSDK
 }
