@@ -5,14 +5,14 @@ exports_files([
 ])
 
 bzl_library(
-    name = "toolchains_repo",
-    srcs = ["toolchains_repo.bzl"],
+    name = "flutter_actions",
+    srcs = ["flutter_actions.bzl"],
     visibility = ["//flutter:__subpackages__"],
 )
 
 bzl_library(
-    name = "versions",
-    srcs = ["versions.bzl"],
+    name = "pub_repository",
+    srcs = ["pub_repository.bzl"],
     visibility = ["//flutter:__subpackages__"],
 )
 
@@ -23,7 +23,13 @@ bzl_library(
 )
 
 bzl_library(
-    name = "flutter_actions",
-    srcs = ["flutter_actions.bzl"],
+    name = "toolchains_repo",
+    srcs = ["toolchains_repo.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)
+
+bzl_library(
+    name = "versions",
+    srcs = ["versions.bzl"],
     visibility = ["//flutter:__subpackages__"],
 )

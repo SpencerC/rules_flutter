@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "flutter",
+    srcs = [
+        "config.go",
+        "generate.go",
+        "language.go",
+        "pubspec.go",
+        "resolve.go",
+    ],
+    importpath = "github.com/spencerconnaughton/rules_flutter/gazelle/flutter",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@bazel_gazelle//config",
+        "@bazel_gazelle//label",
+        "@bazel_gazelle//language",
+        "@bazel_gazelle//repo",
+        "@bazel_gazelle//resolve",
+        "@bazel_gazelle//rule",
+        "@in_gopkg_yaml_v3//:yaml_v3",
+    ],
+)

@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+# Go library for the gazelle module root
+go_library(
+    name = "gazelle",
+    srcs = [],
+    importpath = "github.com/spencerconnaughton/rules_flutter/gazelle",
+    visibility = ["//visibility:public"],
+)

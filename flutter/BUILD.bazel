@@ -50,6 +50,13 @@ bzl_library(
 )
 
 bzl_library(
+    name = "pub",
+    srcs = ["pub.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//flutter/private:pub_repository"],
+)
+
+bzl_library(
     name = "toolchain",
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],

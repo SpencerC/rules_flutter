@@ -3,13 +3,12 @@ load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flut
 
 flutter_library(
     name = "lib",
-    srcs = glob([
-        "lib/**",
-        "test/**",
-        "web/**",
-    ]),
+    srcs = glob(["lib/**"]),
     pubspec = "pubspec.yaml",
-    deps = ["@pub_fixnum//:fixnum"],
+    deps = [
+        "@pub_fixnum//:fixnum",
+        "@pub_vector_math//:vector_math",
+    ],
 )
 
 # Flutter tests in the same directory as pubspec.yaml
