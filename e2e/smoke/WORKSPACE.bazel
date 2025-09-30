@@ -27,5 +27,5 @@ load("@rules_flutter//flutter:pub.bzl", "pub_dev_repository")
 pub_dev_repository(
     name = "pub_fixnum",
     package = "fixnum",
-    version = "1.1.0",
+    version = "1.1.1",
 )

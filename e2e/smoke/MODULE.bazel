@@ -8,9 +8,4 @@ local_path_override(
 
 # Pub.dev dependencies
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
-pub.package(
-    name = "pub_fixnum",
-    package = "fixnum",
-    version = "1.1.0",
-)
 use_repo(pub, "pub_fixnum")

@@ -28,6 +28,22 @@ copy the WORKSPACE snippet into your `WORKSPACE` file.
 bazel_dep(name = "com_github_spencerc_rules_flutter", version = "1.0.0")
 ```
 
+#### Managing pub.dev dependencies
+
+`rules_flutter` ships a `pub` module extension that automatically scans every
+`pubspec.lock` in the module graph and creates repositories for each hosted
+dependency. To consume those repositories, add the extension and `use_repo`
+entries that match the `pub_<package>` naming convention. For example:
+
+```starlark
+pub = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "pub")
+use_repo(pub, "pub_fixnum")  # exposes @pub_fixnum//...
+```
+
+If you need to pin a repository manually (e.g. custom name or override), you
+can continue to call `pub.package(...)`; explicit declarations will override the
+auto-generated entries.
+
 ### Using WORKSPACE
 
 Paste this snippet into your `WORKSPACE.bazel` file:
