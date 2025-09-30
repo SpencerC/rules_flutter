@@ -2,6 +2,7 @@ package flutter
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -93,10 +94,12 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 	// (dart_library uses it optionally for pub get)
 	r.SetAttr("pubspec", "pubspec.yaml")
 
-	// Set srcs attribute - only include lib/**
+	// Set srcs attribute - explicitly list all source files in lib/ directory only
 	if hasLib {
-		srcs := []string{"lib/**"}
-		r.SetAttr("srcs", generateGlob(srcs))
+		srcs := collectSourceFiles(args.Dir, hasLib)
+		if len(srcs) > 0 {
+			r.SetAttr("srcs", srcs)
+		}
 	}
 
 	// Set deps attribute from pubspec.lock if available
@@ -117,12 +120,39 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 	}
 }
 
-// generateGlob creates a glob() expression for srcs
-func generateGlob(patterns []string) interface{} {
-	// Return a special marker that will be formatted as glob([...]) in the output
-	return rule.GlobValue{
-		Patterns: patterns,
+// collectSourceFiles walks the lib/ directory and returns all source files
+func collectSourceFiles(baseDir string, hasLib bool) []string {
+	var srcs []string
+
+	if hasLib {
+		libFiles := walkDir(filepath.Join(baseDir, "lib"), baseDir)
+		srcs = append(srcs, libFiles...)
 	}
+
+	// Sort for consistent output
+	sortStrings(srcs)
+	return srcs
+}
+
+// walkDir recursively walks a directory and returns relative paths to all files
+func walkDir(dir string, baseDir string) []string {
+	var files []string
+
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+		if !info.IsDir() {
+			// Get relative path from baseDir
+			relPath, err := filepath.Rel(baseDir, path)
+			if err == nil {
+				files = append(files, relPath)
+			}
+		}
+		return nil
+	})
+
+	return files
 }
 
 // generateDeps creates a list of dependency labels from pubspec.lock

@@ -3,10 +3,7 @@ load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flut
 
 flutter_library(
     name = "lib",
-    srcs = glob([
-        "lib/**",
-        "web/**",
-    ]),
+    srcs = ["lib/main.dart"],
     pubspec = "pubspec.yaml",
 )
 

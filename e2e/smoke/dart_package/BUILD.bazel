@@ -8,7 +8,7 @@ build_test(
 
 dart_library(
     name = "lib",
-    srcs = glob(["lib/**"]),
+    srcs = ["lib/math_utils.dart"],
     pubspec = "pubspec.yaml",
     deps = ["@pub_fixnum//:fixnum"],
 )

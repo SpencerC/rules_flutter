@@ -17,7 +17,6 @@ func (fl *flutterLang) Kinds() map[string]rule.KindInfo {
 				"pubspec": true,
 			},
 			MergeableAttrs: map[string]bool{
-				"srcs": true,
 				"deps": true,
 			},
 			ResolveAttrs: map[string]bool{
@@ -54,7 +53,6 @@ func (fl *flutterLang) Kinds() map[string]rule.KindInfo {
 				"srcs": true,
 			},
 			MergeableAttrs: map[string]bool{
-				"srcs": true,
 				"deps": true,
 			},
 			ResolveAttrs: map[string]bool{
