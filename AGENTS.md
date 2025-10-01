@@ -15,7 +15,8 @@
 - `cd e2e/smoke && bazel test //:integration_tests` — Integration tests in external workspace.
 - `bazel test //e2e/smoke:smoke_test` — External smoke test.
 - `bazel run //tools:update_flutter_versions` — Refresh Flutter SDK versions/hashes.
-- `bazel run //:gazelle` — Regenerate `bzl_library` targets.
+- `bazel run //:gazelle — Regenerate Bazel/Gazelle targets.
+- `bazel test //gazelle/...` — Run Gazelle plugin Go tests.
 - `pre-commit install` and `bazel run @buildifier_prebuilt//:buildifier` — Set up hooks and format BUILD/Starlark.
 
 ## Pre-Commit & Quality Gates
