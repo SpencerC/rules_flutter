@@ -5,6 +5,10 @@ flutter_library(
     name = "lib",
     srcs = ["lib/main.dart"],
     pubspec = "pubspec.yaml",
+    deps = [
+        "@pub_fixnum//:fixnum",
+        "@pub_vector_math//:vector_math",
+    ],
 )
 
 # Flutter tests in the same directory as pubspec.yaml

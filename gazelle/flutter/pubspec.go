@@ -14,10 +14,10 @@ type PubspecLock struct {
 
 // PubPackage represents a single package entry in pubspec.lock
 type PubPackage struct {
-	Dependency  string                 `yaml:"dependency"`
-	Description map[string]interface{} `yaml:"description"`
-	Source      string                 `yaml:"source"`
-	Version     string                 `yaml:"version"`
+	Dependency  string      `yaml:"dependency"`
+	Description interface{} `yaml:"description"`
+	Source      string      `yaml:"source"`
+	Version     string      `yaml:"version"`
 }
 
 // PubspecYaml represents the structure of a pubspec.yaml file
@@ -57,14 +57,14 @@ func ParsePubspecYaml(path string) (*PubspecYaml, error) {
 	return &pubspec, nil
 }
 
-// GetDirectDependencies returns only direct main dependencies from pubspec.lock
-// Filters out transitive and dev dependencies, but retains source information for callers.
+// GetDirectDependencies returns all direct dependencies from pubspec.lock.
+// This includes main, dev, and overridden dependencies while still excluding transitives.
 func GetDirectDependencies(lock *PubspecLock) map[string]PubPackage {
 	deps := make(map[string]PubPackage)
 
 	for name, pkg := range lock.Packages {
-		// Only include "direct main" dependencies
-		if pkg.Dependency != "direct main" {
+		// Only include dependency entries that are marked as direct.
+		if !strings.HasPrefix(pkg.Dependency, "direct") {
 			continue
 		}
 

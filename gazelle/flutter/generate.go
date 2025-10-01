@@ -163,17 +163,17 @@ func generateDeps(lock *PubspecLock, fc *FlutterConfig) []string {
 	}
 
 	deps := make([]string, 0, len(directDeps))
-	for pkg := range directDeps {
+	for pkg, meta := range directDeps {
+		depKind := meta.Dependency
+		if depKind != "direct main" && depKind != "direct overridden" {
+			continue
+		}
+
 		repoName := SanitizeRepoName(pkg)
-		switch directDeps[pkg].Source {
+		switch meta.Source {
 		case "hosted":
 			dep := fmt.Sprintf("@%s//:%s", repoName, pkg)
 			deps = append(deps, dep)
-		case "sdk":
-			if fc != nil && fc.SDKRepo != "" {
-				dep := fmt.Sprintf("%s//packages/%s:%s", fc.SDKRepo, pkg, pkg)
-				deps = append(deps, dep)
-			}
 		}
 	}
 
