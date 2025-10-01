@@ -462,8 +462,13 @@ BUILD_COMMAND="{build_command}"
 BUILD_OUTPUT_DIR="{build_output_dir}"
 ORIGINAL_PWD="$PWD"
 
+# Convert relative paths to absolute before changing directories
+BUILD_ARTIFACTS_ABS="$ORIGINAL_PWD/$BUILD_ARTIFACTS"
+DART_TOOL_DIR_ABS="$ORIGINAL_PWD/$DART_TOOL_DIR"
+PUB_CACHE_DIR_ABS="$ORIGINAL_PWD/$PUB_CACHE_DIR"
+
 # Set up environment
-export PUB_CACHE="$PUB_CACHE_DIR"
+export PUB_CACHE="$PUB_CACHE_DIR_ABS"
 
 # Configure Flutter for sandbox environment
 export FLUTTER_SUPPRESS_ANALYTICS=true
@@ -478,9 +483,9 @@ export PATH="$FLUTTER_ROOT/bin:$PATH"
 cd "$ORIGINAL_PWD/$WORKSPACE_DIR"
 
 # Copy .dart_tool tree to workspace
-if [ -d "$DART_TOOL_DIR" ]; then
+if [ -d "$DART_TOOL_DIR_ABS" ]; then
     mkdir -p .dart_tool
-    cp -R "$DART_TOOL_DIR/." .dart_tool/
+    cp -R "$DART_TOOL_DIR_ABS/." .dart_tool/
 fi
 
 # Run flutter build
@@ -507,18 +512,37 @@ if [ ! -x "$FLUTTER_BIN_ABS" ]; then
 fi
 
 echo "Flutter binary verified at: $FLUTTER_BIN_ABS"
+
+# Regenerate package_config.json with correct paths for this sandbox
+# This ensures package imports resolve correctly in the build environment
+echo ""
+echo "Regenerating package_config.json for build environment..."
+if "$FLUTTER_BIN_ABS" pub get --offline 2>&1 > /dev/null; then
+    echo "✓ Package config regenerated successfully"
+else
+    # If offline fails, run normal pub get (packages should already be cached)
+    echo "Offline pub get failed, running normal pub get..."
+    if "$FLUTTER_BIN_ABS" pub get --suppress-analytics 2>&1 > /dev/null; then
+        echo "✓ Package config regenerated successfully"
+    else
+        echo "Warning: Could not regenerate package_config.json"
+    fi
+fi
+echo ""
+
 echo "Running: $FLUTTER_BIN_ABS {build_command}"
 
 if "$FLUTTER_BIN_ABS" --suppress-analytics {build_command}; then
     echo "✓ flutter {build_command} completed successfully"
-    
-    # Copy build artifacts
-    mkdir -p "$BUILD_ARTIFACTS"
+
+    # Copy build artifacts to absolute path
+    mkdir -p "$BUILD_ARTIFACTS_ABS"
     if [ -d "$BUILD_OUTPUT_DIR" ]; then
-        cp -r "$BUILD_OUTPUT_DIR"/* "$BUILD_ARTIFACTS/" 2>/dev/null || echo "No files to copy from $BUILD_OUTPUT_DIR"
+        echo "Copying from $BUILD_OUTPUT_DIR to $BUILD_ARTIFACTS_ABS"
+        cp -r "$BUILD_OUTPUT_DIR"/* "$BUILD_ARTIFACTS_ABS/" 2>/dev/null || echo "No files to copy from $BUILD_OUTPUT_DIR"
         echo "Build artifacts copied from $BUILD_OUTPUT_DIR"
         echo "Artifacts directory contents:"
-        ls -la "$BUILD_ARTIFACTS" | head -10
+        ls -la "$BUILD_ARTIFACTS_ABS" | head -10
     else
         echo "✗ FATAL ERROR: Expected build output directory $BUILD_OUTPUT_DIR not found"
         echo "Flutter build completed but did not create expected output directory"

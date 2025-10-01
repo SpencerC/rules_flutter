@@ -357,11 +357,14 @@ def _create_flutter_run_script(ctx, build_artifacts):
             'echo "Serving Flutter web build from $ARTIFACTS_DIR on http://localhost:$PORT"',
             'echo "Press Ctrl+C to stop the server."',
             'cd "$ARTIFACTS_DIR"',
-            "if ! command -v python3 >/dev/null 2>&1; then",
-            '    echo "python3 is required to serve Flutter web artifacts." >&2',
+            "if command -v python3 >/dev/null 2>&1; then",
+            '    exec python3 -m http.server "$PORT"',
+            "elif command -v python >/dev/null 2>&1; then",
+            '    exec python -m http.server "$PORT"',
+            "else",
+            '    echo "python3 or python is required to serve Flutter web artifacts." >&2',
             "    exit 1",
             "fi",
-            'exec python3 -m http.server "$PORT"',
         ])
     else:
         script_lines.extend([
