@@ -290,8 +290,62 @@ def flutter_library(
 
     _flutter_library_update(**update_args)
 
+def _create_flutter_run_script(ctx, build_artifacts):
+    """Render the runner script that powers `bazel run` for flutter_app targets."""
+
+    workspace_name = ctx.workspace_name
+    artifact_short_path = build_artifacts.short_path
+
+    script_lines = [
+        "#!/bin/bash",
+        "set -euo pipefail",
+        "",
+        'RUNFILES_DIR="${RUNFILES_DIR:-$0.runfiles}"',
+        'if [ ! -d "$RUNFILES_DIR" ]; then',
+        '    if [ -n "${RUNFILES_MANIFEST_FILE:-}" ]; then',
+        '        echo "Runfiles manifest found at $RUNFILES_MANIFEST_FILE but directory layout is required." >&2',
+        "    else",
+        '        echo "Runfiles directory not found at $RUNFILES_DIR" >&2',
+        "    fi",
+        "    exit 1",
+        "fi",
+        "",
+        'ARTIFACTS_DIR="$RUNFILES_DIR/{workspace}/{artifact}"'.format(
+            workspace = workspace_name,
+            artifact = artifact_short_path,
+        ),
+        'if [ ! -d "$ARTIFACTS_DIR" ]; then',
+        '    echo "Flutter build artifacts not found at $ARTIFACTS_DIR" >&2',
+        "    exit 1",
+        "fi",
+        "",
+    ]
+
+    if ctx.attr.target == "web":
+        script_lines.extend([
+            'PORT="${1:-8080}"',
+            'echo "Serving Flutter web build from $ARTIFACTS_DIR on http://localhost:$PORT"',
+            'echo "Press Ctrl+C to stop the server."',
+            'cd "$ARTIFACTS_DIR"',
+            "if ! command -v python3 >/dev/null 2>&1; then",
+            '    echo "python3 is required to serve Flutter web artifacts." >&2',
+            "    exit 1",
+            "fi",
+            'exec python3 -m http.server "$PORT"',
+        ])
+    else:
+        script_lines.extend([
+            'echo "flutter run for target {target} is not yet implemented."'.format(
+                target = ctx.attr.target,
+            ),
+            'echo "Artifacts are available at $ARTIFACTS_DIR"',
+        ])
+
+    script_lines.append("")
+    return "\n".join(script_lines)
+
 def _flutter_app_impl(ctx):
-    """Implementation for flutter_app rule."""
+    """Implementation for flutter_app targets."""
 
     if not ctx.attr.embed:
         fail("flutter_app requires at least one flutter_library in embed")
@@ -378,14 +432,24 @@ fi
         library_info.dart_tool,
     )
 
-    output_files = [build_output]
+    runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
+    ctx.actions.write(
+        output = runner,
+        content = _create_flutter_run_script(ctx, build_artifacts),
+        is_executable = True,
+    )
+
+    output_files = [build_output, build_artifacts, runner]
 
     return [
         DefaultInfo(
-            files = depset(output_files + [build_artifacts]),
+            files = depset(output_files),
+            executable = runner,
             runfiles = ctx.runfiles(
                 files = [
+                    runner,
                     build_output,
+                    build_artifacts,
                     library_info.pubspec_lock,
                     library_info.pub_cache,
                     library_info.dart_tool,
@@ -394,7 +458,7 @@ fi
         ),
     ]
 
-flutter_app = rule(
+_flutter_app_rule = rule(
     implementation = _flutter_app_impl,
     attrs = {
         "embed": attr.label_list(
@@ -406,17 +470,109 @@ flutter_app = rule(
             doc = "Additional source files to overlay (e.g. web/ directories).",
         ),
         "target": attr.string(
-            default = "web",
             values = ["web", "apk", "ios", "macos", "linux", "windows"],
             doc = "Flutter build target platform",
         ),
     },
+    executable = True,
     toolchains = ["//flutter:toolchain_type"],
-    doc = """Builds a Flutter application for the specified target platform.
-
-    Define a flutter_library in the same package and reference it via `embed`.
-    Use `srcs` to layer platform-specific resources (for example `web/**`).""",
+    doc = "Internal rule for flutter_app platform targets.",
 )
+
+def _to_label_list(value):
+    if value == None:
+        return []
+    if type(value) == type([]):
+        return value
+    return [value]
+
+def flutter_app(
+        *,
+        name,
+        embed,
+        srcs = None,
+        visibility = None,
+        tags = None,
+        testonly = False,
+        web = None,
+        apk = None,
+        ios = None,
+        macos = None,
+        linux = None,
+        windows = None):
+    """Macro that defines flutter_app platform targets.
+
+    Each platform attribute (`web`, `apk`, `ios`, `macos`, `linux`, `windows`) accepts
+    labels for files that should be overlaid into the Flutter workspace when building
+    for that platform. A target is emitted only when the corresponding attribute is
+    provided.
+
+    Args:
+      name: The base name for the flutter_app targets.
+      embed: List of flutter_library targets to embed.
+      srcs: Additional source files to include in the build workspace.
+      visibility: Visibility specification for generated targets.
+      tags: Tags to apply to generated targets.
+      testonly: Whether the targets are testonly.
+      web: Label for web-specific files (e.g., web/index.html). If provided, generates {name}.web target.
+      apk: Label for Android APK-specific files. If provided, generates {name}.apk target.
+      ios: Label for iOS-specific files. If provided, generates {name}.ios target.
+      macos: Label for macOS-specific files. If provided, generates {name}.macos target.
+      linux: Label for Linux-specific files. If provided, generates {name}.linux target.
+      windows: Label for Windows-specific files. If provided, generates {name}.windows target.
+    """
+
+    platform_specs = {
+        "web": web,
+        "apk": apk,
+        "ios": ios,
+        "macos": macos,
+        "linux": linux,
+        "windows": windows,
+    }
+
+    common_srcs = _to_label_list(srcs)
+
+    generated = []
+
+    for platform, platform_srcs in platform_specs.items():
+        if platform_srcs == None:
+            continue
+
+        target_name = "{}.{}".format(name, platform)
+        rule_args = {
+            "name": target_name,
+            "embed": embed,
+            "srcs": common_srcs + _to_label_list(platform_srcs),
+            "target": platform,
+        }
+
+        if visibility != None:
+            rule_args["visibility"] = visibility
+        if tags != None:
+            rule_args["tags"] = tags
+        if testonly:
+            rule_args["testonly"] = True
+
+        _flutter_app_rule(**rule_args)
+        generated.append(target_name)
+
+    if not generated:
+        fail(
+            "flutter_app requires at least one platform attribute (web, apk, ios, macos, linux, windows).",
+        )
+
+    primary = generated[0]
+    alias_args = {
+        "name": name,
+        "actual": ":" + primary,
+    }
+    if visibility != None:
+        alias_args["visibility"] = visibility
+    if tags != None:
+        alias_args["tags"] = tags
+
+    native.alias(**alias_args)
 
 def _flutter_test_impl(ctx):
     """Implementation for flutter_test rule."""

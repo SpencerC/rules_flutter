@@ -163,4 +163,4 @@ The project follows conventional commit messages for automated releases. Develop
 
 - Add new Flutter versions in `scripts/update_flutter_versions.sh` SUPPORTED_VERSIONS array
 - Platform support defined in `flutter/private/toolchains_repo.bzl` PLATFORMS
-- Build targets configured in `flutter_app` rule's `target` attribute values
+- Build targets configured by `flutter_app` macro platform attributes

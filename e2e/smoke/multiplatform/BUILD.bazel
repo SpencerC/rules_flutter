@@ -9,26 +9,26 @@ flutter_library(
 
 # Flutter app in the same directory as pubspec.yaml
 flutter_app(
-    name = "multiplatform_web",
+    name = "multiplatform",
     embed = [":lib"],
-    target = "web",
     visibility = ["//visibility:public"],
+    web = ":web_files",
 )
 
-# TODO: Enable APK builds once Android SDK is set up in CI
-# flutter_app(
-#     name = "multiplatform_apk",
-#     embed = [":lib"],
-#     target = "apk",
-#     visibility = ["//visibility:public"],
-# )
+# TODO: Enable APK builds once Android SDK is set up in CI by adding
+# `apk = ":[apk_files]"` once assets are defined.
 
 # Test that the apps build successfully
 build_test(
     name = "multiplatform_build_test",
     targets = [
-        ":multiplatform_web",
+        ":multiplatform.web",
         # Note: APK builds require Android SDK setup, so commented out for now
-        # ":multiplatform_apk",
+        # ":multiplatform.apk",
     ],
+)
+
+filegroup(
+    name = "web_files",
+    srcs = glob(["web/**"]),
 )

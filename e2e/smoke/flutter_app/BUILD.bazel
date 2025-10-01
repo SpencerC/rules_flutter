@@ -9,7 +9,7 @@ flutter_library(
 
 # Flutter tests in the same directory as pubspec.yaml
 flutter_test(
-    name = "app_test",
+    name = "lib_test",
     srcs = glob(["test/**"]),
     embed = [":lib"],
     visibility = ["//visibility:public"],
@@ -17,13 +17,18 @@ flutter_test(
 
 # Flutter app in the same directory as pubspec.yaml
 flutter_app(
-    name = "web_app",
+    name = "app",
     embed = [":lib"],
-    target = "web",
     visibility = ["//visibility:public"],
+    web = ":web_files",
 )
 
 build_test(
     name = "app_build_test",
-    targets = [":web_app"],
+    targets = [":app.web"],
+)
+
+filegroup(
+    name = "web_files",
+    srcs = glob(["web/**"]),
 )

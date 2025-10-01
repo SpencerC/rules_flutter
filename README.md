@@ -89,7 +89,7 @@ flutter_library(
 flutter_app(
     name = "my_app",
     embed = [":app_lib"],
-    target = "web",  # Options: web, apk, ios, macos, linux, windows
+    web = glob(["web/**"]),
 )
 
 flutter_test(
@@ -110,11 +110,14 @@ fresh `pubspec.lock` into your workspace next to `pubspec.yaml`.
 ### 2. Build your app
 
 ```bash
-# Build for web
-bazel build //:my_app
+# Build for web (aliased as //:my_app)
+bazel build //:my_app.web
 
 # Build for Android (requires Android SDK setup)
-bazel build //:my_app --define target=apk
+bazel build //:my_app.apk
+
+# Run the web app locally (serves build artifacts over HTTP)
+bazel run //:my_app.web
 
 # Run tests
 bazel test //:my_app_test
@@ -130,24 +133,11 @@ flutter_library(
 )
 
 flutter_app(
-    name = "my_app_web",
+    name = "my_app",
     embed = [":app_lib"],
-    srcs = glob(["web/**"]),
-    target = "web",
-)
-
-flutter_app(
-    name = "my_app_android",
-    embed = [":app_lib"],
-    srcs = glob(["android/**"]),
-    target = "apk",
-)
-
-flutter_app(
-    name = "my_app_ios",
-    embed = [":app_lib"],
-    srcs = glob(["ios/**"]),
-    target = "ios",
+    web = glob(["web/**"]),
+    apk = glob(["android/**"]),
+    ios = glob(["ios/**"]),
 )
 ```
 
@@ -168,17 +158,25 @@ workspace, pub cache, and pubspec outputs to other rules.
 
 ### flutter_app
 
-Builds a Flutter application for the specified target platform.
+Generates runnable Flutter application targets for the platforms you opt into.
 
 **Attributes:**
 
-| Name     | Description                                | Type         | Mandatory | Default |
-| -------- | ------------------------------------------ | ------------ | --------- | ------- |
-| `embed`  | Prepared `flutter_library` targets to use  | `label_list` | ✅        |         |
-| `srcs`   | Additional source files to overlay per app | `label_list` |           |         |
-| `target` | Flutter build target platform              | `string`     |           | `"web"` |
+| Name      | Description                                                           | Type         | Mandatory | Default |
+| --------- | --------------------------------------------------------------------- | ------------ | --------- | ------- |
+| `embed`   | Prepared `flutter_library` targets to use                             | `label_list` | ✅        |         |
+| `srcs`    | Files copied into every platform-specific Flutter workspace           | `label_list` |           |         |
+| `web`     | Files specific to Flutter web builds; enables the `<name>.web` target | `label_list` |           |         |
+| `apk`     | Files specific to Android builds; enables the `<name>.apk` target     | `label_list` |           |         |
+| `ios`     | Files specific to iOS builds; enables the `<name>.ios` target         | `label_list` |           |         |
+| `macos`   | Files specific to macOS builds; enables the `<name>.macos` target     | `label_list` |           |         |
+| `linux`   | Files specific to Linux builds; enables the `<name>.linux` target     | `label_list` |           |         |
+| `windows` | Files specific to Windows builds; enables the `<name>.windows` target | `label_list` |           |         |
 
-**Supported targets:** `web`, `apk`, `ios`, `macos`, `linux`, `windows`
+Targets are created only for the platforms you specify. Each generated target is
+named `<name>.<platform>` and is runnable (`bazel run` will execute a simple
+launcher; for web it serves the built assets locally). The macro also emits an
+alias named `<name>` that points at the first declared platform for convenience.
 
 ### flutter_test
 
