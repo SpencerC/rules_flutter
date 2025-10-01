@@ -93,7 +93,7 @@ mkdir -p "$WORKSPACE_DIR/test"
 
     return working_dir, all_input_files
 
-def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file):
+def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, dependency_pub_caches = []):
     """Execute flutter pub get command.
 
     Args:
@@ -101,6 +101,7 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file):
         flutter_toolchain: The Flutter toolchain
         working_dir: Flutter project working directory
         pubspec_file: The pubspec.yaml file
+        dependency_pub_caches: List of pub_cache directories from dependencies (can contain Files or depsets)
 
     Returns:
         Tuple of (pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir)
@@ -112,11 +113,24 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file):
     flutter_bin_file = flutter_toolchain.flutterinfo.tool_files[0]
     flutter_bin = flutter_bin_file.path
 
+    # Flatten dependency pub_caches: convert depsets to lists
+    dep_pub_cache_files = []
+    for item in dependency_pub_caches:
+        if type(item) == "depset":
+            dep_pub_cache_files.extend(item.to_list())
+        else:
+            dep_pub_cache_files.append(item)
+
     # Create output artifacts
     pub_get_output = ctx.actions.declare_file(ctx.label.name + "_pub_get.log")
     pub_cache_dir = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
     pubspec_lock = ctx.actions.declare_file(ctx.label.name + "_pubspec.lock")
     dart_tool_dir = ctx.actions.declare_directory(ctx.label.name + "_dart_tool")
+
+    # Build arguments for dependency pub_cache directories
+    dep_pub_cache_args = []
+    for dep_cache in dep_pub_cache_files:
+        dep_pub_cache_args.append(dep_cache.path)
 
     # Enhanced script that properly executes flutter pub get and reports results
     script_content = """#!/bin/bash
@@ -130,6 +144,27 @@ ORIGINAL_PWD="$PWD"
 # Set up pub cache directory from file path
 export PUB_CACHE="$PUB_CACHE_DIR"
 mkdir -p "$PUB_CACHE_DIR"
+
+# Pre-populate pub cache from dependencies
+echo "=== Pre-populating Pub Cache from Dependencies ==="
+DEP_CACHES=({dep_caches})
+if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
+    for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
+        if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
+            echo "Copying dependency pub_cache from: $DEP_CACHE"
+            # Use rsync if available for better performance, otherwise use cp
+            if command -v rsync >/dev/null 2>&1; then
+                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR/"
+            else
+                cp -R "$DEP_CACHE/." "$PUB_CACHE_DIR/"
+            fi
+        fi
+    done
+else
+    echo "No dependency pub_caches to pre-populate"
+fi
+echo "Pub cache pre-population complete"
+echo ""
 
 # Configure Flutter for sandbox environment  
 export FLUTTER_SUPPRESS_ANALYTICS=true
@@ -279,6 +314,7 @@ fi
         workspace_dir = working_dir.path,
         pub_cache_dir = pub_cache_dir.path,
         flutter_bin = flutter_bin,
+        dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
         tool_files_count = len(flutter_toolchain.flutterinfo.tool_files),
         sdk_files_count = len(flutter_toolchain.flutterinfo.sdk_files),
         first_tool_file_path = flutter_bin_file.path if flutter_toolchain.flutterinfo.tool_files else "No tool files",
@@ -286,7 +322,7 @@ fi
 
     # Execute pub get and create all outputs in one action
     ctx.actions.run_shell(
-        inputs = [working_dir, pubspec_file] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
+        inputs = [working_dir, pubspec_file] + dep_pub_cache_files + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
         outputs = [pub_get_output, pubspec_lock, pub_cache_dir, dart_tool_dir],
         command = script_content + """
 
