@@ -11,9 +11,16 @@ bzl_library(
 )
 
 bzl_library(
+    name = "package_generation",
+    srcs = ["package_generation.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)
+
+bzl_library(
     name = "pub_repository",
     srcs = ["pub_repository.bzl"],
     visibility = ["//flutter:__subpackages__"],
+    deps = [":package_generation"],
 )
 
 bzl_library(

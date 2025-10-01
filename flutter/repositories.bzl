@@ -6,6 +6,7 @@ See https://docs.bazel.build/versions/main/skylark/deploying.html#dependencies
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", _http_archive = "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("//flutter/private:package_generation.bzl", "generate_package_build")
 load("//flutter/private:toolchains_repo.bzl", "PLATFORMS", "toolchains_repo")
 load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
 
@@ -88,6 +89,37 @@ flutter_toolchain(
 
     # Base BUILD file for this repository
     repository_ctx.file("BUILD.bazel", build_content)
+
+    _generate_flutter_packages(repository_ctx)
+
+def _generate_flutter_packages(repository_ctx):
+    """Generate BUILD files for packages bundled within the Flutter SDK."""
+
+    package_roots = [
+        "flutter/packages",
+        "flutter/bin/cache/pkg",
+    ]
+
+    for root in package_roots:
+        root_path = repository_ctx.path(root)
+        if not root_path.exists or not root_path.is_dir:
+            continue
+
+        for entry in root_path.readdir():
+            if not entry.is_dir:
+                continue
+
+            package_dir = "{}/{}".format(root, entry.basename)
+            pubspec_path = repository_ctx.path(package_dir + "/pubspec.yaml")
+            if not pubspec_path.exists:
+                continue
+
+            package_name = entry.basename
+            generate_package_build(
+                repository_ctx,
+                package_name = package_name,
+                package_dir = package_dir,
+            )
 
 flutter_repositories = repository_rule(
     _flutter_repo_impl,

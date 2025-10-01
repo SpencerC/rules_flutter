@@ -1,6 +1,9 @@
 package flutter
 
 import (
+	"fmt"
+	"runtime"
+
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/rule"
 )
@@ -15,6 +18,9 @@ const (
 
 	// DirectiveGenerate controls whether to generate flutter_library rules
 	DirectiveGenerate = "flutter_generate"
+
+	// DirectiveSDKRepo overrides the repository label used for Flutter SDK deps
+	DirectiveSDKRepo = "flutter_sdk_repo"
 )
 
 // FlutterConfig contains Flutter-specific configuration
@@ -27,6 +33,9 @@ type FlutterConfig struct {
 
 	// Generate controls whether to generate flutter_library rules
 	Generate bool
+
+	// SDKRepo is the repository prefix used for sdk-based dependencies
+	SDKRepo string
 }
 
 // GetFlutterConfig returns the FlutterConfig for a given config.Config
@@ -37,9 +46,9 @@ func GetFlutterConfig(c *config.Config) *FlutterConfig {
 	return &FlutterConfig{
 		LibraryName: "lib",
 		Generate:    true,
+		SDKRepo:     defaultSDKRepo(c),
 	}
 }
-
 
 // KnownDirectives returns the list of recognized Flutter directives
 func (fc *FlutterConfig) KnownDirectives() []string {
@@ -47,6 +56,7 @@ func (fc *FlutterConfig) KnownDirectives() []string {
 		DirectiveExclude,
 		DirectiveLibraryName,
 		DirectiveGenerate,
+		DirectiveSDKRepo,
 	}
 }
 
@@ -65,6 +75,12 @@ func (fc *FlutterConfig) Configure(c *config.Config, rel string, f *rule.File) {
 			fc.LibraryName = d.Value
 		case DirectiveGenerate:
 			fc.Generate = d.Value == "true" || d.Value == "yes" || d.Value == "1"
+		case DirectiveSDKRepo:
+			if d.Value != "" {
+				fc.SDKRepo = d.Value
+			} else {
+				fc.SDKRepo = defaultSDKRepo(c)
+			}
 		}
 	}
 }
@@ -75,6 +91,7 @@ func (fc *FlutterConfig) Clone() *FlutterConfig {
 		Exclude:     append([]string{}, fc.Exclude...),
 		LibraryName: fc.LibraryName,
 		Generate:    fc.Generate,
+		SDKRepo:     fc.SDKRepo,
 	}
 }
 
@@ -86,4 +103,16 @@ func (fc *FlutterConfig) IsExcluded(dir string) bool {
 		}
 	}
 	return false
+}
+
+func defaultSDKRepo(c *config.Config) string {
+	suffix := runtime.GOOS
+	if suffix == "darwin" {
+		suffix = "macos"
+	}
+	repoName := c.RepoName
+	if repoName == "" {
+		return fmt.Sprintf("@flutter_%s", suffix)
+	}
+	return fmt.Sprintf("@%s++flutter+flutter_%s", repoName, suffix)
 }

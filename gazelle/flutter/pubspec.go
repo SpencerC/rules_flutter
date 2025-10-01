@@ -58,12 +58,9 @@ func ParsePubspecYaml(path string) (*PubspecYaml, error) {
 }
 
 // GetDirectDependencies returns only direct main dependencies from pubspec.lock
-// Filters out:
-// - transitive dependencies
-// - dev dependencies
-// - sdk dependencies (flutter, flutter_test)
-func GetDirectDependencies(lock *PubspecLock) map[string]string {
-	deps := make(map[string]string)
+// Filters out transitive and dev dependencies, but retains source information for callers.
+func GetDirectDependencies(lock *PubspecLock) map[string]PubPackage {
+	deps := make(map[string]PubPackage)
 
 	for name, pkg := range lock.Packages {
 		// Only include "direct main" dependencies
@@ -71,18 +68,7 @@ func GetDirectDependencies(lock *PubspecLock) map[string]string {
 			continue
 		}
 
-		// Skip SDK dependencies
-		if pkg.Source == "sdk" {
-			continue
-		}
-
-		// Only include hosted packages (pub.dev)
-		if pkg.Source != "hosted" {
-			continue
-		}
-
-		// Get package version
-		deps[name] = pkg.Version
+		deps[name] = pkg
 	}
 
 	return deps

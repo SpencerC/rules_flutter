@@ -28,6 +28,7 @@ func (fl *flutterLang) RegisterFlags(fs *flag.FlagSet, cmd string, c *config.Con
 	fc := &FlutterConfig{
 		LibraryName: "lib",
 		Generate:    true,
+		SDKRepo:     defaultSDKRepo(c),
 	}
 	c.Exts[languageName] = fc
 }
@@ -53,6 +54,7 @@ func (fl *flutterLang) Configure(c *config.Config, rel string, f *rule.File) {
 		fc = &FlutterConfig{
 			LibraryName: "lib",
 			Generate:    true,
+			SDKRepo:     defaultSDKRepo(c),
 		}
 	}
 

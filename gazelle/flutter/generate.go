@@ -104,7 +104,7 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 
 	// Set deps attribute from pubspec.lock if available
 	if hasPubspecLock && pubspecLock != nil {
-		deps := generateDeps(pubspecLock)
+		deps := generateDeps(pubspecLock, fc)
 		if len(deps) > 0 {
 			r.SetAttr("deps", deps)
 		}
@@ -156,7 +156,7 @@ func walkDir(dir string, baseDir string) []string {
 }
 
 // generateDeps creates a list of dependency labels from pubspec.lock
-func generateDeps(lock *PubspecLock) []string {
+func generateDeps(lock *PubspecLock, fc *FlutterConfig) []string {
 	directDeps := GetDirectDependencies(lock)
 	if len(directDeps) == 0 {
 		return nil
@@ -165,9 +165,16 @@ func generateDeps(lock *PubspecLock) []string {
 	deps := make([]string, 0, len(directDeps))
 	for pkg := range directDeps {
 		repoName := SanitizeRepoName(pkg)
-		// Generate label like @pub_fixnum//:fixnum
-		dep := fmt.Sprintf("@%s//:%s", repoName, pkg)
-		deps = append(deps, dep)
+		switch directDeps[pkg].Source {
+		case "hosted":
+			dep := fmt.Sprintf("@%s//:%s", repoName, pkg)
+			deps = append(deps, dep)
+		case "sdk":
+			if fc != nil && fc.SDKRepo != "" {
+				dep := fmt.Sprintf("%s//packages/%s:%s", fc.SDKRepo, pkg, pkg)
+				deps = append(deps, dep)
+			}
+		}
 	}
 
 	// Sort for consistent output

@@ -2,8 +2,10 @@
 
 Features:
 - If `version` is omitted, resolves the latest stable version from pub.dev API.
-- Generates a simple BUILD file exporting a `dart_library` for `lib/**`.
+- Generates BUILD targets for the package by analysing pubspec metadata.
 """
+
+load("//flutter/private:package_generation.bzl", "generate_package_build")
 
 _DOC = """Download and setup a Dart package from pub.dev"""
 
@@ -72,61 +74,13 @@ def _pub_dev_repository_impl(repository_ctx):
         stripPrefix = "",  # pub.dev packages typically have no prefix
     )
 
-    # Read pubspec.yaml to understand the package structure
-    # pubspec_content = ""
-    # if repository_ctx.path("pubspec.yaml").exists:
-    #     pubspec_content = repository_ctx.read("pubspec.yaml")
-
-    # Generate BUILD.bazel file for the package
-    build_content = _generate_build_file(package_name, version)
-    repository_ctx.file("BUILD.bazel", build_content)
+    generate_package_build(repository_ctx, package_name)
 
     # Create a simple marker file for debugging
     repository_ctx.file(
         "PUB_PACKAGE_INFO",
         "Package: {}\nVersion: {}\nDownloaded from: {}\n".format(package_name, version, archive_url),
     )
-
-def _generate_build_file(package_name, version):
-    """Generate a BUILD.bazel file for the pub package."""
-
-    # Basic BUILD file content
-    build_content = '''# Generated BUILD file for pub.dev package: {package}
-# Version: {version}
-
-load("@rules_flutter//flutter:defs.bzl", "dart_library")
-
-# Main library target
-dart_library(
-    name = "{package}",
-    srcs = glob([
-        "lib/**/*.dart",
-    ]),
-    visibility = ["//visibility:public"],
-)
-
-# Export the main library with a shorter alias
-alias(
-    name = "lib",
-    actual = ":{package}",
-    visibility = ["//visibility:public"],
-)
-
-# Files for inspection
-filegroup(
-    name = "all_files",
-    srcs = glob(["**/*"]),
-    visibility = ["//visibility:public"],
-)
-
-filegroup(
-    name = "pubspec",
-    srcs = ["pubspec.yaml"],
-    visibility = ["//visibility:public"],
-)
-'''.format(package = package_name, version = version)
-
-    return build_content
 
 pub_dev_repository = repository_rule(
     implementation = _pub_dev_repository_impl,
