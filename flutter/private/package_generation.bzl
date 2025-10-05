@@ -148,7 +148,9 @@ def _collect_lib_sources(repository_ctx, package_dir):
     for line in result.stdout.splitlines():
         line = line.strip()
         if line:
-            sources.append("lib/{}".format(line))
+            # Only include .dart files for dart_library rule
+            if line.endswith(".dart"):
+                sources.append("lib/{}".format(line))
 
     return sorted(sources)
 

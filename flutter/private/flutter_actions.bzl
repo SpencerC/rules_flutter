@@ -1,100 +1,114 @@
 """Flutter command execution actions for Bazel rules."""
 
-def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files):
+def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files):
     """Create a working directory structure for Flutter commands.
 
     Args:
         ctx: The rule context
         pubspec_file: The pubspec.yaml file
         dart_files: List of .dart source files
-        other_files: List of other source files
+        other_files: List of other source files declared in srcs
+        data_files: List of additional data files that must be available in the workspace
 
     Returns:
-        Tuple of (working_dir, all_input_files)
+        Tuple of (working_dir, input_files)
     """
-    working_dir = ctx.actions.declare_directory(ctx.label.name + "_flutter_workspace")
-    all_input_files = [pubspec_file] + dart_files + other_files
+    working_dir = ctx.actions.declare_directory(ctx.label.name + "_workspace_seed")
 
-    # Create the workspace directory structure
+    # Build a manifest of files that should be available inside the workspace with
+    # paths relative to the package root so code generation tools see the expected
+    # project layout (e.g. lib/, test/, l10n/, web/).
+    package = ctx.label.package
+    package_prefix = package + "/" if package else ""
+
+    workspace_entries = {}
+    seen = {}
+
+    def add_entry(file, rel_path = None):
+        if file == None:
+            return
+        if file.path in seen:
+            return
+        seen[file.path] = True
+
+        if rel_path == None:
+            short_path = file.short_path
+            if package_prefix and short_path.startswith(package_prefix):
+                rel_path = short_path[len(package_prefix):]
+            else:
+                rel_path = file.basename
+
+        workspace_entries[rel_path] = file
+
+    add_entry(pubspec_file, "pubspec.yaml")
+
+    for f in dart_files + other_files + data_files:
+        add_entry(f)
+
+    manifest = ctx.actions.declare_file(ctx.label.name + "_workspace_manifest.txt")
+    manifest_content = []
+    for rel_path in sorted(workspace_entries.keys()):
+        file = workspace_entries[rel_path]
+        manifest_content.append("{}|{}".format(rel_path, file.path))
+
+    manifest_payload = "\n".join(manifest_content)
+    if manifest_payload:
+        manifest_payload += "\n"
+
+    ctx.actions.write(
+        output = manifest,
+        content = manifest_payload,
+    )
+
     workspace_script = ctx.actions.declare_file(ctx.label.name + "_setup_workspace.sh")
-
-    script_content = """#!/bin/bash
+    ctx.actions.write(
+        output = workspace_script,
+        content = """#!/bin/bash
 set -euo pipefail
 
 WORKSPACE_DIR="$1"
+MANIFEST_FILE="$2"
+
+rm -rf "$WORKSPACE_DIR"
 mkdir -p "$WORKSPACE_DIR"
 
-# Copy pubspec.yaml to root
-cp "{pubspec}" "$WORKSPACE_DIR/pubspec.yaml"
-
-# Create lib directory and copy Dart files
-mkdir -p "$WORKSPACE_DIR/lib"
-mkdir -p "$WORKSPACE_DIR/test"
-
-# Copy source files maintaining directory structure
-""".format(pubspec = pubspec_file.path)
-
-    # Add commands to copy dart files maintaining their relative paths
-    for dart_file in dart_files:
-        # Extract relative path from the source file
-        if "/lib/" in dart_file.path:
-            relative_path = dart_file.path[dart_file.path.find("/lib/") + 1:]
-            script_content += 'mkdir -p "$WORKSPACE_DIR/$(dirname "{}")" && cp "{}" "$WORKSPACE_DIR/{}"\n'.format(
-                relative_path,
-                dart_file.path,
-                relative_path,
-            )
-        elif "/test/" in dart_file.path:
-            relative_path = dart_file.path[dart_file.path.find("/test/") + 1:]
-            script_content += 'mkdir -p "$WORKSPACE_DIR/$(dirname "{}")" && cp "{}" "$WORKSPACE_DIR/{}"\n'.format(
-                relative_path,
-                dart_file.path,
-                relative_path,
-            )
-        else:
-            # Default to lib directory
-            script_content += 'cp "{}" "$WORKSPACE_DIR/lib/$(basename "{}")"\n'.format(
-                dart_file.path,
-                dart_file.path,
-            )
-
-    # Copy other files
-    for other_file in other_files:
-        if other_file.basename != "pubspec.yaml":  # Already copied
-            # Preserve directory structure for web files
-            if "/web/" in other_file.path:
-                relative_path = other_file.path[other_file.path.find("/web/") + 1:]
-                script_content += 'mkdir -p "$WORKSPACE_DIR/$(dirname "{}")" && cp "{}" "$WORKSPACE_DIR/{}"\n'.format(
-                    relative_path,
-                    other_file.path,
-                    relative_path,
-                )
-            else:
-                script_content += 'cp "{}" "$WORKSPACE_DIR/$(basename "{}")"\n'.format(
-                    other_file.path,
-                    other_file.path,
-                )
-
-    ctx.actions.write(
-        output = workspace_script,
-        content = script_content,
+while IFS='|' read -r RELATIVE_PATH SOURCE_PATH; do
+    if [ -z "$RELATIVE_PATH" ]; then
+        continue
+    fi
+    DEST_PATH="$WORKSPACE_DIR/$RELATIVE_PATH"
+    mkdir -p "$(dirname "$DEST_PATH")"
+    cp -RL "$SOURCE_PATH" "$DEST_PATH"
+done < "$MANIFEST_FILE"
+""",
         is_executable = True,
     )
 
+    # Collect unique input files for the action
+    input_files = []
+    seen_inputs = {}
+    for f in [pubspec_file] + dart_files + other_files + data_files:
+        if f == None:
+            continue
+        if f.path in seen_inputs:
+            continue
+        seen_inputs[f.path] = True
+        input_files.append(f)
+
     # Run the workspace setup
     ctx.actions.run(
-        inputs = all_input_files,
+        inputs = input_files + [manifest],
         outputs = [working_dir],
         executable = workspace_script,
-        arguments = [working_dir.path],
+        arguments = [working_dir.path, manifest.path],
         mnemonic = "SetupFlutterWorkspace",
         progress_message = "Setting up Flutter workspace for %s" % ctx.label.name,
     )
 
-    return working_dir, all_input_files
+    return working_dir, input_files
 
-def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, dependency_pub_caches = []):
-    """Execute flutter pub get command.
+def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, dependency_pub_caches = [], codegen_commands = []):
+    """Execute flutter pub get command and optional code generation.
 
     Args:
         ctx: The rule context
@@ -102,6 +116,7 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, de
         working_dir: Flutter project working directory
         pubspec_file: The pubspec.yaml file
         dependency_pub_caches: List of pub_cache directories from dependencies (can contain Files or depsets)
+        codegen_commands: List of code generation commands to run after pub get (e.g., ["intl_utils:generate"])
 
     Returns:
         Tuple of (pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir)
@@ -126,6 +141,7 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, de
     pub_cache_dir = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
     pubspec_lock = ctx.actions.declare_file(ctx.label.name + "_pubspec.lock")
     dart_tool_dir = ctx.actions.declare_directory(ctx.label.name + "_dart_tool")
+    prepared_workspace = ctx.actions.declare_directory(ctx.label.name + "_prepared_flutter_workspace")
 
     # Build arguments for dependency pub_cache directories
     dep_pub_cache_args = []
@@ -136,27 +152,44 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, de
     script_content = """#!/bin/bash
 set -euo pipefail
 
+WORKSPACE_SRC="{workspace_src}"
 WORKSPACE_DIR="{workspace_dir}"
 PUB_CACHE_DIR="{pub_cache_dir}"
 FLUTTER_BIN="{flutter_bin}"
 ORIGINAL_PWD="$PWD"
+WORKSPACE_SRC_ABS="$ORIGINAL_PWD/$WORKSPACE_SRC"
+WORKSPACE_DIR_ABS="$ORIGINAL_PWD/$WORKSPACE_DIR"
+PUB_CACHE_DIR_ABS="$ORIGINAL_PWD/$PUB_CACHE_DIR"
+
+# Prepare the output workspace copy
+rm -rf "$WORKSPACE_DIR_ABS"
+mkdir -p "$WORKSPACE_DIR_ABS"
+if command -v rsync >/dev/null 2>&1; then
+    rsync -aL "$WORKSPACE_SRC_ABS/" "$WORKSPACE_DIR_ABS/"
+else
+    cp -RL "$WORKSPACE_SRC_ABS/." "$WORKSPACE_DIR_ABS/"
+fi
+chmod -R u+rwX "$WORKSPACE_DIR_ABS"
 
 # Set up pub cache directory from file path
-export PUB_CACHE="$PUB_CACHE_DIR"
-mkdir -p "$PUB_CACHE_DIR"
+export PUB_CACHE="$PUB_CACHE_DIR_ABS"
+mkdir -p "$PUB_CACHE_DIR_ABS"
 
 # Pre-populate pub cache from dependencies
 echo "=== Pre-populating Pub Cache from Dependencies ==="
 DEP_CACHES=({dep_caches})
 if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
     for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
+        if [[ "$DEP_CACHE" != /* ]]; then
+            DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
+        fi
         if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
             echo "Copying dependency pub_cache from: $DEP_CACHE"
             # Use rsync if available for better performance, otherwise use cp
             if command -v rsync >/dev/null 2>&1; then
-                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR/"
+                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
             else
-                cp -R "$DEP_CACHE/." "$PUB_CACHE_DIR/"
+                cp -R "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
             fi
         fi
     done
@@ -176,13 +209,13 @@ export ANDROID_SDK_ROOT=""
 export PATH="$FLUTTER_ROOT/bin:$PATH"
 
 # Change to the workspace directory from execroot
-cd "$ORIGINAL_PWD/$WORKSPACE_DIR"
+cd "$WORKSPACE_DIR_ABS"
 
 echo "=== Flutter Pub Get Execution ==="
 echo "Working directory: $(pwd)"
 echo "Expected workspace dir: $WORKSPACE_DIR"
 echo "Flutter binary: $FLUTTER_BIN"  
-echo "Pub cache: $PUB_CACHE_DIR"
+echo "Pub cache: $PUB_CACHE_DIR_ABS"
 echo "Contents of workspace:"
 ls -la
 echo ""
@@ -289,7 +322,7 @@ if "$FLUTTER_BIN_ABS" pub get --suppress-analytics; then
     fi
     
     # Check pub cache
-    if [ -n "$(ls -A "$PUB_CACHE_DIR" 2>/dev/null)" ]; then
+    if [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
         echo "✓ Pub cache populated with dependencies"
     else
         echo "⚠ Warning: Pub cache appears empty (may be expected for projects with no dependencies)"
@@ -298,11 +331,11 @@ if "$FLUTTER_BIN_ABS" pub get --suppress-analytics; then
     echo ""
     echo "=== Final Status ==="
     echo "✓ Flutter pub get execution completed successfully"
-    
+
 else
     echo "✗ FATAL ERROR: flutter pub get failed"
     echo "This could be due to:"
-    echo "  - Network connectivity issues" 
+    echo "  - Network connectivity issues"
     echo "  - Invalid pubspec.yaml dependencies"
     echo "  - Flutter SDK compatibility issues"
     echo "  - Insufficient permissions"
@@ -310,11 +343,32 @@ else
     echo "Check your pubspec.yaml and network connection"
     exit 1
 fi
+
+# Run code generation if requested
+CODEGEN_COMMANDS=({codegen_commands})
+if [ ${{#CODEGEN_COMMANDS[@]}} -gt 0 ]; then
+    echo ""
+    echo "=== Running Code Generation ==="
+    for CODEGEN_CMD in "${{CODEGEN_COMMANDS[@]}}"; do
+        if [ -n "$CODEGEN_CMD" ]; then
+            echo "Running: flutter pub run $CODEGEN_CMD"
+            if "$FLUTTER_BIN_ABS" pub run "$CODEGEN_CMD"; then
+                echo "✓ Code generation command '$CODEGEN_CMD' completed successfully"
+            else
+                echo "✗ FATAL ERROR: Code generation command '$CODEGEN_CMD' failed"
+                exit 1
+            fi
+        fi
+    done
+    echo "✓ All code generation commands completed"
+fi
 """.format(
-        workspace_dir = working_dir.path,
+        workspace_src = working_dir.path,
+        workspace_dir = prepared_workspace.path,
         pub_cache_dir = pub_cache_dir.path,
         flutter_bin = flutter_bin,
         dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
+        codegen_commands = " ".join(['"{}"'.format(cmd) for cmd in codegen_commands]),
         tool_files_count = len(flutter_toolchain.flutterinfo.tool_files),
         sdk_files_count = len(flutter_toolchain.flutterinfo.sdk_files),
         first_tool_file_path = flutter_bin_file.path if flutter_toolchain.flutterinfo.tool_files else "No tool files",
@@ -323,7 +377,7 @@ fi
     # Execute pub get and create all outputs in one action
     ctx.actions.run_shell(
         inputs = [working_dir, pubspec_file] + dep_pub_cache_files + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
-        outputs = [pub_get_output, pubspec_lock, pub_cache_dir, dart_tool_dir],
+        outputs = [pub_get_output, pubspec_lock, pub_cache_dir, dart_tool_dir, prepared_workspace],
         command = script_content + """
 
 echo ""
@@ -335,7 +389,7 @@ cd "$ORIGINAL_PWD"
 # Create output directories
 mkdir -p "$(dirname "{pub_get_output}")"
 mkdir -p "$(dirname "{pubspec_lock}")"
-mkdir -p "{pub_cache_dir}"
+mkdir -p "$PUB_CACHE_DIR_ABS"
 mkdir -p "{dart_tool_dir}"
 
 # Create the pub get log
@@ -346,9 +400,9 @@ echo "Execution time: $(date)" >> "{pub_get_output}"
 echo "" >> "{pub_get_output}"
 
 # Copy pubspec.lock from workspace (should always exist after successful pub get)
-if [ -f "$WORKSPACE_DIR/pubspec.lock" ]; then
+if [ -f "$WORKSPACE_DIR_ABS/pubspec.lock" ]; then
     echo "✓ Copying pubspec.lock from Flutter pub get" >> "{pub_get_output}"
-    cp "$WORKSPACE_DIR/pubspec.lock" "{pubspec_lock}"
+    cp "$WORKSPACE_DIR_ABS/pubspec.lock" "{pubspec_lock}"
 else
     echo "✗ FATAL ERROR: pubspec.lock not found after successful pub get" >> "{pub_get_output}"
     echo "This should never happen - Flutter pub get validation failed"
@@ -356,12 +410,12 @@ else
 fi
 
 # Copy entire .dart_tool directory
-if [ -d "$WORKSPACE_DIR/.dart_tool" ]; then
+if [ -d "$WORKSPACE_DIR_ABS/.dart_tool" ]; then
     echo "✓ Copying .dart_tool directory from Flutter pub get" >> "{pub_get_output}"
     # Clean target dir first to avoid stale files
     rm -rf "{dart_tool_dir}"
     mkdir -p "{dart_tool_dir}"
-    cp -R "$WORKSPACE_DIR/.dart_tool/." "{dart_tool_dir}/"
+    cp -R "$WORKSPACE_DIR_ABS/.dart_tool/." "{dart_tool_dir}/"
 else
     echo "✗ FATAL ERROR: .dart_tool directory not found after successful pub get" >> "{pub_get_output}"
     echo "This should never happen - Flutter pub get validation failed"
@@ -369,7 +423,7 @@ else
 fi
 
 # Sync PUB_CACHE directory to declared output directory
-if [ -d "$PUB_CACHE_DIR" ] && [ -n "$(ls -A "$PUB_CACHE_DIR" 2>/dev/null)" ]; then
+if [ -d "$PUB_CACHE_DIR_ABS" ] && [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
     echo "✓ Pub cache populated with dependencies" >> "{pub_get_output}"
 else
     echo "⚠ Pub cache directory empty or not found" >> "{pub_get_output}"
@@ -392,7 +446,7 @@ echo "All output files created successfully"
         progress_message = "Running flutter pub get for %s" % ctx.label.name,
     )
 
-    return pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir
+    return prepared_workspace, pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir
 
 def flutter_build_action(ctx, flutter_toolchain, working_dir, target, pub_cache_dir, dart_tool_dir):
     """Execute flutter build command for the specified target.
@@ -486,6 +540,7 @@ cd "$ORIGINAL_PWD/$WORKSPACE_DIR"
 if [ -d "$DART_TOOL_DIR_ABS" ]; then
     mkdir -p .dart_tool
     cp -R "$DART_TOOL_DIR_ABS/." .dart_tool/
+    chmod -R u+rwX .dart_tool
 fi
 
 # Run flutter build

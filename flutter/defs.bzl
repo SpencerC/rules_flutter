@@ -57,7 +57,7 @@ def _flutter_library_impl(ctx):
     if not pubspec_file:
         fail("flutter_library requires the 'pubspec' attribute to be set")
 
-    source_files = list(ctx.files.srcs)
+    source_files = list(ctx.files.srcs) + list(ctx.files.data)
     dart_files = [f for f in source_files if f.extension == "dart"]
     other_files = [f for f in source_files if f.extension != "dart"]
 
@@ -66,6 +66,7 @@ def _flutter_library_impl(ctx):
         pubspec_file,
         dart_files,
         other_files,
+        list(ctx.files.data),
     )
 
     # Collect pub_cache directories from all transitive dependencies
@@ -78,18 +79,19 @@ def _flutter_library_impl(ctx):
             # Collect transitive pub_caches depset from dart_library deps
             transitive_pub_caches.append(dep[DartLibraryInfo].transitive_pub_caches)
 
-    pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir = flutter_pub_get_action(
+    prepared_workspace, pub_get_output, pub_cache_dir, pubspec_lock, dart_tool_dir = flutter_pub_get_action(
         ctx,
         flutter_toolchain,
         working_dir,
         pubspec_file,
         transitive_pub_caches,
+        ctx.attr.codegen,
     )
 
     output_files = [
         pub_get_output,
         pubspec_lock,
-        working_dir,
+        prepared_workspace,
         pub_cache_dir,
         dart_tool_dir,
     ]
@@ -100,7 +102,7 @@ def _flutter_library_impl(ctx):
             runfiles = ctx.runfiles(files = output_files + [pubspec_file]),
         ),
         FlutterLibraryInfo(
-            workspace = working_dir,
+            workspace = prepared_workspace,
             pub_get_log = pub_get_output,
             pub_cache = pub_cache_dir,
             pubspec_lock = pubspec_lock,
@@ -130,6 +132,14 @@ _flutter_library_rule = rule(
         "deps": attr.label_list(
             doc = "Additional flutter_library or dart_library dependencies.",
             providers = [[FlutterLibraryInfo], [DartLibraryInfo]],
+        ),
+        "data": attr.label_list(
+            allow_files = True,
+            doc = "Additional files (assets, l10n data, etc.) needed for code generation or embedding.",
+        ),
+        "codegen": attr.string_list(
+            doc = "List of code generation commands to run after pub get (e.g., ['intl_utils:generate'])",
+            default = [],
         ),
     },
     toolchains = ["//flutter:toolchain_type"],
@@ -421,6 +431,7 @@ if command -v rsync >/dev/null 2>&1; then
 else
     cp -RL "$SRC_WORKSPACE/." "$DEST/"
 fi
+chmod -R u+rwX "$DEST"
 
 if [ -f "$PUBSPEC_LOCK_SRC" ]; then
     cp "$PUBSPEC_LOCK_SRC" "$DEST/pubspec.lock"
@@ -958,15 +969,17 @@ def _dart_library_impl(ctx):
             pubspec_file,
             ctx.files.srcs,
             [],
+            [],
         )
 
         # Run pub get to generate pubspec.lock
-        pub_get_output, pub_cache_dir, pubspec_lock_file, dart_tool_dir = flutter_pub_get_action(
+        _prepared_workspace, pub_get_output, pub_cache_dir, pubspec_lock_file, dart_tool_dir = flutter_pub_get_action(
             ctx,
             flutter_toolchain,
             working_dir,
             pubspec_file,
             transitive_pub_caches,
+            ctx.attr.codegen,
         )
         pubspec_lock = pubspec_lock_file
 
@@ -1181,6 +1194,10 @@ _dart_library_rule = rule(
         "pubspec": attr.label(
             allow_single_file = True,
             doc = "Optional pubspec.yaml for dependency management",
+        ),
+        "codegen": attr.string_list(
+            doc = "List of code generation commands to run after pub get (e.g., ['intl_utils:generate'])",
+            default = [],
         ),
     },
     toolchains = ["//flutter:toolchain_type"],
