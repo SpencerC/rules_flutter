@@ -5,7 +5,7 @@ flutter_library(
     name = "lib",
     srcs = ["lib/main.dart"],
     codegen = ["intl_utils:generate"],
-    data = glob(["lib/l10n/**"]),
+    data = glob(["l10n/**"]),
     pubspec = "pubspec.yaml",
     deps = [
         "@pub_fixnum//:fixnum",

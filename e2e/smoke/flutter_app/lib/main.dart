@@ -4,7 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hello_world/generated/l10n.dart';
 
 // Code generation via intl_utils is configured in this project.
-// ARB files are in lib/l10n/ and generated files will be emitted into
+// ARB files are in l10n/ and generated files will be emitted into
 // lib/generated/ after running 'flutter pub run intl_utils:generate'.
 
 void main() {
