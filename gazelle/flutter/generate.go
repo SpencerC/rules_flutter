@@ -41,16 +41,16 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		return language.GenerateResult{}
 	}
 
-	// Check if pubspec.lock exists (for dependencies)
-	hasPubspecLock := false
-	var pubspecLock *PubspecLock
+	// Check if pub_deps.json exists (for dependencies)
+	hasPubDeps := false
+	var pubDeps *PubDeps
 	for _, f := range args.RegularFiles {
-		if f == "pubspec.lock" {
-			hasPubspecLock = true
-			lockPath := filepath.Join(args.Dir, f)
-			lock, err := ParsePubspecLock(lockPath)
+		if f == "pub_deps.json" {
+			hasPubDeps = true
+			depsPath := filepath.Join(args.Dir, f)
+			deps, err := ParsePubDeps(depsPath)
 			if err == nil {
-				pubspecLock = lock
+				pubDeps = deps
 			}
 			break
 		}
@@ -102,9 +102,9 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
-	// Set deps attribute from pubspec.lock if available
-	if hasPubspecLock && pubspecLock != nil {
-		deps := generateDeps(pubspecLock, fc)
+	// Set deps attribute from pub_deps.json if available
+	if hasPubDeps && pubDeps != nil {
+		deps := generateDeps(pubDeps, fc)
 		if len(deps) > 0 {
 			r.SetAttr("deps", deps)
 		}
@@ -155,9 +155,9 @@ func walkDir(dir string, baseDir string) []string {
 	return files
 }
 
-// generateDeps creates a list of dependency labels from pubspec.lock
-func generateDeps(lock *PubspecLock, fc *FlutterConfig) []string {
-	directDeps := GetDirectDependencies(lock)
+// generateDeps creates a list of dependency labels from pub_deps.json
+func generateDeps(depsFile *PubDeps, fc *FlutterConfig) []string {
+	directDeps := GetDirectDependencies(depsFile)
 	if len(directDeps) == 0 {
 		return nil
 	}
@@ -225,7 +225,7 @@ func sortStrings(s []string) {
 // Imports extracts import statements from Flutter/Dart source files
 func (fl *flutterLang) Imports(c *config.Config, r *rule.Rule, f *rule.File) []resolve.ImportSpec {
 	// For now, we don't need to parse Dart imports
-	// The dependencies are extracted from pubspec.lock
+	// The dependencies are extracted from pub_deps.json
 	return []resolve.ImportSpec{}
 }
 

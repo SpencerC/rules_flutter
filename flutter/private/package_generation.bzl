@@ -160,12 +160,12 @@ def _collect_lib_sources(repository_ctx, package_dir):
 def _collect_direct_deps(repository_ctx, package_dir, sdk_repo):
     """Return the Bazel labels for direct dependencies (hosted + sdk)."""
 
-    lock_rel = "pubspec.lock" if package_dir in (".", "") else package_dir + "/pubspec.lock"
-    lock_path = repository_ctx.path(lock_rel)
-    if not lock_path.exists:
+    deps_rel = "pub_deps.json" if package_dir in (".", "") else package_dir + "/pub_deps.json"
+    deps_path = repository_ctx.path(deps_rel)
+    if not deps_path.exists:
         return []
 
-    packages = _parse_pubspec_lock(repository_ctx.read(lock_rel))
+    packages = _parse_pub_deps(repository_ctx.read(deps_rel))
     deps = []
     for pkg, info in packages.items():
         dep_kind = info.get("dependency", "") or ""
@@ -200,13 +200,6 @@ def _sanitize_repo_name(pkg):
             pieces.append("_")
     return "".join(pieces)
 
-def _strip_quotes(value):
-    if value.startswith('"') and value.endswith('"'):
-        return value[1:-1]
-    if value.startswith("'") and value.endswith("'"):
-        return value[1:-1]
-    return value
-
 def _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo):
     path = _sdk_package_path(pkg)
     if not path:
@@ -233,58 +226,41 @@ def _sdk_package_path(pkg):
         return "flutter/bin/cache/pkg/{}".format(pkg)
     return "flutter/packages/{}".format(pkg)
 
-def _parse_pubspec_lock(content):
-    """Parse pubspec.lock into a dict of package metadata."""
+def _parse_pub_deps(content):
+    """Parse flutter pub deps --json output into a dict of package metadata."""
 
+    data = json.decode(content)
     packages = {}
-    in_packages = False
-    current_pkg = None
-    current_info = {}
+    for entry in data.get("packages", []):
+        name = entry.get("name")
+        if not name:
+            continue
 
-    def _commit():
-        if not current_pkg:
-            return
-        packages[current_pkg] = {
-            "dependency": current_info.get("dependency"),
-            "source": current_info.get("source"),
-            "version": current_info.get("version"),
-            "url": current_info.get("url"),
+        source = entry.get("source")
+        dependency = entry.get("dependency")
+        version = entry.get("version")
+        description = entry.get("description")
+        url = _description_url(description)
+        if source == "hosted" and not url:
+            url = "https://pub.dev"
+
+        packages[name] = {
+            "dependency": dependency,
+            "source": source,
+            "version": version,
+            "url": url,
         }
 
-    for raw_line in content.splitlines():
-        if not in_packages:
-            if raw_line.strip() == "packages:":
-                in_packages = True
-            continue
-
-        if raw_line and not raw_line.startswith(" "):
-            _commit()
-            in_packages = False
-            current_pkg = None
-            current_info = {}
-            continue
-
-        if raw_line.startswith("  ") and not raw_line.startswith("    "):
-            _commit()
-            current_pkg = raw_line.strip().rstrip(":")
-            current_info = {}
-            continue
-
-        if not current_pkg:
-            continue
-
-        stripped = raw_line.strip()
-        if not stripped or stripped.startswith("description:"):
-            continue
-
-        if stripped.startswith("dependency:"):
-            current_info["dependency"] = _strip_quotes(stripped.split(":", 1)[1].strip())
-        elif stripped.startswith("source:"):
-            current_info["source"] = _strip_quotes(stripped.split(":", 1)[1].strip())
-        elif stripped.startswith("version:"):
-            current_info["version"] = _strip_quotes(stripped.split(":", 1)[1].strip())
-        elif stripped.startswith("url:"):
-            current_info["url"] = _strip_quotes(stripped.split(":", 1)[1].strip())
-
-    _commit()
     return packages
+
+def _description_url(description):
+    if type(description) == "string":
+        return description
+    if type(description) == "dict":
+        return (
+            description.get("url") or
+            description.get("base_url") or
+            description.get("hosted_url") or
+            description.get("hosted-url")
+        )
+    return None

@@ -6,33 +6,18 @@ import (
 )
 
 func TestGenerateDepsIncludesAllDirectDependencies(t *testing.T) {
-	lock := &PubspecLock{
-		Packages: map[string]PubPackage{
-			"vector_math": {
-				Dependency: "direct main",
-				Source:     "hosted",
-			},
-			"flutter_test": {
-				Dependency: "direct dev",
-				Source:     "sdk",
-			},
-			"flutter": {
-				Dependency: "direct main",
-				Source:     "sdk",
-			},
-			"flutter_lints": {
-				Dependency: "direct dev",
-				Source:     "hosted",
-			},
-			"collection": {
-				Dependency: "transitive",
-				Source:     "hosted",
-			},
+	deps := &PubDeps{
+		Packages: []PubDepsPackage{
+			{Name: "vector_math", Dependency: "direct main", Source: "hosted"},
+			{Name: "flutter_test", Dependency: "direct dev", Source: "sdk"},
+			{Name: "flutter", Dependency: "direct main", Source: "sdk"},
+			{Name: "flutter_lints", Dependency: "direct dev", Source: "hosted"},
+			{Name: "collection", Dependency: "transitive", Source: "hosted"},
 		},
 	}
 
 	fc := &FlutterConfig{SDKRepo: "@flutter_macos"}
-	got := generateDeps(lock, fc)
+	got := generateDeps(deps, fc)
 	want := []string{
 		"@flutter_macos//flutter/packages/flutter:flutter",
 		"@flutter_macos//flutter/packages/flutter_test:flutter_test",
@@ -46,24 +31,16 @@ func TestGenerateDepsIncludesAllDirectDependencies(t *testing.T) {
 }
 
 func TestGetDirectDependenciesIncludesAllDirectKinds(t *testing.T) {
-	lock := &PubspecLock{
-		Packages: map[string]PubPackage{
-			"direct-main": {
-				Dependency: "direct main",
-			},
-			"direct-dev": {
-				Dependency: "direct dev",
-			},
-			"direct-overridden": {
-				Dependency: "direct overridden",
-			},
-			"transitive": {
-				Dependency: "transitive",
-			},
+	deps := &PubDeps{
+		Packages: []PubDepsPackage{
+			{Name: "direct-main", Dependency: "direct main"},
+			{Name: "direct-dev", Dependency: "direct dev"},
+			{Name: "direct-overridden", Dependency: "direct overridden"},
+			{Name: "transitive", Dependency: "transitive"},
 		},
 	}
 
-	got := GetDirectDependencies(lock)
+	got := GetDirectDependencies(deps)
 	if len(got) != 3 {
 		t.Fatalf("expected 3 direct dependencies, got %d", len(got))
 	}

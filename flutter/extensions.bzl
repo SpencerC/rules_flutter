@@ -63,7 +63,7 @@ pub_package = tag_class(attrs = {
     "version": attr.string(doc = "Package version (optional, defaults to latest)"),
 })
 
-_LOCKFILE_DISCOVERY_SCRIPT = """
+_DEPS_DISCOVERY_SCRIPT = """
 import os
 import sys
 
@@ -79,8 +79,8 @@ for dirpath, dirnames, filenames in os.walk(root):
         for name in dirnames
         if not name.startswith(SKIP_PREFIXES) and name not in SKIP_NAMES
     ]
-    if "pubspec.lock" in filenames:
-        results.append(os.path.join(dirpath, "pubspec.lock"))
+    if "pub_deps.json" in filenames:
+        results.append(os.path.join(dirpath, "pub_deps.json"))
 
 for path in sorted(results):
     print(path)
@@ -93,22 +93,22 @@ def _module_root(module_ctx, mod):
     module_file = module_ctx.path(Label(label))
     return module_file.dirname
 
-def _execute_lockfile_scan(module_ctx, root):
-    """Run a python helper to locate pubspec.lock files under the module root."""
+def _execute_deps_scan(module_ctx, root):
+    """Run a python helper to locate pub_deps.json files under the module root."""
     python = module_ctx.which("python3") or module_ctx.which("python")
     if not python:
-        fail("Unable to locate python3 or python on PATH while scanning pubspec.lock files")
+        fail("Unable to locate python3 or python on PATH while scanning pub_deps.json files")
 
     result = module_ctx.execute([
         python,
         "-c",
-        _LOCKFILE_DISCOVERY_SCRIPT,
+        _DEPS_DISCOVERY_SCRIPT,
         str(root),
     ], quiet = True)
 
     if result.return_code != 0:
         fail(
-            "pub extension failed to scan {} for pubspec.lock files (code {}):\nstdout: {}\nstderr: {}".format(
+            "pub extension failed to scan {} for pub_deps.json files (code {}):\nstdout: {}\nstderr: {}".format(
                 str(root),
                 result.return_code,
                 result.stdout,
@@ -116,8 +116,8 @@ def _execute_lockfile_scan(module_ctx, root):
             ),
         )
 
-    lockfiles = [line for line in result.stdout.splitlines() if line]
-    return [module_ctx.path(path) for path in lockfiles]
+    deps_files = [line for line in result.stdout.splitlines() if line]
+    return [module_ctx.path(path) for path in deps_files]
 
 def _sanitize_repo_name(package):
     """Generate a deterministic repository name for a package."""
@@ -136,58 +136,39 @@ def _sanitize_repo_name(package):
         sanitized.append(ch if _is_valid_char(ch) else "_")
     return "pub_" + "".join(sanitized)
 
-def _commit_package(packages, package, source, version, url):
-    if package and source == "hosted" and version:
-        packages[package] = {
-            "version": version,
-            "url": url or "https://pub.dev",
-        }
+def _parse_pub_deps_json(content):
+    """Return mapping of package -> (version, url) from pub_deps.json payload."""
 
-def _parse_pubspec_lock(content):
-    """Return mapping of package -> (version, url) from a pubspec.lock payload."""
+    data = json.decode(content)
     packages = {}
-    in_packages = False
-    current_pkg = None
-    current_source = None
-    current_version = None
-    current_url = None
-
-    for raw_line in content.splitlines():
-        if not in_packages:
-            if raw_line.strip() == "packages:":
-                in_packages = True
+    for entry in data.get("packages", []):
+        name = entry.get("name")
+        if not name:
             continue
 
-        if raw_line and not raw_line.startswith(" "):
-            _commit_package(packages, current_pkg, current_source, current_version, current_url)
-            in_packages = False
-            current_pkg = None
-            current_source = None
-            current_version = None
-            current_url = None
-            continue
+        source = entry.get("source")
+        version = entry.get("version")
+        description = entry.get("description")
+        url = _extract_description_url(description)
+        if source == "hosted" and version:
+            packages[name] = {
+                "version": version,
+                "url": url or "https://pub.dev",
+            }
 
-        if raw_line.startswith("  ") and not raw_line.startswith("    "):
-            _commit_package(packages, current_pkg, current_source, current_version, current_url)
-            current_pkg = raw_line.strip().rstrip(":")
-            current_source = None
-            current_version = None
-            current_url = None
-            continue
-
-        if not current_pkg:
-            continue
-
-        stripped = raw_line.strip()
-        if stripped.startswith("source:"):
-            current_source = stripped.split(":", 1)[1].strip().strip('"\'')
-        elif stripped.startswith("version:"):
-            current_version = stripped.split(":", 1)[1].strip().strip('"\'')
-        elif stripped.startswith("url:"):
-            current_url = stripped.split(":", 1)[1].strip().strip('"\'')
-
-    _commit_package(packages, current_pkg, current_source, current_version, current_url)
     return packages
+
+def _extract_description_url(description):
+    if type(description) == "string":
+        return description
+    if type(description) == "dict":
+        return (
+            description.get("url") or
+            description.get("base_url") or
+            description.get("hosted_url") or
+            description.get("hosted-url")
+        )
+    return None
 
 def _register_repo(repo_map, repo_name, package, version, origin):
     """Merge repository metadata ensuring consistency across lockfiles/tags."""
@@ -235,13 +216,13 @@ def _pub_extension(module_ctx):
         if root_key in scanned_roots:
             continue
         scanned_roots[root_key] = True
-        lockfiles = _execute_lockfile_scan(module_ctx, root)
-        for lockfile in lockfiles:
-            module_ctx.watch(lockfile)
-            packages = _parse_pubspec_lock(module_ctx.read(lockfile))
+        deps_files = _execute_deps_scan(module_ctx, root)
+        for deps_file in deps_files:
+            module_ctx.watch(deps_file)
+            packages = _parse_pub_deps_json(module_ctx.read(deps_file))
             for package, info in packages.items():
                 repo_name = _sanitize_repo_name(package)
-                origin = "{} (pubspec.lock)".format(str(lockfile))
+                origin = "{} (pub_deps.json)".format(str(deps_file))
                 _register_repo(
                     repos,
                     repo_name,

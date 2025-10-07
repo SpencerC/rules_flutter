@@ -31,7 +31,7 @@ bazel_dep(name = "com_github_spencerc_rules_flutter", version = "1.0.0")
 #### Managing pub.dev dependencies
 
 `rules_flutter` ships a `pub` module extension that automatically scans every
-`pubspec.lock` in the module graph and creates repositories for each hosted
+`pub_deps.json` (generated with `flutter pub deps --json`) in the module graph and creates repositories for each hosted
 dependency. To consume those repositories, add the extension and `use_repo`
 entries that match the `pub_<package>` naming convention. For example:
 
@@ -100,12 +100,12 @@ flutter_test(
 ```
 
 `flutter_library` runs `flutter pub get` once and exposes the generated
-workspace, pub cache, and `pubspec.lock`. Both `flutter_app` and `flutter_test`
+workspace, pub cache, and `pub_deps.json`. Both `flutter_app` and `flutter_test`
 reuse those outputs via the `embed` attribute, keeping builds and tests fast and
 hermetic.
 
 Whenever dependencies change, run `bazel run //:app_lib.update` to copy the
-fresh `pubspec.lock` into your workspace next to `pubspec.yaml`.
+fresh `pub_deps.json` (generated via `flutter pub deps --json`) into your workspace next to `pubspec.yaml`.
 
 ### 2. Build your app
 

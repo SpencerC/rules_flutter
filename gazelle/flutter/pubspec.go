@@ -1,23 +1,25 @@
 package flutter
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// PubspecLock represents the structure of a pubspec.lock file
-type PubspecLock struct {
-	Packages map[string]PubPackage `yaml:"packages"`
+// PubDeps represents the structure of flutter pub deps --json output.
+type PubDeps struct {
+	Packages []PubDepsPackage `json:"packages"`
 }
 
-// PubPackage represents a single package entry in pubspec.lock
-type PubPackage struct {
-	Dependency  string      `yaml:"dependency"`
-	Description interface{} `yaml:"description"`
-	Source      string      `yaml:"source"`
-	Version     string      `yaml:"version"`
+// PubDepsPackage represents a single package entry in pub_deps.json.
+type PubDepsPackage struct {
+	Name        string      `json:"name"`
+	Dependency  string      `json:"dependency"`
+	Description interface{} `json:"description"`
+	Source      string      `json:"source"`
+	Version     string      `json:"version"`
 }
 
 // PubspecYaml represents the structure of a pubspec.yaml file
@@ -27,19 +29,19 @@ type PubspecYaml struct {
 	Environment  map[string]interface{} `yaml:"environment"`
 }
 
-// ParsePubspecLock parses a pubspec.lock file and returns the parsed structure
-func ParsePubspecLock(path string) (*PubspecLock, error) {
+// ParsePubDeps parses a pub_deps.json file and returns the parsed structure
+func ParsePubDeps(path string) (*PubDeps, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var lock PubspecLock
-	if err := yaml.Unmarshal(data, &lock); err != nil {
+	var deps PubDeps
+	if err := json.Unmarshal(data, &deps); err != nil {
 		return nil, err
 	}
 
-	return &lock, nil
+	return &deps, nil
 }
 
 // ParsePubspecYaml parses a pubspec.yaml file and returns the parsed structure
@@ -57,12 +59,20 @@ func ParsePubspecYaml(path string) (*PubspecYaml, error) {
 	return &pubspec, nil
 }
 
-// GetDirectDependencies returns all direct dependencies from pubspec.lock.
+// GetDirectDependencies returns all direct dependencies from pub_deps.json.
 // This includes main, dev, and overridden dependencies while still excluding transitives.
-func GetDirectDependencies(lock *PubspecLock) map[string]PubPackage {
-	deps := make(map[string]PubPackage)
+func GetDirectDependencies(depsFile *PubDeps) map[string]PubDepsPackage {
+	deps := make(map[string]PubDepsPackage)
 
-	for name, pkg := range lock.Packages {
+	if depsFile == nil {
+		return deps
+	}
+
+	for _, pkg := range depsFile.Packages {
+		name := pkg.Name
+		if name == "" {
+			continue
+		}
 		// Only include dependency entries that are marked as direct.
 		if !strings.HasPrefix(pkg.Dependency, "direct") {
 			continue
