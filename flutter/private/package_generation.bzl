@@ -21,18 +21,21 @@ _DEF_LOAD_STMT = 'load("@rules_flutter//flutter:defs.bzl", "dart_library", "flut
 
 _DEF_VISIBILITY = '    visibility = ["//visibility:public"],'
 
-def generate_package_build(repository_ctx, package_name, package_dir = "."):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
         repository_ctx: Repository rule context.
         package_name: The Bazel target / Dart package name.
         package_dir: Relative directory containing the package ("." for root).
+        sdk_repo: Optional repository label used to resolve SDK-provided
+            dependencies (e.g. `@flutter_macos`). When omitted, a sensible
+            default for the current host platform is used.
     """
 
     rule_kind = _determine_rule_kind(repository_ctx, package_dir)
     srcs = _collect_lib_sources(repository_ctx, package_dir)
-    deps = _collect_direct_deps(repository_ctx, package_dir)
+    deps = _collect_direct_deps(repository_ctx, package_dir, sdk_repo)
 
     lines = [
         "# Generated BUILD file for package: {}".format(package_name),
@@ -154,8 +157,8 @@ def _collect_lib_sources(repository_ctx, package_dir):
 
     return sorted(sources)
 
-def _collect_direct_deps(repository_ctx, package_dir):
-    """Return the Bazel labels for direct hosted dependencies."""
+def _collect_direct_deps(repository_ctx, package_dir, sdk_repo):
+    """Return the Bazel labels for direct dependencies (hosted + sdk)."""
 
     lock_rel = "pubspec.lock" if package_dir in (".", "") else package_dir + "/pubspec.lock"
     lock_path = repository_ctx.path(lock_rel)
@@ -165,12 +168,18 @@ def _collect_direct_deps(repository_ctx, package_dir):
     packages = _parse_pubspec_lock(repository_ctx.read(lock_rel))
     deps = []
     for pkg, info in packages.items():
-        if info.get("dependency") != "direct main":
+        dep_kind = info.get("dependency", "") or ""
+        if not dep_kind.startswith("direct"):
             continue
-        if info.get("source") != "hosted":
-            continue
-        repo_name = _sanitize_repo_name(pkg)
-        deps.append("@{}//:{}".format(repo_name, pkg))
+
+        source = info.get("source")
+        if source == "hosted":
+            repo_name = _sanitize_repo_name(pkg)
+            deps.append("@{}//:{}".format(repo_name, pkg))
+        elif source == "sdk":
+            label = _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo)
+            if label:
+                deps.append(label)
 
     return sorted(deps)
 
@@ -197,6 +206,32 @@ def _strip_quotes(value):
     if value.startswith("'") and value.endswith("'"):
         return value[1:-1]
     return value
+
+def _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo):
+    path = _sdk_package_path(pkg)
+    if not path:
+        return None
+
+    if package_dir.startswith("flutter/"):
+        return "//{}:{}".format(path, pkg)
+
+    repo = sdk_repo or _default_sdk_repo(repository_ctx)
+    return "{}//{}:{}".format(repo, path, pkg)
+
+def _default_sdk_repo(repository_ctx):
+    os_name = repository_ctx.os.name.lower()
+    if os_name.startswith("mac"):
+        suffix = "macos"
+    elif os_name.startswith("windows"):
+        suffix = "windows"
+    else:
+        suffix = "linux"
+    return "@flutter_{}".format(suffix)
+
+def _sdk_package_path(pkg):
+    if pkg == "sky_engine":
+        return "flutter/bin/cache/pkg/{}".format(pkg)
+    return "flutter/packages/{}".format(pkg)
 
 def _parse_pubspec_lock(content):
     """Parse pubspec.lock into a dict of package metadata."""

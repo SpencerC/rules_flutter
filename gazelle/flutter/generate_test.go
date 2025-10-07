@@ -33,16 +33,15 @@ func TestGenerateDepsIncludesAllDirectDependencies(t *testing.T) {
 
 	fc := &FlutterConfig{SDKRepo: "@flutter_macos"}
 	got := generateDeps(lock, fc)
-	want := []string{"@pub_vector_math//:vector_math"}
+	want := []string{
+		"@flutter_macos//flutter/packages/flutter:flutter",
+		"@flutter_macos//flutter/packages/flutter_test:flutter_test",
+		"@pub_flutter_lints//:flutter_lints",
+		"@pub_vector_math//:vector_math",
+	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("generateDeps(...):\nwant %v\n got %v", want, got)
-	}
-
-	for _, dep := range got {
-		if dep == "@flutter_macos//flutter/packages/flutter:flutter" || dep == "@flutter_macos//flutter/packages/flutter_test:flutter_test" || dep == "@pub_flutter_lints//:flutter_lints" {
-			t.Fatalf("unexpected dependency %q emitted", dep)
-		}
 	}
 }
 
@@ -77,5 +76,25 @@ func TestGetDirectDependenciesIncludesAllDirectKinds(t *testing.T) {
 
 	if _, ok := got["transitive"]; ok {
 		t.Fatalf("did not expect transitive dependencies to be included")
+	}
+}
+
+func TestSDKDependencyLabelDefaultPackage(t *testing.T) {
+	fc := &FlutterConfig{SDKRepo: "@flutter_macos"}
+	got := sdkDependencyLabel("flutter", fc)
+	want := "@flutter_macos//flutter/packages/flutter:flutter"
+
+	if got != want {
+		t.Fatalf("sdkDependencyLabel(...): want %q got %q", want, got)
+	}
+}
+
+func TestSDKDependencyLabelSkyEngine(t *testing.T) {
+	fc := &FlutterConfig{SDKRepo: "@flutter_linux"}
+	got := sdkDependencyLabel("sky_engine", fc)
+	want := "@flutter_linux//flutter/bin/cache/pkg/sky_engine:sky_engine"
+
+	if got != want {
+		t.Fatalf("sdkDependencyLabel(...): want %q got %q", want, got)
 	}
 }

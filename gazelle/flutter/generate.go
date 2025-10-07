@@ -165,21 +165,48 @@ func generateDeps(lock *PubspecLock, fc *FlutterConfig) []string {
 	deps := make([]string, 0, len(directDeps))
 	for pkg, meta := range directDeps {
 		depKind := meta.Dependency
-		if depKind != "direct main" && depKind != "direct overridden" {
+		if !strings.HasPrefix(depKind, "direct") {
 			continue
 		}
 
-		repoName := SanitizeRepoName(pkg)
 		switch meta.Source {
 		case "hosted":
-			dep := fmt.Sprintf("@%s//:%s", repoName, pkg)
-			deps = append(deps, dep)
+			repoName := SanitizeRepoName(pkg)
+			deps = append(deps, fmt.Sprintf("@%s//:%s", repoName, pkg))
+		case "sdk":
+			if sdkLabel := sdkDependencyLabel(pkg, fc); sdkLabel != "" {
+				deps = append(deps, sdkLabel)
+			}
 		}
 	}
 
 	// Sort for consistent output
 	sortStrings(deps)
 	return deps
+}
+
+// sdkDependencyLabel returns the Bazel label for an SDK provided package.
+func sdkDependencyLabel(pkg string, fc *FlutterConfig) string {
+	if fc == nil || fc.SDKRepo == "" {
+		return ""
+	}
+
+	path := sdkPackagePath(pkg)
+	if path == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("%s//%s:%s", fc.SDKRepo, path, pkg)
+}
+
+// sdkPackagePath returns the repository relative path for an SDK package target.
+func sdkPackagePath(pkg string) string {
+	switch pkg {
+	case "sky_engine":
+		return fmt.Sprintf("flutter/bin/cache/pkg/%s", pkg)
+	default:
+		return fmt.Sprintf("flutter/packages/%s", pkg)
+	}
 }
 
 // sortStrings sorts a slice of strings in place

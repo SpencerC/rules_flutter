@@ -22,6 +22,9 @@ _ATTRS = {
         default = "https://pub.dev",
         doc = "Base URL for pub.dev API",
     ),
+    "sdk_repo": attr.string(
+        doc = "Repository label providing Flutter SDK packages (e.g. @flutter_macos)",
+    ),
 }
 
 def _pub_dev_repository_impl(repository_ctx):
@@ -74,7 +77,11 @@ def _pub_dev_repository_impl(repository_ctx):
         stripPrefix = "",  # pub.dev packages typically have no prefix
     )
 
-    generate_package_build(repository_ctx, package_name)
+    generate_package_build(
+        repository_ctx,
+        package_name,
+        sdk_repo = repository_ctx.attr.sdk_repo,
+    )
 
     # Create a simple marker file for debugging
     repository_ctx.file(

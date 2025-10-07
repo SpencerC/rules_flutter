@@ -43,3 +43,8 @@ test_suite(
         "//multiplatform:multiplatform_build_test",
     ],
 )
+
+alias(
+    name = "go",
+    actual = "@rules_go//go",
+)
