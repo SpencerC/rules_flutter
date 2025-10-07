@@ -21,6 +21,124 @@ _DEF_LOAD_STMT = 'load("@rules_flutter//flutter:defs.bzl", "dart_library", "flut
 
 _DEF_VISIBILITY = '    visibility = ["//visibility:public"],'
 
+def _ensure_pub_deps(repository_ctx, package_name, package_dir):
+    """Ensure pub_deps.json exists by running pub deps --json when necessary."""
+
+    if package_dir in (".", ""):
+        pubspec_rel = "pubspec.yaml"
+        pub_deps_rel = "pub_deps.json"
+        pub_cache_rel = ".pub_cache"
+    else:
+        pubspec_rel = package_dir + "/pubspec.yaml"
+        pub_deps_rel = package_dir + "/pub_deps.json"
+        pub_cache_rel = package_dir + "/.pub_cache"
+
+    pubspec_path = repository_ctx.path(pubspec_rel)
+    if not pubspec_path.exists:
+        return
+
+    pub_deps_path = repository_ctx.path(pub_deps_rel)
+    if pub_deps_path.exists:
+        content = repository_ctx.read(pub_deps_rel)
+        if content.strip():
+            return
+
+    command, tool = _find_pub_command(repository_ctx)
+    if not command:
+        fail("""Unable to locate a Dart or Flutter executable while preparing '{}' to run `pub deps --json`.
+Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".format(package_name))
+
+    workdir = str(repository_ctx.path(package_dir if package_dir not in (".", "") else "."))
+    run_env = {
+        "PUB_CACHE": str(repository_ctx.path(pub_cache_rel)),
+        "PUB_ENVIRONMENT": "rules_flutter:repository",
+    }
+    if tool == "flutter":
+        run_env["FLUTTER_SUPPRESS_ANALYTICS"] = "true"
+        run_env["CI"] = "true"
+
+    repository_ctx.report_progress(
+        "Resolving pub dependencies for {}".format(package_name),
+    )
+
+    deps_result = repository_ctx.execute(
+        command + ["deps", "--json"],
+        working_directory = workdir,
+        environment = run_env,
+        quiet = True,
+    )
+    if deps_result.return_code != 0:
+        fail("Failed to run `{tool} pub deps --json` for package '{pkg}' (dir: {dir}).\nstdout: {stdout}\nstderr: {stderr}".format(
+            tool = tool,
+            pkg = package_name,
+            dir = package_dir,
+            stdout = deps_result.stdout,
+            stderr = deps_result.stderr,
+        ))
+
+    # Write the generated JSON payload (strip any leading log lines).
+    output = deps_result.stdout
+    json_start = -1
+    for idx in range(len(output)):
+        ch = output[idx]
+        if ch == "{" or ch == "[":
+            json_start = idx
+            break
+    if json_start == -1:
+        fail("`{tool} pub deps --json` for package '{pkg}' did not produce JSON output.\nstdout: {stdout}\nstderr: {stderr}".format(
+            tool = tool,
+            pkg = package_name,
+            stdout = deps_result.stdout,
+            stderr = deps_result.stderr,
+        ))
+
+    json_text = output[json_start:]
+    if not json_text.endswith("\n"):
+        json_text += "\n"
+    repository_ctx.file(pub_deps_rel, json_text)
+
+def _find_pub_command(repository_ctx):
+    """Locate a flutter or dart executable and return the pub command prefix."""
+
+    os_name = repository_ctx.os.name.lower()
+    flutter_candidates = [
+        "flutter/bin/flutter",
+        "bin/flutter",
+        "flutter/bin/flutter.bat",
+        "bin/flutter.bat",
+    ]
+    dart_candidates = [
+        "flutter/bin/cache/dart-sdk/bin/dart",
+        "bin/dart",
+        "flutter/bin/cache/dart-sdk/bin/dart.exe",
+        "bin/dart.exe",
+    ]
+
+    for candidate in flutter_candidates:
+        path = repository_ctx.path(candidate)
+        if path.exists:
+            return _pub_command_prefix(str(path)), "flutter"
+
+    host_flutter = repository_ctx.which("flutter.bat" if os_name.startswith("windows") else "flutter")
+    if host_flutter:
+        return _pub_command_prefix(str(host_flutter)), "flutter"
+
+    for candidate in dart_candidates:
+        path = repository_ctx.path(candidate)
+        if path.exists:
+            return _pub_command_prefix(str(path)), "dart"
+
+    host_dart = repository_ctx.which("dart.exe" if os_name.startswith("windows") else "dart")
+    if host_dart:
+        return _pub_command_prefix(str(host_dart)), "dart"
+
+    return None, None
+
+def _pub_command_prefix(executable):
+    if executable.endswith(".bat") or executable.endswith(".cmd"):
+        return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
+    return [executable, "pub"]
+
 def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None):
     """Generate a BUILD.bazel for the given package directory.
 
@@ -33,6 +151,7 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
             default for the current host platform is used.
     """
 
+    _ensure_pub_deps(repository_ctx, package_name, package_dir)
     rule_kind = _determine_rule_kind(repository_ctx, package_dir)
     srcs = _collect_lib_sources(repository_ctx, package_dir)
     deps = _collect_direct_deps(repository_ctx, package_dir, sdk_repo)
@@ -237,7 +356,7 @@ def _parse_pub_deps(content):
             continue
 
         source = entry.get("source")
-        dependency = entry.get("dependency")
+        dependency = entry.get("dependency") or entry.get("kind")
         version = entry.get("version")
         description = entry.get("description")
         url = _description_url(description)
