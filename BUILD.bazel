@@ -1,4 +1,5 @@
 load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
+load("@rules_go//go:def.bzl", "nogo")
 
 gazelle_binary(
     name = "gazelle_bin",
@@ -13,9 +14,13 @@ gazelle(
     gazelle = "gazelle_bin",
 )
 
-# Convenience alias for updating Flutter SDK versions
-alias(
-    name = "update_flutter_versions",
-    actual = "//tools:update_flutter_versions",
+nogo(
+    name = "ggx_nogo",
+    vet = True,
     visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go",
+    actual = "@rules_go//go",
 )
