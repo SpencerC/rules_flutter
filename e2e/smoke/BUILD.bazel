@@ -34,9 +34,15 @@ build_test(
     ],
 )
 
+build_test(
+    name = "single_pub_dependency_build_test",
+    targets = ["@pub_fixnum//:fixnum"],
+)
+
 test_suite(
     name = "integration_tests",
     tests = [
+        ":single_pub_dependency_build_test",
         ":smoke_test",
         "//dart_package:dart_package_test",
         "//flutter_app:app_build_test",
