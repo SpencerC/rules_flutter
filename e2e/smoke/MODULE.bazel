@@ -28,14 +28,53 @@ pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
 pub.package(
     name = "pub_lints",
     package = "lints",
+    version = "2.1.1",
+)
+pub.package(
+    name = "pub_flutter_lints",
+    package = "flutter_lints",
+    version = "2.0.3",
+)
+pub.package(
+    name = "pub_intl_utils",
+    package = "intl_utils",
+    version = "2.8.11",
 )
 use_repo(
     pub,
+    "pub_analyzer",
+    "pub_archive",
+    "pub_args",
+    "pub_async",
+    "pub_boolean_selector",
+    "pub_characters",
+    "pub_clock",
+    "pub_collection",
+    "pub_dart_style",
+    "pub_fake_async",
     "pub_fixnum",
     "pub_flutter_lints",
+    "pub_http",
+    "pub_intl",
     "pub_intl_utils",
+    "pub_leak_tracker",
+    "pub_leak_tracker_flutter_testing",
+    "pub_leak_tracker_testing",
     "pub_lints",
+    "pub_matcher",
+    "pub_material_color_utilities",
+    "pub_meta",
+    "pub_path",
+    "pub_petitparser",
+    "pub_source_span",
+    "pub_stack_trace",
+    "pub_stream_channel",
+    "pub_string_scanner",
+    "pub_term_glyph",
+    "pub_test_api",
     "pub_vector_math",
+    "pub_vm_service",
+    "pub_yaml",
 )
 
 # Go dependencies for gazelle plugin

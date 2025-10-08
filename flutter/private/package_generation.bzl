@@ -35,13 +35,13 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir):
 
     pubspec_path = repository_ctx.path(pubspec_rel)
     if not pubspec_path.exists:
-        return
+        return False
 
     pub_deps_path = repository_ctx.path(pub_deps_rel)
     if pub_deps_path.exists:
         content = repository_ctx.read(pub_deps_rel)
         if content.strip():
-            return
+            return False
 
     command, tool = _find_pub_command(repository_ctx)
     if not command:
@@ -68,12 +68,31 @@ Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".
         quiet = True,
     )
     if deps_result.return_code != 0:
+        stderr = deps_result.stderr or ""
+
+        # Packages such as `package:http` reference dev-only path dependencies that
+        # are not present in the published archive. In those cases, flutter pub deps
+        # fails with a path resolution error. Allow falling back to pubspec parsing
+        # so repository generation can continue.
+        lower_stderr = stderr.lower()
+        if (
+            "path" in lower_stderr and (
+                "could not find package" in lower_stderr or
+                "which doesn't exist" in lower_stderr
+            )
+        ) or (
+            "from sdk" in lower_stderr and "doesn't match any versions" in lower_stderr
+        ):
+            repository_ctx.report_progress(
+                "Skipping pub deps generation for {} due to unsupported dependency source; falling back to pubspec.yaml".format(package_name),
+            )
+            return False
         fail("Failed to run `{tool} pub deps --json` for package '{pkg}' (dir: {dir}).\nstdout: {stdout}\nstderr: {stderr}".format(
             tool = tool,
             pkg = package_name,
             dir = package_dir,
             stdout = deps_result.stdout,
-            stderr = deps_result.stderr,
+            stderr = stderr,
         ))
 
     # Write the generated JSON payload (strip any leading log lines).
@@ -96,6 +115,7 @@ Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".
     if not json_text.endswith("\n"):
         json_text += "\n"
     repository_ctx.file(pub_deps_rel, json_text)
+    return True
 
 def _find_pub_command(repository_ctx):
     """Locate a flutter or dart executable and return the pub command prefix."""
@@ -139,7 +159,7 @@ def _pub_command_prefix(executable):
         return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
     return [executable, "pub"]
 
-def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None, include_hosted_deps = False):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None, include_hosted_deps = True):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
@@ -150,9 +170,9 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
             dependencies (e.g. `@flutter_macos`). When omitted, a sensible
             default for the current host platform is used.
         include_hosted_deps: When true, emit hosted pub.dev dependencies from
-            pub_deps.json as external repositories. Flutter SDK packages set
-            this to False because their hosted deps are already vendored in the
-            SDK and should not pull from pub.dev.
+            pub_deps.json as external repositories. Flutter SDK packages pass
+            False because their hosted deps are already vendored in the SDK and
+            should not pull from pub.dev.
     """
 
     _ensure_pub_deps(repository_ctx, package_name, package_dir)
@@ -298,28 +318,137 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
 
     deps_rel = "pub_deps.json" if package_dir in (".", "") else package_dir + "/pub_deps.json"
     deps_path = repository_ctx.path(deps_rel)
-    if not deps_path.exists:
-        return []
+    packages = None
+    if deps_path.exists:
+        packages = _parse_pub_deps(repository_ctx.read(deps_rel))
 
-    packages = _parse_pub_deps(repository_ctx.read(deps_rel))
+    if not packages:
+        fallback_packages = _parse_pubspec_dependencies(repository_ctx, package_dir)
+    else:
+        fallback_packages = None
+
     deps = []
-    for pkg, info in packages.items():
-        dep_kind = info.get("dependency", "") or ""
-        if not dep_kind.startswith("direct"):
-            continue
-
-        source = info.get("source")
-        if source == "hosted":
-            if not include_hosted_deps:
+    if packages:
+        for pkg, info in packages.items():
+            dep_kind = info.get("dependency", "") or ""
+            if not dep_kind.startswith("direct"):
                 continue
-            repo_name = _sanitize_repo_name(pkg)
-            deps.append("@{}//:{}".format(repo_name, pkg))
-        elif source == "sdk":
-            label = _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo)
-            if label:
-                deps.append(label)
+
+            source = info.get("source")
+            if source == "hosted":
+                if not include_hosted_deps:
+                    continue
+                repo_name = _sanitize_repo_name(pkg)
+                deps.append("@{}//:{}".format(repo_name, pkg))
+            elif source == "sdk":
+                label = _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo)
+                if label:
+                    deps.append(label)
+    elif fallback_packages:
+        for entry in fallback_packages:
+            pkg = entry["name"]
+            source = entry["source"]
+            if source == "hosted":
+                if not include_hosted_deps:
+                    continue
+                repo_name = _sanitize_repo_name(pkg)
+                deps.append("@{}//:{}".format(repo_name, pkg))
+            elif source == "sdk":
+                label = _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo)
+                if label:
+                    deps.append(label)
 
     return sorted(deps)
+
+def _parse_pubspec_dependencies(repository_ctx, package_dir):
+    """Fallback parser to extract dependencies from pubspec.yaml when pub_deps.json is unavailable."""
+
+    pubspec_rel = "pubspec.yaml" if package_dir in (".", "") else package_dir + "/pubspec.yaml"
+    pubspec_path = repository_ctx.path(pubspec_rel)
+    if not pubspec_path.exists:
+        return []
+
+    content = repository_ctx.read(pubspec_rel).splitlines()
+    deps = []
+    in_deps = False
+    deps_indent = 0
+    current_name = ""
+    current_indent = 0
+    current_block = None
+
+    for raw_line in content:
+        stripped = raw_line.strip()
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if not in_deps:
+            if stripped == "dependencies:":
+                in_deps = True
+                deps_indent = indent
+            continue
+
+        if indent <= deps_indent:
+            if current_name:
+                if current_block != None and "path" in current_block:
+                    pass
+                elif current_block != None and current_block.get("sdk"):
+                    deps.append({"name": current_name, "source": "sdk"})
+                elif current_name:
+                    deps.append({"name": current_name, "source": "hosted"})
+            current_name = ""
+            current_block = None
+
+            # End of the dependencies block.
+            break
+
+        if current_name and indent > current_indent:
+            if ":" in stripped:
+                sub_key, sub_value = stripped.split(":", 1)
+                if current_block == None:
+                    current_block = {}
+                current_block[sub_key.strip()] = sub_value.strip().strip("'\"")
+            continue
+
+        if ":" not in stripped:
+            continue
+
+        name, remainder = stripped.split(":", 1)
+        name = name.strip()
+        remainder = remainder.strip()
+        entry_indent = indent
+
+        if not name:
+            continue
+
+        if current_name:
+            if current_block != None and "path" in current_block:
+                pass
+            elif current_block != None and current_block.get("sdk"):
+                deps.append({"name": current_name, "source": "sdk"})
+            else:
+                deps.append({"name": current_name, "source": "hosted"})
+            current_block = None
+        current_name = name
+        current_indent = entry_indent
+
+        if remainder:
+            deps.append({"name": current_name, "source": "hosted"})
+            current_name = ""
+            current_block = None
+        else:
+            current_block = {}
+
+    if current_name:
+        if current_block != None and "path" in current_block:
+            pass
+        elif current_block != None and current_block.get("sdk"):
+            deps.append({"name": current_name, "source": "sdk"})
+        elif current_name:
+            deps.append({"name": current_name, "source": "hosted"})
+
+    return deps
 
 def _sanitize_repo_name(pkg):
     """Convert a package name to a canonical repository identifier."""
@@ -362,6 +491,9 @@ def _default_sdk_repo(repository_ctx):
 def _sdk_package_path(pkg):
     if pkg == "sky_engine":
         return "flutter/bin/cache/pkg/{}".format(pkg)
+    if pkg == "_macros":
+        # `_macros` is provided by the Dart SDK internals and does not live under flutter/packages.
+        return None
     return "flutter/packages/{}".format(pkg)
 
 def _parse_pub_deps(content):
