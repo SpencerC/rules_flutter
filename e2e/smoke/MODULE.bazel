@@ -11,9 +11,32 @@ local_path_override(
     path = "../..",
 )
 
+flutter = use_extension("@rules_flutter//flutter:extensions.bzl", "flutter")
+flutter.toolchain(flutter_version = "3.24.0")
+use_repo(
+    flutter,
+    "flutter_linux",
+    "flutter_macos",
+    "flutter_toolchains",
+    "flutter_windows",
+)
+
+register_toolchains("@flutter_toolchains//:all")
+
 # Pub.dev dependencies
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
-use_repo(pub, "pub_fixnum", "pub_vector_math")
+pub.package(
+    name = "pub_lints",
+    package = "lints",
+)
+use_repo(
+    pub,
+    "pub_fixnum",
+    "pub_flutter_lints",
+    "pub_intl_utils",
+    "pub_lints",
+    "pub_vector_math",
+)
 
 # Go dependencies for gazelle plugin
 go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")

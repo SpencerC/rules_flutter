@@ -119,6 +119,7 @@ def _generate_flutter_packages(repository_ctx):
                 repository_ctx,
                 package_name = package_name,
                 package_dir = package_dir,
+                include_hosted_deps = False,
             )
 
 flutter_repositories = repository_rule(

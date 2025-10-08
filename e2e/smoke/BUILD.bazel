@@ -36,7 +36,7 @@ build_test(
 
 build_test(
     name = "single_pub_dependency_build_test",
-    targets = ["@pub_fixnum//:fixnum"],
+    targets = ["@pub_intl_utils//:intl_utils"],
 )
 
 test_suite(

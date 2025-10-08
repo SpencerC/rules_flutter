@@ -89,7 +89,10 @@ for path in sorted(results):
 def _module_root(module_ctx, mod):
     """Return the filesystem root for the given module."""
     module_name = mod.name or ""
-    label = "@@{}//:MODULE.bazel".format(module_name)
+    if mod.is_root:
+        label = "@@//:MODULE.bazel"
+    else:
+        label = "@@{}//:MODULE.bazel".format(module_name)
     module_file = module_ctx.path(Label(label))
     return module_file.dirname
 
@@ -211,6 +214,8 @@ def _pub_extension(module_ctx):
     scanned_roots = {}
 
     for mod in module_ctx.modules:
+        if not mod.is_root:
+            continue
         root = _module_root(module_ctx, mod)
         root_key = str(root)
         if root_key in scanned_roots:

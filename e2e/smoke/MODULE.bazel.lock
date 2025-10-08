@@ -164,8 +164,8 @@
   "moduleExtensions": {
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "Ud4NEfvcxP4rzlxlrUoP9XkKl/oVfgDAKOPfj9y+GZ8=",
-        "usagesDigest": "7ZMGz+5FzhV1fcmwtaA3d92th77v56W53oOfVYm0GfE=",
+        "bzlTransitiveDigest": "7JNwSIgsKigI7YU7S8DGj33ElQI11ECywHnxzbi8Rro=",
+        "usagesDigest": "j1+3MZmNcCkACb5AMJa9d5IkO756wppC6h0X/AYbCWM=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -209,8 +209,8 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "Ud4NEfvcxP4rzlxlrUoP9XkKl/oVfgDAKOPfj9y+GZ8=",
-        "usagesDigest": "P+ZIkY/G22pRFt7rsAvTKpp+MupKVqxab5wow4EDur4=",
+        "bzlTransitiveDigest": "7JNwSIgsKigI7YU7S8DGj33ElQI11ECywHnxzbi8Rro=",
+        "usagesDigest": "rzCMB7bS853a+geg8AGeeAZaQ5JkS22cOCqdRDe91Ls=",
         "recordedFileInputs": {
           "@@//dart_package/pub_deps.json": "73450fe56d893cfd0ff653d4d46d420ebee41b94efd9d983aa81582d1f6ffb6f",
           "@@//flutter_app/pub_deps.json": "870467b5e48fe3cdaae4a8d4f9327b838310af9f22ff396398ae4fe69beb1d95",
@@ -238,6 +238,13 @@
             "attributes": {
               "package": "intl_utils",
               "version": "2.8.12"
+            }
+          },
+          "pub_lints": {
+            "repoRuleId": "@@rules_flutter+//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "lints",
+              "version": ""
             }
           },
           "pub_vector_math": {

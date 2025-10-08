@@ -139,7 +139,7 @@ def _pub_command_prefix(executable):
         return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
     return [executable, "pub"]
 
-def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None, include_hosted_deps = False):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
@@ -149,12 +149,21 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         sdk_repo: Optional repository label used to resolve SDK-provided
             dependencies (e.g. `@flutter_macos`). When omitted, a sensible
             default for the current host platform is used.
+        include_hosted_deps: When true, emit hosted pub.dev dependencies from
+            pub_deps.json as external repositories. Flutter SDK packages set
+            this to False because their hosted deps are already vendored in the
+            SDK and should not pull from pub.dev.
     """
 
     _ensure_pub_deps(repository_ctx, package_name, package_dir)
     rule_kind = _determine_rule_kind(repository_ctx, package_dir)
     srcs = _collect_lib_sources(repository_ctx, package_dir)
-    deps = _collect_direct_deps(repository_ctx, package_dir, sdk_repo)
+    deps = _collect_direct_deps(
+        repository_ctx,
+        package_dir,
+        sdk_repo,
+        include_hosted_deps = include_hosted_deps,
+    )
 
     lines = [
         "# Generated BUILD file for package: {}".format(package_name),
@@ -276,8 +285,16 @@ def _collect_lib_sources(repository_ctx, package_dir):
 
     return sorted(sources)
 
-def _collect_direct_deps(repository_ctx, package_dir, sdk_repo):
-    """Return the Bazel labels for direct dependencies (hosted + sdk)."""
+def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_deps = True):
+    """Return Bazel labels for direct dependencies sourced from pub or the SDK.
+
+    Args:
+        repository_ctx: Repository rule context.
+        package_dir: Relative location of the package being generated.
+        sdk_repo: Repository label to use for Flutter SDK provided packages.
+        include_hosted_deps: Whether hosted pub.dev dependencies should be
+            emitted as external repos (True) or skipped (False).
+    """
 
     deps_rel = "pub_deps.json" if package_dir in (".", "") else package_dir + "/pub_deps.json"
     deps_path = repository_ctx.path(deps_rel)
@@ -293,6 +310,8 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo):
 
         source = info.get("source")
         if source == "hosted":
+            if not include_hosted_deps:
+                continue
             repo_name = _sanitize_repo_name(pkg)
             deps.append("@{}//:{}".format(repo_name, pkg))
         elif source == "sdk":
