@@ -99,10 +99,11 @@ flutter_test(
 )
 ```
 
-`flutter_library` runs `flutter pub get` once and exposes the generated
-workspace, pub cache, and `pub_deps.json`. Both `flutter_app` and `flutter_test`
-reuse those outputs via the `embed` attribute, keeping builds and tests fast and
-hermetic.
+`flutter_library` assembles a reusable pub cache, `pub_deps.json`, and
+workspace snapshot without invoking `pub get`. Both `flutter_app` and
+`flutter_test` reuse those outputs via the `embed` attribute and run
+`flutter pub get --offline` using the prepared cache, keeping builds and tests
+fast and hermetic.
 
 Whenever dependencies change, run `bazel run //:app_lib.update` to copy the
 fresh `pub_deps.json` (generated via `flutter pub deps --json`) into your workspace next to `pubspec.yaml`.
@@ -145,8 +146,9 @@ flutter_app(
 
 ### flutter_library
 
-Prepares a Flutter package by running `flutter pub get` once and exposing the
-workspace, pub cache, and pubspec outputs to other rules.
+Prepares a Flutter package by assembling its pub cache and dependency metadata
+without running `pub get`. The generated workspace, pub cache, and pubspec
+artifacts are reused by other rules.
 
 **Attributes:**
 
@@ -297,7 +299,7 @@ This section outlines the planned development phases and features for rules_flut
 
 ### 🚧 Phase 2: Core Functionality (Current)
 
-- ✅ **Complete**: Execute actual Flutter commands (`pub get`, `flutter build`, `flutter test`)
+- ✅ **Complete**: Offline dependency assembly plus real `flutter build`/`flutter test`
 - 🔄 **In Progress**: **Pub dependency management**: Integration with pub.dev packages and dependency caching
 - 🔄 **In Progress**: **Build caching**: Leverage Bazel's incremental builds for Flutter projects
 - 🔲 **Error handling**: Comprehensive error messages and build diagnostics

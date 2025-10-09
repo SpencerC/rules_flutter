@@ -107,28 +107,27 @@ done < "$MANIFEST_FILE"
 
     return working_dir, input_files
 
-def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, dependency_pub_caches = [], codegen_commands = []):
-    """Execute flutter pub get command and optional code generation.
+def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, dependency_pub_caches = [], codegen_commands = [], is_pub_package = False):
+    """Prepare Flutter/Dart dependencies without running pub get.
 
     Args:
-        ctx: The rule context
-        flutter_toolchain: The Flutter toolchain
-        working_dir: Flutter project working directory
-        pubspec_file: The pubspec.yaml file
-        dependency_pub_caches: List of pub_cache directories from dependencies (can contain Files or depsets)
-        codegen_commands: List of code generation commands to run after pub get (e.g., ["intl_utils:generate"])
+        ctx: The rule context.
+        flutter_toolchain: The resolved Flutter toolchain.
+        working_dir: Directory containing the staged package sources.
+        pubspec_file: The pubspec.yaml file for the library.
+        dependency_pub_caches: Files or depsets with pub cache directories from dependencies.
+        codegen_commands: Optional list of code generation commands (package:script).
+        is_pub_package: Whether the target represents a hosted pub.dev package.
 
     Returns:
-        Tuple of (pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir)
+        Tuple of (prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir).
     """
 
-    # Get the actual Flutter binary file object (first tool file)
     if not flutter_toolchain.flutterinfo.tool_files:
         fail("No tool files found in Flutter toolchain")
     flutter_bin_file = flutter_toolchain.flutterinfo.tool_files[0]
     flutter_bin = flutter_bin_file.path
 
-    # Flatten dependency pub_caches: convert depsets to lists
     dep_pub_cache_files = []
     for item in dependency_pub_caches:
         if type(item) == "depset":
@@ -136,32 +135,36 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, de
         else:
             dep_pub_cache_files.append(item)
 
-    # Create output artifacts
-    pub_get_output = ctx.actions.declare_file(ctx.label.name + "_pub_get.log")
+    pub_get_output = ctx.actions.declare_file(ctx.label.name + "_pub_prepare.log")
     pub_cache_dir = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
     pub_deps = ctx.actions.declare_file(ctx.label.name + "_pub_deps.json")
     dart_tool_dir = ctx.actions.declare_directory(ctx.label.name + "_dart_tool")
     prepared_workspace = ctx.actions.declare_directory(ctx.label.name + "_prepared_flutter_workspace")
 
-    # Build arguments for dependency pub_cache directories
     dep_pub_cache_args = []
     for dep_cache in dep_pub_cache_files:
         dep_pub_cache_args.append(dep_cache.path)
 
-    # Enhanced script that properly executes flutter pub get and reports results
+    codegen_args = ["\"{}\"".format(cmd) for cmd in codegen_commands]
+
     script_content = """#!/bin/bash
 set -euo pipefail
 
 WORKSPACE_SRC="{workspace_src}"
 WORKSPACE_DIR="{workspace_dir}"
 PUB_CACHE_DIR="{pub_cache_dir}"
+PUB_DEPS_OUT="{pub_deps}"
+DART_TOOL_DIR="{dart_tool_dir}"
 FLUTTER_BIN="{flutter_bin}"
+IS_PUB_PACKAGE="{is_pub_package}"
 ORIGINAL_PWD="$PWD"
+
 WORKSPACE_SRC_ABS="$ORIGINAL_PWD/$WORKSPACE_SRC"
 WORKSPACE_DIR_ABS="$ORIGINAL_PWD/$WORKSPACE_DIR"
 PUB_CACHE_DIR_ABS="$ORIGINAL_PWD/$PUB_CACHE_DIR"
+DART_TOOL_DIR_ABS="$ORIGINAL_PWD/$DART_TOOL_DIR"
 
-# Prepare the output workspace copy
+# Copy staged workspace into prepared output directory
 rm -rf "$WORKSPACE_DIR_ABS"
 mkdir -p "$WORKSPACE_DIR_ABS"
 if command -v rsync >/dev/null 2>&1; then
@@ -171,52 +174,58 @@ else
 fi
 chmod -R u+rwX "$WORKSPACE_DIR_ABS"
 
-# Strip sections that reference unpublished sources (dependency_overrides, dev_dependencies for external packages).
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "✗ FATAL ERROR: python interpreter not found on PATH" >&2
+    exit 1
+fi
+
 if [ -f "$WORKSPACE_DIR_ABS/pubspec.yaml" ]; then
     PUBSPEC_SECTIONS="dependency_overrides"
-    if [[ "$WORKSPACE_DIR" == *"rules_flutter++pub+"* ]]; then
+    if [ "$IS_PUB_PACKAGE" = "1" ]; then
         PUBSPEC_SECTIONS="$PUBSPEC_SECTIONS dev_dependencies"
     fi
-    PUBSPEC_PATH="$WORKSPACE_DIR_ABS/pubspec.yaml" PUBSPEC_SECTIONS="$PUBSPEC_SECTIONS" python3 - <<'PY'
-import sys, os
+    PUBSPEC_PATH="$WORKSPACE_DIR_ABS/pubspec.yaml" PUBSPEC_SECTIONS="$PUBSPEC_SECTIONS" "$PYTHON_BIN" - <<'PY'
+import os
+import sys
+
 path = os.environ.get("PUBSPEC_PATH")
-if not path or not os.path.exists(path):
+sections = set(filter(None, (os.environ.get("PUBSPEC_SECTIONS") or "").split()))
+if not path or not os.path.exists(path) or not sections:
     sys.exit(0)
-with open(path, "r", encoding="utf-8") as f:
-    lines = f.readlines()
+
+with open(path, "r", encoding="utf-8") as fh:
+    lines = fh.readlines()
 
 output = []
 skip = False
 skip_indent = 0
-sections_to_strip = set(filter(None, os.environ.get("PUBSPEC_SECTIONS", "").split()))
 for line in lines:
-    stripped = line.strip()
+    stripped = line.rstrip()
     indent = len(line) - len(line.lstrip(" "))
-
     if skip:
         if stripped and not stripped.startswith("#") and indent <= skip_indent:
             skip = False
         else:
             continue
 
-    if not skip and stripped.rstrip(":") in sections_to_strip and stripped.endswith(":"):
+    key = stripped.rstrip(":")
+    if not skip and stripped.endswith(":") and key in sections:
         skip = True
         skip_indent = indent
         continue
 
     output.append(line)
 
-with open(path, "w", encoding="utf-8") as f:
-    f.writelines(output)
+with open(path, "w", encoding="utf-8") as fh:
+    fh.writelines(output)
 PY
 fi
 
-# Set up pub cache directory from file path
 export PUB_CACHE="$PUB_CACHE_DIR_ABS"
 mkdir -p "$PUB_CACHE_DIR_ABS"
 
-# Pre-populate pub cache from dependencies
-echo "=== Pre-populating Pub Cache from Dependencies ==="
+echo "=== Preparing pub cache from dependencies ==="
 DEP_CACHES=({dep_caches})
 if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
     for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
@@ -224,282 +233,290 @@ if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
             DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
         fi
         if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
-            echo "Copying dependency pub_cache from: $DEP_CACHE"
-            # Use rsync if available for better performance, otherwise use cp
             if command -v rsync >/dev/null 2>&1; then
                 rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
             else
-                cp -R "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
+                cp -RL "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
             fi
         fi
     done
 else
-    echo "No dependency pub_caches to pre-populate"
+    echo "No dependency caches supplied"
 fi
-echo "Pub cache pre-population complete"
 echo ""
 
-# Configure Flutter for sandbox environment  
+export PUBSPEC_PATH="$WORKSPACE_DIR_ABS/pubspec.yaml"
+PACKAGE_INFO="$("$PYTHON_BIN" <<'PY'
+import os
+path = os.environ.get("PUBSPEC_PATH")
+name = ""
+version = ""
+language = ""
+if path and os.path.exists(path):
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if stripped.startswith("name:") and not name:
+                value = stripped.split(":", 1)[1].strip()
+                value = value.strip("\\\"").strip("'")
+                name = value
+            elif stripped.startswith("version:") and not version:
+                value = stripped.split(":", 1)[1].strip()
+                value = value.strip("\\\"").strip("'")
+                version = value
+            elif stripped.startswith("environment:"):
+                break
+        fh.seek(0)
+        capture = False
+        for line in fh:
+            stripped = line.strip()
+            if stripped.startswith("environment:"):
+                capture = True
+                continue
+            if capture:
+                if stripped.startswith("sdk:"):
+                    value = stripped.split(":", 1)[1].strip()
+                    value = value.strip("\\\"").strip("'")
+                    language = value
+                    break
+                if stripped and not stripped.startswith("#") and not stripped.startswith(("flutter:", "flutter_test:", "dart:")):
+                    break
+values = [name or "", version or "", language or ""]
+print("|".join(values))
+PY
+)"
+
+PACKAGE_NAME="${{PACKAGE_INFO%%|*}}"
+PACKAGE_VERSION="${{PACKAGE_INFO#*|}}"
+PACKAGE_VERSION="${{PACKAGE_VERSION%%|*}}"
+LANGUAGE_SPEC="${{PACKAGE_INFO##*|}}"
+if [ -z "$LANGUAGE_SPEC" ]; then
+    LANGUAGE_SPEC=">=3.0.0 <4.0.0"
+fi
+
+if [ "$IS_PUB_PACKAGE" = "1" ] && [ -n "$PACKAGE_NAME" ] && [ -n "$PACKAGE_VERSION" ]; then
+    DEST="$PUB_CACHE_DIR_ABS/hosted/pub.dev/${{PACKAGE_NAME}}-${{PACKAGE_VERSION}}"
+    rm -rf "$DEST"
+    mkdir -p "$DEST"
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -aL "$WORKSPACE_DIR_ABS/" "$DEST/"
+    else
+        cp -RL "$WORKSPACE_DIR_ABS/." "$DEST/"
+    fi
+fi
+
 export FLUTTER_SUPPRESS_ANALYTICS=true
 export CI=true
-export FLUTTER_ROOT="$ORIGINAL_PWD/external/+flutter+flutter_macos/flutter"
 export PUB_ENVIRONMENT="flutter_tool:bazel"
 export ANDROID_HOME=""
 export ANDROID_SDK_ROOT=""
+export FLUTTER_ROOT="$ORIGINAL_PWD/external/+flutter+flutter_macos/flutter"
 export PATH="$FLUTTER_ROOT/bin:$PATH"
 
-# Change to the workspace directory from execroot
+FLUTTER_BIN_ABS="$ORIGINAL_PWD/$FLUTTER_BIN"
+if [ ! -x "$FLUTTER_BIN_ABS" ]; then
+    echo "✗ FATAL ERROR: Flutter binary not found at $FLUTTER_BIN_ABS" >&2
+    exit 1
+fi
+
 cd "$WORKSPACE_DIR_ABS"
 
-echo "=== Flutter Pub Get Execution ==="
-echo "Working directory: $(pwd)"
-echo "Expected workspace dir: $WORKSPACE_DIR"
-echo "Flutter binary: $FLUTTER_BIN"  
-echo "Pub cache: $PUB_CACHE_DIR_ABS"
-echo "Contents of workspace:"
-ls -la
-echo ""
-
-# Check if pubspec.yaml symlink is valid
-if [ -L "pubspec.yaml" ]; then
-    echo "pubspec.yaml is a symlink pointing to: $(readlink pubspec.yaml)"
-    if [ ! -f "$(readlink pubspec.yaml)" ]; then
-        echo "✗ ERROR: pubspec.yaml symlink target doesn't exist"
-        exit 1
-    fi
-fi
-
-# Validate pubspec.yaml exists and is valid
-if [ ! -f "pubspec.yaml" ]; then
-    echo "✗ ERROR: pubspec.yaml not found in workspace"
-    echo "Files in workspace:"
-    ls -la
-    exit 1
-fi
-
-echo "pubspec.yaml found:"
-head -10 pubspec.yaml
-echo ""
-
-echo "Debug: Confirming Flutter SDK access from execroot"
-# Set absolute path to Flutter binary from execroot  
-FLUTTER_BIN_ABS="$ORIGINAL_PWD/$FLUTTER_BIN"
-echo "Flutter binary absolute path: $FLUTTER_BIN_ABS"
-echo "Toolchain info: {tool_files_count} tool files, {sdk_files_count} SDK files"
-
-# Validate Flutter binary exists and is executable
-if [ ! -f "$FLUTTER_BIN_ABS" ]; then
-    echo "✗ FATAL ERROR: Flutter binary not found at: $FLUTTER_BIN_ABS"
-    echo "Expected Flutter SDK to be available via toolchain"
-    echo "Check your MODULE.bazel flutter.toolchain() configuration"
-    echo "Available files in $(dirname "$FLUTTER_BIN_ABS"):"
-    ls -la "$(dirname "$FLUTTER_BIN_ABS")" 2>/dev/null || echo "Directory not found"
-    exit 1
-fi
-
-if [ ! -x "$FLUTTER_BIN_ABS" ]; then
-    echo "✗ FATAL ERROR: Flutter binary not executable at: $FLUTTER_BIN_ABS"
-    ls -la "$FLUTTER_BIN_ABS"
-    echo "Check Flutter SDK permissions and installation"
-    exit 1
-fi
-
-echo "Flutter binary verified at: $FLUTTER_BIN_ABS"
-echo "Flutter version:"
-"$FLUTTER_BIN_ABS" --version --suppress-analytics || {{
-    echo "✗ FATAL ERROR: Could not get Flutter version"
-    echo "Flutter SDK may be corrupted or incompatible"
-    exit 1
-}}
-echo ""
-
-echo "Trying dart pub get first:"
-DART_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
-if [ -f "$DART_BIN" ]; then
-    echo "Using Dart SDK directly: $DART_BIN"
-    if "$DART_BIN" pub get --offline; then
-        echo "✓ dart pub get (offline) completed successfully"
-        echo ""
-    else
-        echo "Offline dart pub get failed, trying online mode"
-        if "$DART_BIN" pub get; then
-            echo "✓ dart pub get (online) completed successfully"
-            echo ""
-        else
-            echo "Dart pub get failed, falling back to Flutter"
-        fi
-    fi
+echo "=== Generating pub_deps.json ==="
+DART_BIN_LOCAL="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+if [ -x "$DART_BIN_LOCAL" ]; then
+    PUB_DEPS_CMD=("$DART_BIN_LOCAL" pub deps --json)
 else
-    echo "Dart SDK not found, using Flutter directly"
+    PUB_DEPS_CMD=("$FLUTTER_BIN_ABS" --suppress-analytics pub deps --json)
 fi
-
-echo "Running: $FLUTTER_BIN_ABS pub get --offline"
-FLUTTER_PUB_GET_MODE="offline"
-if "$FLUTTER_BIN_ABS" pub get --offline --suppress-analytics; then
-    echo "✓ flutter pub get (offline) completed successfully"
-else
-    echo "Offline flutter pub get failed, running normal pub get..."
-    FLUTTER_PUB_GET_MODE="online"
-    if "$FLUTTER_BIN_ABS" pub get --suppress-analytics; then
-        echo "✓ flutter pub get (online) completed successfully"
-    else
-        echo "✗ FATAL ERROR: flutter pub get failed"
-        echo "This could be due to:"
-        echo "  - Network connectivity issues"
-        echo "  - Invalid pubspec.yaml dependencies"
-        echo "  - Flutter SDK compatibility issues"
-        echo "  - Insufficient permissions"
-        echo ""
-        echo "Check your pubspec.yaml and network connection"
-        exit 1
-    fi
-fi
-
-# Validate and report outputs
-echo ""
-echo "=== Post-execution Analysis ==="
-echo "Generating dependency report via flutter pub deps --json"
-if "$FLUTTER_BIN_ABS" pub deps --json > "$WORKSPACE_DIR_ABS/pub_deps.json"; then
-    if [ -s "$WORKSPACE_DIR_ABS/pub_deps.json" ]; then
-        echo "✓ pub deps JSON generated ($(wc -c < \"$WORKSPACE_DIR_ABS/pub_deps.json\") bytes)"
-    else
-        echo "✗ FATAL ERROR: pub deps JSON was created but is empty"
-        exit 1
-    fi
-else
-    echo "✗ FATAL ERROR: flutter pub deps --json failed"
-    echo "This indicates flutter pub get may not have resolved dependencies correctly"
+if ! "${{PUB_DEPS_CMD[@]}}" > pub_deps.json; then
+    echo "✗ FATAL ERROR: flutter pub deps --json failed" >&2
     exit 1
 fi
 
-if [ -d ".dart_tool" ]; then
-    echo "✓ .dart_tool directory created"
-    if [ -f ".dart_tool/package_config.json" ]; then
-        echo "✓ package_config.json generated"
-        # Optional: jq may not be available; fallback to unknown
-        echo "Packages configured: $( (command -v jq >/dev/null 2>&1 && jq '.packages | length' .dart_tool/package_config.json) || echo 'unknown')"
-    else
-        echo "✗ FATAL ERROR: package_config.json not generated by Flutter"
-        echo "This indicates a serious issue with Flutter pub get execution"
-        exit 1
-    fi
-else
-    echo "✗ FATAL ERROR: .dart_tool directory not created by Flutter"
-    echo "This indicates a serious issue with Flutter pub get execution"
+export PUB_DEPS_PATH="$WORKSPACE_DIR_ABS/pub_deps.json"
+"$PYTHON_BIN" <<'PY'
+import os
+
+path = os.environ.get("PUB_DEPS_PATH")
+if path and os.path.exists(path):
+    with open(path, "r", encoding="utf-8") as fh:
+        payload = fh.read()
+    start = None
+    for idx, ch in enumerate(payload):
+        if ch == "[" or ch == chr(123):
+            start = idx
+            break
+    if start and start > 0:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(payload[start:])
+PY
+
+if [ ! -s pub_deps.json ]; then
+    echo "✗ FATAL ERROR: pub_deps.json is empty" >&2
     exit 1
 fi
 
-# Check pub cache
-if [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
-    echo "✓ Pub cache populated with dependencies"
-else
-    echo "⚠ Warning: Pub cache appears empty (may be expected for projects with no dependencies)"
-fi
+export PUB_CACHE_ABS="$PUB_CACHE_DIR_ABS"
+export WORKSPACE_ABS="$WORKSPACE_DIR_ABS"
+export PACKAGE_CONFIG_PATH="$WORKSPACE_DIR_ABS/.dart_tool/package_config.json"
+export ROOT_PACKAGE_NAME="$PACKAGE_NAME"
+export ROOT_LANGUAGE_SPEC="$LANGUAGE_SPEC"
+mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
+"$PYTHON_BIN" <<'PY'
+import json
+import os
 
-echo ""
-echo "=== Final Status ==="
-echo "✓ Flutter pub get execution completed successfully (${{FLUTTER_PUB_GET_MODE}})"
+deps_path = os.path.join(os.environ["WORKSPACE_ABS"], "pub_deps.json")
+cache_root = os.environ["PUB_CACHE_ABS"]
+workspace_root = os.environ["WORKSPACE_ABS"]
+config_path = os.environ["PACKAGE_CONFIG_PATH"]
+root_name = os.environ.get("ROOT_PACKAGE_NAME") or ""
+language_spec = os.environ.get("ROOT_LANGUAGE_SPEC") or ""
 
-# Run code generation if requested
+def _parse_language(spec):
+    if not spec:
+        return "3.0"
+    spec = spec.replace(">=", "").replace("<", "").split()
+    if spec:
+        return spec[0].split("+")[0]
+    return "3.0"
+
+language_version = _parse_language(language_spec)
+
+with open(deps_path, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+
+packages = []
+for entry in data.get("packages", []):
+    name = entry.get("name")
+    source = entry.get("source")
+    version = entry.get("version")
+    if not name:
+        continue
+    if source == "hosted" and version:
+        root_path = os.path.join(cache_root, "hosted", "pub.dev", name + "-" + version)
+        if not os.path.isdir(root_path):
+            continue
+        rel = os.path.relpath(root_path, workspace_root).replace(os.sep, "/")
+        pkg = dict()
+        pkg["name"] = name
+        pkg["rootUri"] = rel
+        pkg["packageUri"] = "lib/"
+        pkg["languageVersion"] = language_version
+        packages.append(pkg)
+    elif source == "root":
+        pkg = dict()
+        pkg["name"] = name
+        pkg["rootUri"] = "."
+        pkg["packageUri"] = "lib/"
+        pkg["languageVersion"] = language_version
+        packages.append(pkg)
+
+config = dict()
+config["configVersion"] = 2
+config["generated"] = True
+config["generator"] = "rules_flutter"
+config["packages"] = packages
+with open(config_path, "w", encoding="utf-8") as fh:
+    json.dump(config, fh, indent=2)
+    fh.write("\\n")
+PY
+
 CODEGEN_COMMANDS=({codegen_commands})
 if [ ${{#CODEGEN_COMMANDS[@]}} -gt 0 ]; then
-    echo ""
-    echo "=== Running Code Generation ==="
+    if ! "$FLUTTER_BIN_ABS" --suppress-analytics pub get --offline; then
+        echo "✗ FATAL ERROR: flutter pub get --offline failed before code generation" >&2
+        exit 1
+    fi
     for CODEGEN_CMD in "${{CODEGEN_COMMANDS[@]}}"; do
         if [ -n "$CODEGEN_CMD" ]; then
-            echo "Running: flutter pub run $CODEGEN_CMD"
-            if "$FLUTTER_BIN_ABS" pub run "$CODEGEN_CMD"; then
-                echo "✓ Code generation command '$CODEGEN_CMD' completed successfully"
-            else
-                echo "✗ FATAL ERROR: Code generation command '$CODEGEN_CMD' failed"
+            echo "Running code generation: $CODEGEN_CMD"
+            if ! "$FLUTTER_BIN_ABS" --suppress-analytics pub run "$CODEGEN_CMD"; then
+                echo "✗ FATAL ERROR: Code generation command '$CODEGEN_CMD' failed" >&2
                 exit 1
             fi
         fi
     done
-    echo "✓ All code generation commands completed"
+    rm -f .dart_tool/version 2>/dev/null || true
+    rm -f .dart_tool/package_config_subset 2>/dev/null || true
 fi
+
+echo ""
+echo "=== Dependency preparation complete ==="
 """.format(
         workspace_src = working_dir.path,
         workspace_dir = prepared_workspace.path,
         pub_cache_dir = pub_cache_dir.path,
+        pub_deps = pub_deps.path,
+        dart_tool_dir = dart_tool_dir.path,
         flutter_bin = flutter_bin,
         dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
-        codegen_commands = " ".join(['"{}"'.format(cmd) for cmd in codegen_commands]),
-        tool_files_count = len(flutter_toolchain.flutterinfo.tool_files),
-        sdk_files_count = len(flutter_toolchain.flutterinfo.sdk_files),
-        first_tool_file_path = flutter_bin_file.path if flutter_toolchain.flutterinfo.tool_files else "No tool files",
+        codegen_commands = " ".join(codegen_args),
+        is_pub_package = "1" if is_pub_package else "0",
     )
 
-    # Execute pub get and create all outputs in one action
     ctx.actions.run_shell(
         inputs = [working_dir, pubspec_file] + dep_pub_cache_files + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
         outputs = [pub_get_output, pub_deps, pub_cache_dir, dart_tool_dir, prepared_workspace],
         command = script_content + """
 
-echo ""
-echo "=== Creating Output Files ==="
-
-# Go back to execution root
 cd "$ORIGINAL_PWD"
 
-# Create output directories
 mkdir -p "$(dirname "{pub_get_output}")"
 mkdir -p "$(dirname "{pub_deps}")"
 mkdir -p "$PUB_CACHE_DIR_ABS"
 mkdir -p "{dart_tool_dir}"
 
-# Create the pub get log
-echo "=== Flutter Pub Get Results ===" > "{pub_get_output}"
-echo "Flutter binary: {flutter_bin}" >> "{pub_get_output}" 
-echo "Working directory: $WORKSPACE_DIR" >> "{pub_get_output}"
-echo "Execution time: $(date)" >> "{pub_get_output}"
-echo "" >> "{pub_get_output}"
+LOG_FILE="{pub_get_output}"
+echo "=== Flutter Dependency Preparation ===" > "$LOG_FILE"
+echo "Flutter binary: {flutter_bin}" >> "$LOG_FILE"
+echo "Workspace output: {workspace_dir}" >> "$LOG_FILE"
+echo "Prepared at: $(date)" >> "$LOG_FILE"
+echo "" >> "$LOG_FILE"
 
-# Copy pub_deps.json from workspace (produced by flutter pub deps --json)
 if [ -f "$WORKSPACE_DIR_ABS/pub_deps.json" ]; then
-    echo "✓ Copying pub deps JSON from Flutter pub deps" >> "{pub_get_output}"
     cp "$WORKSPACE_DIR_ABS/pub_deps.json" "{pub_deps}"
+    echo "✓ Generated pub_deps.json" >> "$LOG_FILE"
 else
-    echo "✗ FATAL ERROR: pub deps JSON not found after successful flutter pub deps" >> "{pub_get_output}"
-    echo "This should never happen - Flutter pub deps validation failed"
-    exit 1
+    echo "{{}}" > "{pub_deps}"
+    echo "⚠ pub_deps.json missing, wrote empty placeholder" >> "$LOG_FILE"
 fi
 
-# Copy entire .dart_tool directory
+rm -rf "{dart_tool_dir}"
+mkdir -p "{dart_tool_dir}"
 if [ -d "$WORKSPACE_DIR_ABS/.dart_tool" ]; then
-    echo "✓ Copying .dart_tool directory from Flutter pub get" >> "{pub_get_output}"
-    # Clean target dir first to avoid stale files
-    rm -rf "{dart_tool_dir}"
-    mkdir -p "{dart_tool_dir}"
-    cp -R "$WORKSPACE_DIR_ABS/.dart_tool/." "{dart_tool_dir}/"
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a "$WORKSPACE_DIR_ABS/.dart_tool/" "{dart_tool_dir}/"
+    else
+        cp -RL "$WORKSPACE_DIR_ABS/.dart_tool/." "{dart_tool_dir}/"
+    fi
+    echo "✓ Created .dart_tool/package_config.json" >> "$LOG_FILE"
 else
-    echo "✗ FATAL ERROR: .dart_tool directory not found after successful pub get" >> "{pub_get_output}"
-    echo "This should never happen - Flutter pub get validation failed"
-    exit 1
+    echo "{{}}" > "{dart_tool_dir}/package_config.json"
+    echo "⚠ .dart_tool missing, wrote placeholder package_config.json" >> "$LOG_FILE"
 fi
 
-# Sync PUB_CACHE directory to declared output directory
-if [ -d "$PUB_CACHE_DIR_ABS" ] && [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
-    echo "✓ Pub cache populated with dependencies" >> "{pub_get_output}"
+mkdir -p "{pub_cache_dir}"
+if [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
+    echo "✓ Populated pub_cache directory" >> "$LOG_FILE"
 else
-    echo "⚠ Pub cache directory empty or not found" >> "{pub_get_output}"
-    # Ensure directory exists and has a placeholder for Bazel tree artifact determinism
-    mkdir -p "{pub_cache_dir}"
-    echo '{{}}' > "{pub_cache_dir}/.cache_info.json"
+    echo '{{}}' > "{pub_cache_dir}/.empty_cache.json"
+    echo "⚠ Dependency cache was empty" >> "$LOG_FILE"
 fi
 
-echo "" >> "{pub_get_output}"
-echo "Status: Real Flutter pub get execution completed" >> "{pub_get_output}"
-echo "All output files created successfully"
+echo "Status: Prepared dependencies without pub get" >> "$LOG_FILE"
 """.format(
             pub_get_output = pub_get_output.path,
             pub_deps = pub_deps.path,
             pub_cache_dir = pub_cache_dir.path,
             dart_tool_dir = dart_tool_dir.path,
             flutter_bin = flutter_bin,
+            workspace_dir = prepared_workspace.path,
         ),
-        mnemonic = "FlutterPubGet",
-        progress_message = "Running flutter pub get for %s" % ctx.label.name,
+        mnemonic = "FlutterPrepareDeps",
+        progress_message = "Preparing Flutter dependencies for %s" % ctx.label.name,
     )
 
     return prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir
@@ -512,8 +529,8 @@ def flutter_build_action(ctx, flutter_toolchain, working_dir, target, pub_cache_
         flutter_toolchain: The Flutter toolchain
         working_dir: Flutter project working directory
         target: Build target (web, apk, ios, etc.)
-        pub_cache_dir: Pub cache directory from pub get
-        dart_tool_dir: Dart tool directory from pub get
+        pub_cache_dir: Assembled pub cache directory used for offline resolution
+        dart_tool_dir: Prepared .dart_tool directory containing package_config metadata
 
     Returns:
         Tuple of (build_output, build_artifacts_dir)
@@ -628,16 +645,11 @@ echo "Flutter binary verified at: $FLUTTER_BIN_ABS"
 # This ensures package imports resolve correctly in the build environment
 echo ""
 echo "Regenerating package_config.json for build environment..."
-if "$FLUTTER_BIN_ABS" pub get --offline 2>&1 > /dev/null; then
-    echo "✓ Package config regenerated successfully"
+if "$FLUTTER_BIN_ABS" --suppress-analytics pub get --offline > /dev/null 2>&1; then
+    echo "✓ Package config regenerated successfully (offline)"
 else
-    # If offline fails, run normal pub get (packages should already be cached)
-    echo "Offline pub get failed, running normal pub get..."
-    if "$FLUTTER_BIN_ABS" pub get --suppress-analytics 2>&1 > /dev/null; then
-        echo "✓ Package config regenerated successfully"
-    else
-        echo "Warning: Could not regenerate package_config.json"
-    fi
+    echo "✗ FATAL ERROR: flutter pub get --offline failed; ensure dependency caches contain all packages" >&2
+    exit 1
 fi
 echo ""
 
@@ -665,7 +677,7 @@ if "$FLUTTER_BIN_ABS" --suppress-analytics {build_command}; then
 else
     echo "✗ FATAL ERROR: flutter {build_command} failed"
     echo "Check your Flutter project configuration and dependencies"
-    echo "Ensure all required dependencies are resolved via 'flutter pub get'"
+    echo "Ensure the offline pub cache contains all required dependencies"
     exit 1
 fi
 """.format(

@@ -121,8 +121,8 @@ echo "common $OVERRIDE" >> ~/.bazelrc
 
 3. **Build Rules** (`flutter/defs.bzl`)
 
-   - `flutter_library`: Runs `flutter pub get` once and shares outputs with dependents
-   - `flutter_app`: Reuses `flutter_library` workspaces and pub caches to build targets (web, apk, ios, macos, linux, windows)
+   - `flutter_library`: Assembles dependency caches (no `pub get`) and shares outputs with dependents
+   - `flutter_app`: Uses `flutter_library` workspaces and pub caches to build targets (web, apk, ios, macos, linux, windows)
    - `flutter_test`: Launches `flutter test` using the prepared workspace from `flutter_library`
    - `dart_library`: Pass-through rule for Dart source files
    - Rules resolve the Flutter toolchain and perform real command invocations
@@ -154,7 +154,7 @@ echo "common $OVERRIDE" >> ~/.bazelrc
 The project follows conventional commit messages for automated releases. Development priorities:
 
 1. **✅ COMPLETED**: Enhanced Flutter rules with toolchain validation and structured outputs
-2. Implement actual Flutter command execution (pub get, flutter build, flutter test)
+2. Implement actual Flutter command execution (offline dependency prep, `flutter build`, `flutter test`)
 3. Add pub dependency resolution and caching
 4. Implement platform-specific build capabilities
 5. Add hot reload support and development workflow improvements

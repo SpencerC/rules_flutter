@@ -91,7 +91,7 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 	r := rule.NewRule(ruleKind, fc.LibraryName)
 
 	// Set pubspec attribute for both flutter_library and dart_library
-	// (dart_library uses it optionally for pub get)
+	// (dart_library uses it optionally for dependency preparation)
 	r.SetAttr("pubspec", "pubspec.yaml")
 
 	// Set srcs attribute - explicitly list all source files in lib/ directory only

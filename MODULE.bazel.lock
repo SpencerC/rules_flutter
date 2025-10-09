@@ -169,7 +169,7 @@
   "moduleExtensions": {
     "//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "/rmoFLnkEDkjF7RGH7Mc9fZiCYRCsCqIbbC5/wgq0vA=",
+        "bzlTransitiveDigest": "qjet312nMIvzAeX10b/d2b/WPB3ajZ1YfAMy5QxI07c=",
         "usagesDigest": "MPZC/xzGVbRvfxHYU74cPXZyyx32ojSPxKT0ZE+0WUE=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -214,7 +214,7 @@
     },
     "//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "/rmoFLnkEDkjF7RGH7Mc9fZiCYRCsCqIbbC5/wgq0vA=",
+        "bzlTransitiveDigest": "qjet312nMIvzAeX10b/d2b/WPB3ajZ1YfAMy5QxI07c=",
         "usagesDigest": "djiHABm2u1MkS79dq+dmG3R8s4n7RLPJMicRXu6nbNo=",
         "recordedFileInputs": {
           "@@//e2e/smoke/dart_package/pub_deps.json": "73450fe56d893cfd0ff653d4d46d420ebee41b94efd9d983aa81582d1f6ffb6f",
