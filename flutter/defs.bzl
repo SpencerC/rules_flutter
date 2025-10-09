@@ -35,6 +35,130 @@ DartLibraryInfo = provider(
     },
 )
 
+def _render_pub_deps_update_script(workspace_name, pub_deps_rel, pub_deps_path, pubspec_rel):
+    """Generate shell script that syncs pub_deps.json back to the source workspace."""
+
+    return """#!/bin/bash
+set -euo pipefail
+
+resolve_path() {{
+    local rel="$1"
+    local fallback="$2"
+    local candidate
+    if [ -n "$rel" ]; then
+        candidate="$WORKSPACE_ROOT/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+        candidate="$RUNFILES_ROOT/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    fi
+    if [ -n "$fallback" ] && [ -e "$fallback" ]; then
+        echo "$fallback"
+        return 0
+    fi
+    if [ -n "$rel" ] && [ -e "$rel" ]; then
+        echo "$rel"
+        return 0
+    fi
+    echo ""
+    return 1
+}}
+
+RUNFILES_ROOT="${{RUNFILES_DIR:-$PWD}}"
+WORKSPACE_ROOT="$RUNFILES_ROOT/{workspace_root}"
+if [ ! -d "$WORKSPACE_ROOT" ]; then
+    if [ -d "$RUNFILES_ROOT/__main__" ]; then
+        WORKSPACE_ROOT="$RUNFILES_ROOT/__main__"
+    elif [ -d "$RUNFILES_ROOT/_main" ]; then
+        WORKSPACE_ROOT="$RUNFILES_ROOT/_main"
+    else
+        WORKSPACE_ROOT="$RUNFILES_ROOT"
+    fi
+fi
+
+PUB_DEPS_REL="{pub_deps_rel}"
+PUB_DEPS_FALLBACK="{pub_deps_path}"
+
+PUB_DEPS_SRC="$(resolve_path "$PUB_DEPS_REL" "$PUB_DEPS_FALLBACK")"
+if [ -z "$PUB_DEPS_SRC" ]; then
+    echo "✗ Unable to locate generated pub_deps.json: $PUB_DEPS_REL" >&2
+    exit 1
+fi
+
+if [ ! -f "$PUB_DEPS_SRC" ]; then
+    echo "✗ pub_deps.json source missing: $PUB_DEPS_SRC" >&2
+    exit 1
+fi
+
+WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
+    exit 1
+fi
+
+PUBSPEC_REL="{pubspec_rel}"
+DEST_DIR="$WORKSPACE_DIR"
+if [ -n "$PUBSPEC_REL" ]; then
+    DEST_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
+fi
+
+mkdir -p "$DEST_DIR"
+
+DEST_FILE="$DEST_DIR/pub_deps.json"
+
+if [ -f "$DEST_FILE" ] && cmp -s "$PUB_DEPS_SRC" "$DEST_FILE"; then
+    echo "✓ pub_deps.json already up to date at $DEST_FILE"
+    exit 0
+fi
+
+cp "$PUB_DEPS_SRC" "$DEST_FILE"
+chmod 0644 "$DEST_FILE" 2>/dev/null || true
+
+echo "✓ Updated $DEST_FILE"
+""".format(
+        workspace_root = workspace_name,
+        pub_deps_rel = pub_deps_rel,
+        pub_deps_path = pub_deps_path,
+        pubspec_rel = pubspec_rel,
+    )
+
+def _create_pub_deps_update_target(ctx, workspace_name, pub_deps_file, pubspec_file):
+    """Declare the executable update helper shared by flutter_library and dart_library."""
+
+    update_script = ctx.actions.declare_file(ctx.label.name + "_update.sh")
+    pubspec_rel = pubspec_file.short_path if pubspec_file else ""
+
+    script_content = _render_pub_deps_update_script(
+        workspace_name,
+        pub_deps_file.short_path,
+        pub_deps_file.path,
+        pubspec_rel,
+    )
+
+    ctx.actions.write(
+        output = update_script,
+        content = script_content,
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = update_script,
+            files = depset([update_script]),
+            runfiles = ctx.runfiles(
+                files = [
+                    update_script,
+                    pub_deps_file,
+                ],
+            ),
+        ),
+    ]
+
 def _compute_relative_to_package(ctx, file):
     """Return file path relative to the package directory."""
 
@@ -157,118 +281,12 @@ def _flutter_library_update_impl(ctx):
     if not workspace_name:
         workspace_name = "__main__"
 
-    pubspec_rel = library_info.pubspec.short_path
-    pub_deps_rel = library_info.pub_deps.short_path
-
-    update_script = ctx.actions.declare_file(ctx.label.name + "_update.sh")
-
-    script_content = """#!/bin/bash
-set -euo pipefail
-
-resolve_path() {{
-    local rel="$1"
-    local fallback="$2"
-    local candidate
-    if [ -n "$rel" ]; then
-        candidate="$WORKSPACE_ROOT/$rel"
-        if [ -e "$candidate" ]; then
-            echo "$candidate"
-            return 0
-        fi
-        candidate="$RUNFILES_ROOT/$rel"
-        if [ -e "$candidate" ]; then
-            echo "$candidate"
-            return 0
-        fi
-    fi
-    if [ -n "$fallback" ] && [ -e "$fallback" ]; then
-        echo "$fallback"
-        return 0
-    fi
-    if [ -n "$rel" ] && [ -e "$rel" ]; then
-        echo "$rel"
-        return 0
-    fi
-    echo ""
-    return 1
-}}
-
-RUNFILES_ROOT="${{RUNFILES_DIR:-$PWD}}"
-WORKSPACE_ROOT="$RUNFILES_ROOT/{workspace_root}"
-if [ ! -d "$WORKSPACE_ROOT" ]; then
-    if [ -d "$RUNFILES_ROOT/__main__" ]; then
-        WORKSPACE_ROOT="$RUNFILES_ROOT/__main__"
-    elif [ -d "$RUNFILES_ROOT/_main" ]; then
-        WORKSPACE_ROOT="$RUNFILES_ROOT/_main"
-    else
-        WORKSPACE_ROOT="$RUNFILES_ROOT"
-    fi
-fi
-
-PUB_DEPS_REL="{pub_deps_rel}"
-PUB_DEPS_FALLBACK="{pub_deps_path}"
-
-PUB_DEPS_SRC="$(resolve_path "$PUB_DEPS_REL" "$PUB_DEPS_FALLBACK")"
-if [ -z "$PUB_DEPS_SRC" ]; then
-    echo "✗ Unable to locate generated pub_deps.json: $PUB_DEPS_REL" >&2
-    exit 1
-fi
-
-if [ ! -f "$PUB_DEPS_SRC" ]; then
-    echo "✗ pub_deps.json source missing: $PUB_DEPS_SRC" >&2
-    exit 1
-fi
-
-WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
-if [ -z "$WORKSPACE_DIR" ]; then
-    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
-    exit 1
-fi
-
-PUBSPEC_REL="{pubspec_rel}"
-DEST_DIR="$WORKSPACE_DIR"
-if [ -n "$PUBSPEC_REL" ]; then
-    DEST_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
-fi
-
-mkdir -p "$DEST_DIR"
-
-DEST_FILE="$DEST_DIR/pub_deps.json"
-
-if [ -f "$DEST_FILE" ] && cmp -s "$PUB_DEPS_SRC" "$DEST_FILE"; then
-    echo "✓ pub_deps.json already up to date at $DEST_FILE"
-    exit 0
-fi
-
-cp "$PUB_DEPS_SRC" "$DEST_FILE"
-chmod 0644 "$DEST_FILE" 2>/dev/null || true
-
-echo "✓ Updated $DEST_FILE"
-""".format(
-        workspace_root = workspace_name,
-        pub_deps_rel = pub_deps_rel,
-        pub_deps_path = library_info.pub_deps.path,
-        pubspec_rel = pubspec_rel,
+    return _create_pub_deps_update_target(
+        ctx,
+        workspace_name,
+        library_info.pub_deps,
+        library_info.pubspec,
     )
-
-    ctx.actions.write(
-        output = update_script,
-        content = script_content,
-        is_executable = True,
-    )
-
-    return [
-        DefaultInfo(
-            executable = update_script,
-            files = depset([update_script]),
-            runfiles = ctx.runfiles(
-                files = [
-                    update_script,
-                    library_info.pub_deps,
-                ],
-            ),
-        ),
-    ]
 
 _flutter_library_update = rule(
     implementation = _flutter_library_update_impl,
@@ -845,11 +863,10 @@ export PATH="$FLUTTER_BIN_DIR:$PATH"
 echo "Regenerating package_config.json for test runtime..."
 pushd "$RUNTIME_WORKSPACE" >/dev/null
 if "$FLUTTER_BIN_ABS" --suppress-analytics pub get --offline > /dev/null 2>&1; then
-    echo "✓ Package config regenerated successfully (offline)" >> "$TEST_LOG"
+    echo "✓ Package config regenerated successfully (offline)" | tee -a "$TEST_LOG"
 else
-    echo "✗ flutter pub get --offline failed in test runtime" >> "$TEST_LOG"
+    echo "✗ flutter pub get --offline failed in test runtime" | tee -a "$TEST_LOG"
     popd >/dev/null
-    cat "$TEST_LOG"
     exit 1
 fi
 popd >/dev/null
@@ -872,14 +889,13 @@ set -e
 
 popd >/dev/null
 
-echo "" >> "$TEST_LOG"
+echo "" | tee -a "$TEST_LOG"
 if [ "$RESULT" -eq 0 ]; then
-    echo "✓ Flutter tests completed successfully" >> "$TEST_LOG"
+    echo "✓ Flutter tests completed successfully" | tee -a "$TEST_LOG"
 else
-    echo "✗ Flutter tests failed" >> "$TEST_LOG"
+    echo "✗ Flutter tests failed" | tee -a "$TEST_LOG"
 fi
 
-cat "$TEST_LOG"
 exit "$RESULT"
 """.format(
         workspace_short = prepared_workspace.short_path,
@@ -1057,118 +1073,12 @@ def _dart_library_update_impl(ctx):
     if not workspace_name:
         workspace_name = "__main__"
 
-    pubspec_rel = library_info.pubspec.short_path if library_info.pubspec else ""
-    pub_deps_rel = library_info.pub_deps.short_path
-
-    update_script = ctx.actions.declare_file(ctx.label.name + "_update.sh")
-
-    script_content = """#!/bin/bash
-set -euo pipefail
-
-resolve_path() {{
-    local rel="$1"
-    local fallback="$2"
-    local candidate
-    if [ -n "$rel" ]; then
-        candidate="$WORKSPACE_ROOT/$rel"
-        if [ -e "$candidate" ]; then
-            echo "$candidate"
-            return 0
-        fi
-        candidate="$RUNFILES_ROOT/$rel"
-        if [ -e "$candidate" ]; then
-            echo "$candidate"
-            return 0
-        fi
-    fi
-    if [ -n "$fallback" ] && [ -e "$fallback" ]; then
-        echo "$fallback"
-        return 0
-    fi
-    if [ -n "$rel" ] && [ -e "$rel" ]; then
-        echo "$rel"
-        return 0
-    fi
-    echo ""
-    return 1
-}}
-
-RUNFILES_ROOT="${{RUNFILES_DIR:-$PWD}}"
-WORKSPACE_ROOT="$RUNFILES_ROOT/{workspace_root}"
-if [ ! -d "$WORKSPACE_ROOT" ]; then
-    if [ -d "$RUNFILES_ROOT/__main__" ]; then
-        WORKSPACE_ROOT="$RUNFILES_ROOT/__main__"
-    elif [ -d "$RUNFILES_ROOT/_main" ]; then
-        WORKSPACE_ROOT="$RUNFILES_ROOT/_main"
-    else
-        WORKSPACE_ROOT="$RUNFILES_ROOT"
-    fi
-fi
-
-PUB_DEPS_REL="{pub_deps_rel}"
-PUB_DEPS_FALLBACK="{pub_deps_path}"
-
-PUB_DEPS_SRC="$(resolve_path "$PUB_DEPS_REL" "$PUB_DEPS_FALLBACK")"
-if [ -z "$PUB_DEPS_SRC" ]; then
-    echo "✗ Unable to locate generated pub_deps.json: $PUB_DEPS_REL" >&2
-    exit 1
-fi
-
-if [ ! -f "$PUB_DEPS_SRC" ]; then
-    echo "✗ pub_deps.json source missing: $PUB_DEPS_SRC" >&2
-    exit 1
-fi
-
-WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
-if [ -z "$WORKSPACE_DIR" ]; then
-    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
-    exit 1
-fi
-
-PUBSPEC_REL="{pubspec_rel}"
-DEST_DIR="$WORKSPACE_DIR"
-if [ -n "$PUBSPEC_REL" ]; then
-    DEST_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
-fi
-
-mkdir -p "$DEST_DIR"
-
-DEST_FILE="$DEST_DIR/pub_deps.json"
-
-if [ -f "$DEST_FILE" ] && cmp -s "$PUB_DEPS_SRC" "$DEST_FILE"; then
-    echo "✓ pub_deps.json already up to date at $DEST_FILE"
-    exit 0
-fi
-
-cp "$PUB_DEPS_SRC" "$DEST_FILE"
-chmod 0644 "$DEST_FILE" 2>/dev/null || true
-
-echo "✓ Updated $DEST_FILE"
-""".format(
-        workspace_root = workspace_name,
-        pub_deps_rel = pub_deps_rel,
-        pub_deps_path = library_info.pub_deps.path,
-        pubspec_rel = pubspec_rel,
+    return _create_pub_deps_update_target(
+        ctx,
+        workspace_name,
+        library_info.pub_deps,
+        library_info.pubspec,
     )
-
-    ctx.actions.write(
-        output = update_script,
-        content = script_content,
-        is_executable = True,
-    )
-
-    return [
-        DefaultInfo(
-            executable = update_script,
-            files = depset([update_script]),
-            runfiles = ctx.runfiles(
-                files = [
-                    update_script,
-                    library_info.pub_deps,
-                ],
-            ),
-        ),
-    ]
 
 _dart_library_update = rule(
     implementation = _dart_library_update_impl,
