@@ -4,16 +4,16 @@ Build Flutter applications with Bazel! This repository provides Bazel rules for 
 
 ## Features
 
-- ✅ **Multi-platform builds**: Build Flutter apps for Web, Android, iOS, macOS, Windows, and Linux
-- ✅ **Automatic SDK management**: Download and manage Flutter SDK versions declaratively
-- ✅ **Testing support**: Run Flutter tests within Bazel's build system
-- ✅ **Dart libraries**: Support for standalone Dart libraries and packages
-- ✅ **Incremental builds**: Leverage Bazel's caching for fast incremental builds
-- ✅ **Toolchain integration**: Hermetic builds with proper toolchain isolation
+- ✅ **Hermetic Flutter builds/tests**: Run real `flutter build` and `flutter test` inside Bazel actions using registered toolchains.
+- ✅ **Offline dependency assembly**: `flutter_library` prepares pub caches, `.dart_tool`, and `pub_deps.json` for downstream rules.
+- ✅ **Multi-platform builds**: Target Web, Android, iOS, macOS, Windows, and Linux from a single Bazel workspace.
+- ✅ **Automatic SDK management**: Download and verify Flutter SDK releases with baked-in integrity hashes.
+- ✅ **Bzlmod + pub.dev integration**: Module extensions register Flutter toolchains and mirror hosted packages automatically.
+- ✅ **Toolchain isolation**: Hermetic builds with reproducible inputs and sandbox-friendly workspace staging.
 
 ## Installation
 
-**⚠️ Development Status**: This project is currently in active development. The Flutter build rules (`flutter_app`, `flutter_test`, `dart_library`) are enhanced implementations that validate toolchain resolution, project structure, and create structured outputs demonstrating build readiness. While not yet executing actual Flutter commands, they provide a solid foundation for real Flutter builds. Flutter SDK downloads use real integrity hashes from Flutter's official releases.
+**⚠️ Development Status**: This project is in active development. The Flutter rules (`flutter_app`, `flutter_test`, `flutter_library`, `dart_library`) execute real `flutter build`/`flutter test` commands after assembling hermetic pub caches. Expect sharp edges: platform builds still require the host SDKs (e.g. Android SDK, Xcode), artifacts focus on validating the pipeline, and we are hardening error reporting. Flutter SDK downloads use real integrity hashes from Flutter's official releases.
 
 From the release you wish to use:
 <https://github.com/spencerc/rules_flutter/releases>
@@ -22,27 +22,42 @@ copy the WORKSPACE snippet into your `WORKSPACE` file.
 ### Using Bzlmod with Bazel 6 or greater
 
 1. (Bazel 6 only) Enable with `common --enable_bzlmod` in `.bazelrc`.
-2. Add to your `MODULE.bazel` file:
+2. Update your `MODULE.bazel` file:
 
 ```starlark
 bazel_dep(name = "com_github_spencerc_rules_flutter", version = "1.0.0")
+
+flutter = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "flutter")
+flutter.toolchain(flutter_version = "3.29.0")
+use_repo(
+    flutter,
+    "flutter_toolchains",
+    "flutter_linux",
+    "flutter_macos",
+    "flutter_windows",
+)
+register_toolchains("@flutter_toolchains//:all")
 ```
+
+The extension materializes one repository per supported SDK (`flutter_<platform>`) plus a `flutter_toolchains` alias repo. Registering the toolchains ensures Bazel can resolve Flutter for all actions.
 
 #### Managing pub.dev dependencies
 
-`rules_flutter` ships a `pub` module extension that automatically scans every
+`rules_flutter` ships a `pub` module extension that scans every
 `pub_deps.json` (generated with `flutter pub deps --json`) in the module graph and creates repositories for each hosted
-dependency. To consume those repositories, add the extension and `use_repo`
-entries that match the `pub_<package>` naming convention. For example:
+dependency. Pair it with the Flutter extension:
 
 ```starlark
 pub = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "pub")
-use_repo(pub, "pub_fixnum")  # exposes @pub_fixnum//...
+
+# Optional overrides pin versions or add extra packages.
+pub.package(name = "pub_freezed", package = "freezed", version = "2.4.5")
+
+# Repositories follow the pub_<package> naming convention and must be opt-in.
+use_repo(pub, "pub_fixnum", "pub_freezed")
 ```
 
-If you need to pin a repository manually (e.g. custom name or override), you
-can continue to call `pub.package(...)`; explicit declarations will override the
-auto-generated entries.
+Auto-discovered repositories become available once `pub_deps.json` files exist (run `bazel run //:app_lib.update` after dependency changes). Explicit `pub.package(...)` declarations override or extend the generated repositories when you need custom names or mirrors.
 
 ### Using WORKSPACE
 
@@ -290,52 +305,50 @@ This section outlines the planned development phases and features for rules_flut
 
 ### ✅ Phase 1: Foundation (Complete)
 
-- ✅ **Complete**: Basic project structure and toolchain setup
-- ✅ **Complete**: Flutter SDK version management and download URLs
-- ✅ **Complete**: Enhanced build rules with toolchain validation (`flutter_app`, `flutter_test`, `dart_library`)
-- ✅ **Complete**: Comprehensive testing framework
-- ✅ **Complete**: Real Flutter SDK integrity hashes
-- ✅ **Complete**: Project structure validation and build readiness verification
+- ✅ **Repository bootstrap**: Established Bazel package structure, CI scaffolding, and development tooling.
+- ✅ **Toolchain plumbing**: Download and integrity-check Flutter SDKs for macOS, Linux, and Windows.
+- ✅ **Rule scaffolding**: Delivered `flutter_library`, `flutter_app`, `flutter_test`, and `dart_library` with provider wiring.
+- ✅ **Test harness**: Added unit tests and a smoke e2e workspace validating basic usage.
 
-### 🚧 Phase 2: Core Functionality (Current)
+### 🚢 Phase 2: Hermetic Command Execution (Stabilizing)
 
-- ✅ **Complete**: Offline dependency assembly plus real `flutter build`/`flutter test`
-- 🔄 **In Progress**: **Pub dependency management**: Integration with pub.dev packages and dependency caching
-- 🔄 **In Progress**: **Build caching**: Leverage Bazel's incremental builds for Flutter projects
-- 🔲 **Error handling**: Comprehensive error messages and build diagnostics
-- 🔲 **Hot reload support**: Development workflow improvements
+- ✅ **End-to-end commands**: Real `flutter build`/`flutter test` execution with offline pub caches and workspace staging.
+- ✅ **Bzlmod integration**: Module extensions for Flutter toolchains plus automatic pub.dev mirroring.
+- 🔄 **Error surfacing**: Improve action logs, failure messaging, and diagnostics.
+- 🔄 **Incremental and remote caching**: Trim redundant copies, document remote execution expectations, and benchmark performance.
+- 🔲 **Artifact packaging**: Normalize output locations for APK/AAB/IPA/web bundles.
 
-### 🚀 Phase 3: Platform Support (Future)
+### 🚀 Phase 3: Platform Support (Next)
 
-- 🔲 **Android builds**: Full APK/AAB generation with SDK integration
-- 🔲 **iOS builds**: IPA generation with Xcode integration
-- 🔲 **Desktop platforms**: Native Windows, macOS, Linux builds
-- 🔲 **Web optimization**: Advanced web build configurations
-- 🔲 **CI/CD templates**: GitHub Actions and other CI integrations
+- 🔲 **Android**: Validate APK/AAB production in CI with managed Android SDK toolchains.
+- 🔲 **iOS and macOS**: Add codesign-aware workflows and tighten Xcode integration.
+- 🔲 **Windows/Linux desktop**: Produce runnable bundles via Bazel without manual setup.
+- 🔲 **Web optimization**: Profile release builds and expose tuning knobs.
+- 🔲 **CI/CD templates**: Publish reusable Bazel pipelines for Flutter consumers.
 
-### 🌟 Phase 4: Advanced Features (Long-term)
+### 🌟 Phase 4: Advanced Features (Future)
 
-- 🔲 **Code generation**: Build-time code gen (JSON serialization, etc.)
-- 🔲 **Asset management**: Images, fonts, and localization
-- 🔲 **Testing enhancements**: Widget testing, integration testing
-- 🔲 **Performance profiling**: Build-time Flutter performance analysis
-- 🔲 **Plugin ecosystem**: Support for Flutter plugins and native modules
+- 🔲 **Plugin ecosystem**: Support federated plugins and native platform interop rules.
+- 🔲 **Code generation**: First-class build-time generators (e.g. `json_serializable`, `build_runner`).
+- 🔲 **Asset management**: Declarative rules for assets, fonts, and localization artifacts.
+- 🔲 **Testing enhancements**: Widget, golden, and integration test harnesses.
+- 🔲 **Performance insights**: Build profiling, caching metrics, and developer ergonomics.
 
 ### 💡 Contributing Priorities
 
 We welcome contributions in these areas (in order of priority):
 
-1. **Real build implementations** - Replace placeholder rules with actual Flutter commands
-2. **Pub dependency resolution** - Integrate with Flutter's package ecosystem
-3. **Platform-specific builds** - Android SDK and iOS build chain integration
-4. **Documentation and examples** - More comprehensive usage examples
+1. **Harden cross-platform builds** - improve Android/iOS/desktop outputs, diagnostics, and host tool discovery.
+2. **Expand automated testing** - grow e2e coverage, add regression suites, and keep CI aligned with remote execution.
+3. **Polish pub.dev workflows** - lockfile support, repository overrides, and cache reuse guidance.
+4. **Documentation and examples** - advanced guides, migration tips, and troubleshooting recipes.
 
 ### 📊 Success Metrics
 
-- ✅ **Basic functionality**: All tests passing
-- 🎯 **Alpha release**: Real Flutter web builds working
-- 🎯 **Beta release**: Android/iOS builds functional
-- 🎯 **1.0 release**: Production-ready with full platform support
+- ✅ **Basic functionality**: Core unit and smoke tests stay green
+- 🎯 **Alpha release**: Hermetic web builds/tests validated in CI with documented setup
+- 🎯 **Beta release**: Android and iOS packaging exercised in CI with sample apps
+- 🎯 **1.0 release**: Multi-platform builds, plugins, and docs ready for production teams
 
 ## Contributing
 
