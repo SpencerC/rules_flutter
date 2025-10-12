@@ -17,6 +17,7 @@ use_repo(
     flutter,
     "flutter_linux",
     "flutter_macos",
+    "flutter_sdk",
     "flutter_toolchains",
     "flutter_windows",
 )

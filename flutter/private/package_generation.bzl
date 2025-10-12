@@ -159,7 +159,7 @@ def _pub_command_prefix(executable):
         return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
     return [executable, "pub"]
 
-def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = None, include_hosted_deps = True):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
@@ -167,7 +167,7 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         package_name: The Bazel target / Dart package name.
         package_dir: Relative directory containing the package ("." for root).
         sdk_repo: Optional repository label used to resolve SDK-provided
-            dependencies (e.g. `@flutter_macos`). When omitted, a sensible
+            dependencies (e.g. `@flutter_sdk`). When omitted, a sensible
             default for the current host platform is used.
         include_hosted_deps: When true, emit hosted pub.dev dependencies from
             pub_deps.json as external repositories. Flutter SDK packages pass
@@ -218,6 +218,12 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         "alias(",
         '    name = "lib",',
         '    actual = ":{}",'.format(package_name),
+        _DEF_VISIBILITY,
+        ")",
+        "",
+        "filegroup(",
+        '    name = "{}_files",'.format(package_name),
+        '    srcs = glob(["**/*"], exclude = ["BUILD", "BUILD.bazel"]),',
         _DEF_VISIBILITY,
         ")",
     ])
@@ -470,7 +476,7 @@ def _sanitize_repo_name(pkg):
             pieces.append("_")
     return "".join(pieces)
 
-def _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo):
+def _sdk_dep_label(package_dir, pkg, sdk_repo):
     path = _sdk_package_path(pkg)
     if not path:
         return None
@@ -478,18 +484,7 @@ def _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo):
     if package_dir.startswith("flutter/"):
         return "//{}:{}".format(path, pkg)
 
-    repo = sdk_repo or _default_sdk_repo(repository_ctx)
-    return "{}//{}:{}".format(repo, path, pkg)
-
-def _default_sdk_repo(repository_ctx):
-    os_name = repository_ctx.os.name.lower()
-    if os_name.startswith("mac"):
-        suffix = "macos"
-    elif os_name.startswith("windows"):
-        suffix = "windows"
-    else:
-        suffix = "linux"
-    return "@flutter_{}".format(suffix)
+    return "{}//{}:{}".format(sdk_repo, path, pkg)
 
 def _sdk_package_path(pkg):
     if pkg == "sky_engine":

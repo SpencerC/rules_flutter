@@ -312,14 +312,15 @@ export CI=true
 export PUB_ENVIRONMENT="flutter_tool:bazel"
 export ANDROID_HOME=""
 export ANDROID_SDK_ROOT=""
-export FLUTTER_ROOT="$ORIGINAL_PWD/external/+flutter+flutter_macos/flutter"
-export PATH="$FLUTTER_ROOT/bin:$PATH"
-
 FLUTTER_BIN_ABS="$ORIGINAL_PWD/$FLUTTER_BIN"
 if [ ! -x "$FLUTTER_BIN_ABS" ]; then
     echo "✗ FATAL ERROR: Flutter binary not found at $FLUTTER_BIN_ABS" >&2
     exit 1
 fi
+
+FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN_ABS")/.." && pwd -P)"
+export FLUTTER_ROOT
+export PATH="$FLUTTER_ROOT/bin:$PATH"
 
 cd "$WORKSPACE_DIR_ABS"
 
@@ -597,13 +598,33 @@ PUB_CACHE_DIR_ABS="$ORIGINAL_PWD/$PUB_CACHE_DIR"
 # Set up environment
 export PUB_CACHE="$PUB_CACHE_DIR_ABS"
 
+# Set absolute path to Flutter binary from execroot
+FLUTTER_BIN_ABS="$ORIGINAL_PWD/$FLUTTER_BIN"
+
+# Validate Flutter binary exists and is executable
+if [ ! -f "$FLUTTER_BIN_ABS" ]; then
+    echo "✗ FATAL ERROR: Flutter binary not found at: $FLUTTER_BIN_ABS"
+    echo "Expected Flutter SDK to be available via toolchain"
+    exit 1
+fi
+
+if [ ! -x "$FLUTTER_BIN_ABS" ]; then
+    echo "✗ FATAL ERROR: Flutter binary not executable at: $FLUTTER_BIN_ABS"
+    echo "Check Flutter SDK permissions and installation"
+    exit 1
+fi
+
+echo "Flutter binary verified at: $FLUTTER_BIN_ABS"
+
+FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN_ABS")/.." && pwd -P)"
+
 # Configure Flutter for sandbox environment
 export FLUTTER_SUPPRESS_ANALYTICS=true
 export CI=true
-export FLUTTER_ROOT="$ORIGINAL_PWD/external/+flutter+flutter_macos/flutter"
 export PUB_ENVIRONMENT="flutter_tool:bazel"
 export ANDROID_HOME=""
 export ANDROID_SDK_ROOT=""
+export FLUTTER_ROOT
 export PATH="$FLUTTER_ROOT/bin:$PATH"
 
 # Change to the workspace directory from execroot
@@ -622,24 +643,6 @@ echo "Working directory: $(pwd)"
 echo "Flutter binary: $FLUTTER_BIN"
 echo "Target: {target}"
 echo ""
-
-# Set absolute path to Flutter binary from execroot
-FLUTTER_BIN_ABS="$ORIGINAL_PWD/$FLUTTER_BIN"
-
-# Validate Flutter binary exists and is executable
-if [ ! -f "$FLUTTER_BIN_ABS" ]; then
-    echo "✗ FATAL ERROR: Flutter binary not found at: $FLUTTER_BIN_ABS"
-    echo "Expected Flutter SDK to be available via toolchain"
-    exit 1
-fi
-
-if [ ! -x "$FLUTTER_BIN_ABS" ]; then
-    echo "✗ FATAL ERROR: Flutter binary not executable at: $FLUTTER_BIN_ABS"
-    echo "Check Flutter SDK permissions and installation"
-    exit 1
-fi
-
-echo "Flutter binary verified at: $FLUTTER_BIN_ABS"
 
 # Regenerate package_config.json with correct paths for this sandbox
 # This ensures package imports resolve correctly in the build environment

@@ -32,6 +32,7 @@ flutter.toolchain(flutter_version = "3.29.0")
 use_repo(
     flutter,
     "flutter_toolchains",
+    "flutter_sdk",
     "flutter_linux",
     "flutter_macos",
     "flutter_windows",
@@ -39,7 +40,7 @@ use_repo(
 register_toolchains("@flutter_toolchains//:all")
 ```
 
-The extension materializes one repository per supported SDK (`flutter_<platform>`) plus a `flutter_toolchains` alias repo. Registering the toolchains ensures Bazel can resolve Flutter for all actions.
+The extension materializes one repository per supported SDK (`flutter_<platform>`), a `flutter_sdk` alias that always points at the host platform SDK, and a `flutter_toolchains` repository. Registering the toolchains ensures Bazel can resolve Flutter for all actions.
 
 #### Managing pub.dev dependencies
 
@@ -227,7 +228,7 @@ Configure Flutter SDK version in your `MODULE.bazel`:
 ```starlark
 flutter = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "flutter")
 flutter.toolchain(flutter_version = "3.24.0")  # or "3.27.0", "3.29.0"
-use_repo(flutter, "flutter_toolchains")
+use_repo(flutter, "flutter_toolchains", "flutter_sdk")
 ```
 
 ### Supported Platforms

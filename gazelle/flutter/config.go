@@ -2,7 +2,6 @@ package flutter
 
 import (
 	"fmt"
-	"runtime"
 
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/rule"
@@ -106,13 +105,9 @@ func (fc *FlutterConfig) IsExcluded(dir string) bool {
 }
 
 func defaultSDKRepo(c *config.Config) string {
-	suffix := runtime.GOOS
-	if suffix == "darwin" {
-		suffix = "macos"
-	}
 	repoName := c.RepoName
 	if repoName == "" {
-		return fmt.Sprintf("@flutter_%s", suffix)
+		return "@flutter_sdk"
 	}
-	return fmt.Sprintf("@%s++flutter+flutter_%s", repoName, suffix)
+	return fmt.Sprintf("@%s++flutter+flutter_sdk", repoName)
 }

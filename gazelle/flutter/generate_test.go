@@ -16,11 +16,11 @@ func TestGenerateDepsIncludesAllDirectDependencies(t *testing.T) {
 		},
 	}
 
-	fc := &FlutterConfig{SDKRepo: "@flutter_macos"}
+	fc := &FlutterConfig{SDKRepo: "@flutter_sdk"}
 	got := generateDeps(deps, fc)
 	want := []string{
-		"@flutter_macos//flutter/packages/flutter:flutter",
-		"@flutter_macos//flutter/packages/flutter_test:flutter_test",
+		"@flutter_sdk//flutter/packages/flutter:flutter",
+		"@flutter_sdk//flutter/packages/flutter_test:flutter_test",
 		"@pub_flutter_lints//:flutter_lints",
 		"@pub_vector_math//:vector_math",
 	}
@@ -57,9 +57,9 @@ func TestGetDirectDependenciesIncludesAllDirectKinds(t *testing.T) {
 }
 
 func TestSDKDependencyLabelDefaultPackage(t *testing.T) {
-	fc := &FlutterConfig{SDKRepo: "@flutter_macos"}
+	fc := &FlutterConfig{SDKRepo: "@flutter_sdk"}
 	got := sdkDependencyLabel("flutter", fc)
-	want := "@flutter_macos//flutter/packages/flutter:flutter"
+	want := "@flutter_sdk//flutter/packages/flutter:flutter"
 
 	if got != want {
 		t.Fatalf("sdkDependencyLabel(...): want %q got %q", want, got)
@@ -67,9 +67,9 @@ func TestSDKDependencyLabelDefaultPackage(t *testing.T) {
 }
 
 func TestSDKDependencyLabelSkyEngine(t *testing.T) {
-	fc := &FlutterConfig{SDKRepo: "@flutter_linux"}
+	fc := &FlutterConfig{SDKRepo: "@flutter_sdk"}
 	got := sdkDependencyLabel("sky_engine", fc)
-	want := "@flutter_linux//flutter/bin/cache/pkg/sky_engine:sky_engine"
+	want := "@flutter_sdk//flutter/bin/cache/pkg/sky_engine:sky_engine"
 
 	if got != want {
 		t.Fatalf("sdkDependencyLabel(...): want %q got %q", want, got)

@@ -5,8 +5,8 @@ flutter_library(
     srcs = ["lib/main.dart"],
     pubspec = "pubspec.yaml",
     deps = [
-        "@flutter_macos//flutter/packages/flutter",
-        "@flutter_macos//flutter/packages/flutter_test",
+        "@flutter_sdk//flutter/packages/flutter",
+        "@flutter_sdk//flutter/packages/flutter_test",
         "@pub_cupertino_icons//:cupertino_icons",
     ],
 )

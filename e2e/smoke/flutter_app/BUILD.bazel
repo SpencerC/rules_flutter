@@ -8,9 +8,9 @@ flutter_library(
     data = glob(["l10n/**"]),
     pubspec = "pubspec.yaml",
     deps = [
-        "@flutter_macos//flutter/packages/flutter",
-        "@flutter_macos//flutter/packages/flutter_localizations",
-        "@flutter_macos//flutter/packages/flutter_test",
+        "@flutter_sdk//flutter/packages/flutter",
+        "@flutter_sdk//flutter/packages/flutter_localizations",
+        "@flutter_sdk//flutter/packages/flutter_test",
         "@pub_fixnum//:fixnum",
         "@pub_flutter_lints//:flutter_lints",
         "@pub_intl_utils//:intl_utils",
