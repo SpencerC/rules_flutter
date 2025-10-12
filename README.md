@@ -301,54 +301,45 @@ bazel run @buildifier_prebuilt//:buildifier
 
 ## Development Roadmap
 
-This section outlines the planned development phases and features for rules_flutter:
+`rules_flutter` is being delivered in three major stages—Alpha, Beta, and Production-readiness. This roadmap captures what is already in place and what remains to ship a dependable 1.0.
 
-### ✅ Phase 1: Foundation (Complete)
+### ✅ Alpha foundations (complete)
 
-- ✅ **Repository bootstrap**: Established Bazel package structure, CI scaffolding, and development tooling.
-- ✅ **Toolchain plumbing**: Download and integrity-check Flutter SDKs for macOS, Linux, and Windows.
-- ✅ **Rule scaffolding**: Delivered `flutter_library`, `flutter_app`, `flutter_test`, and `dart_library` with provider wiring.
-- ✅ **Test harness**: Added unit tests and a smoke e2e workspace validating basic usage.
+- Established Bazel workspace layout, CI scaffolding, and contributor tooling (buildifier, pre-commit, update scripts).
+- Implemented Flutter SDK toolchains with version pinning, integrity verification, and bzlmod module extensions.
+- Landed core rules (`flutter_library`, `flutter_app`, `flutter_test`, `dart_library`) with providers, transitions, and pub cache management.
+- Delivered hermetic execution scaffolding: offline pub caches, reproducible `flutter build/test` invocation, and staged workspace assets.
+- Added verification suites: unit tests, smoke e2e workspace, and publishing of SDK metadata through automation.
 
-### 🚢 Phase 2: Hermetic Command Execution (Stabilizing)
+### 🚢 Beta: Hermetic cross-platform builds (in progress)
 
-- ✅ **End-to-end commands**: Real `flutter build`/`flutter test` execution with offline pub caches and workspace staging.
-- ✅ **Bzlmod integration**: Module extensions for Flutter toolchains plus automatic pub.dev mirroring.
-- 🔄 **Error surfacing**: Improve action logs, failure messaging, and diagnostics.
-- 🔄 **Incremental and remote caching**: Trim redundant copies, document remote execution expectations, and benchmark performance.
-- 🔲 **Artifact packaging**: Normalize output locations for APK/AAB/IPA/web bundles.
+- Harden failure surfacing with structured action logs, actionable diagnostics, and better toolchain validation.
+- Normalize build outputs for APK/AAB/IPA/web bundles and document how to consume them from Bazel.
+- Optimize incremental and remote builds by trimming redundant copies, exercising RBE, and benchmarking cache hit rates.
+- Expand automated coverage: multi-platform e2e matrix (Linux/macOS/Windows), release build assertions, and remote execution smoke tests.
+- Produce task-oriented docs: quickstarts, troubleshooting, and upgrade guides covering common Flutter/Bazel workflows.
 
-### 🚀 Phase 3: Platform Support (Next)
+### 🛫 Production readiness (planned)
 
-- 🔲 **Android**: Validate APK/AAB production in CI with managed Android SDK toolchains.
-- 🔲 **iOS and macOS**: Add codesign-aware workflows and tighten Xcode integration.
-- 🔲 **Windows/Linux desktop**: Produce runnable bundles via Bazel without manual setup.
-- 🔲 **Web optimization**: Profile release builds and expose tuning knobs.
-- 🔲 **CI/CD templates**: Publish reusable Bazel pipelines for Flutter consumers.
+- Ship CI-backed Android packaging (APK/AAB) with managed SDKs, signing hooks, and release build examples.
+- Complete iOS/macOS pipelines with codesign-aware actions, xcframework integration, and Apple toolchain configuration rules.
+- Deliver Windows and Linux desktop bundling, including runtime discovery, asset staging, and exe/appimage installers.
+- Support advanced Flutter UX: declarative asset rules, localization packaging, configurable build flavors, and web performance tuning.
+- Introduce extensibility: plugin federation, native interop helpers, and code generation entry points (`build_runner`, `json_serializable`, etc.).
 
-### 🌟 Phase 4: Advanced Features (Future)
+### 🔧 Enabling workstreams
 
-- 🔲 **Plugin ecosystem**: Support federated plugins and native platform interop rules.
-- 🔲 **Code generation**: First-class build-time generators (e.g. `json_serializable`, `build_runner`).
-- 🔲 **Asset management**: Declarative rules for assets, fonts, and localization artifacts.
-- 🔲 **Testing enhancements**: Widget, golden, and integration test harnesses.
-- 🔲 **Performance insights**: Build profiling, caching metrics, and developer ergonomics.
+- Documentation: restructure `docs/` into scenario-based guides, API reference, migration playbooks, and host environment setup guides.
+- Samples: maintain a gallery of minimal apps (mobile, desktop, web) exercising each rule and kept green in CI.
+- Release process: define versioning policy, changelog automation, and artifact verification prior to cutting tagged releases.
+- Community health: triage rotations, RFC template, contribution workshops, and public roadmap updates.
+- Quality gates: enforce `bazel test //flutter/tests:all_tests` and `cd e2e/smoke && bazel test //:integration_tests` in CI along with lint/buildifier checks.
 
-### 💡 Contributing Priorities
+### 🎯 Release checkpoints
 
-We welcome contributions in these areas (in order of priority):
-
-1. **Harden cross-platform builds** - improve Android/iOS/desktop outputs, diagnostics, and host tool discovery.
-2. **Expand automated testing** - grow e2e coverage, add regression suites, and keep CI aligned with remote execution.
-3. **Polish pub.dev workflows** - lockfile support, repository overrides, and cache reuse guidance.
-4. **Documentation and examples** - advanced guides, migration tips, and troubleshooting recipes.
-
-### 📊 Success Metrics
-
-- ✅ **Basic functionality**: Core unit and smoke tests stay green
-- 🎯 **Alpha release**: Hermetic web builds/tests validated in CI with documented setup
-- 🎯 **Beta release**: Android and iOS packaging exercised in CI with sample apps
-- 🎯 **1.0 release**: Multi-platform builds, plugins, and docs ready for production teams
+- ✅ Alpha: Hermetic builds proven with web/mobile smoke apps and documented setup.
+- 🎯 Beta: Android & iOS packaging validated on CI runners with reference apps and published consumption docs.
+- 🏁 1.0: Multi-platform builds, plugin support, asset workflows, and production-ready docs/tests all green on continuous CI and remote execution.
 
 ## Contributing
 
