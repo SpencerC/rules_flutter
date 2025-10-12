@@ -1,0 +1,39 @@
+{
+  "packages": [
+    {
+      "name": "gazelle_app",
+      "dependency": "root",
+      "source": "root",
+      "version": "0.1.0",
+      "dependencies": ["flutter", "flutter_test", "cupertino_icons"]
+    },
+    {
+      "name": "cupertino_icons",
+      "dependency": "direct main",
+      "source": "hosted",
+      "version": "1.0.6",
+      "description": {
+        "name": "cupertino_icons",
+        "url": "https://pub.dev"
+      }
+    },
+    {
+      "name": "flutter",
+      "dependency": "direct main",
+      "source": "sdk",
+      "version": "0.0.0"
+    },
+    {
+      "name": "flutter_test",
+      "dependency": "direct dev",
+      "source": "sdk",
+      "version": "0.0.0"
+    },
+    {
+      "name": "sky_engine",
+      "dependency": "transitive",
+      "source": "sdk",
+      "version": "0.0.99"
+    }
+  ]
+}

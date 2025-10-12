@@ -19,6 +19,23 @@ gazelle(
     gazelle = "gazelle_bin",
 )
 
+filegroup(
+    name = "gazelle_app_fixture",
+    srcs = glob(["gazelle_app/**"]),
+)
+
+py_test(
+    name = "gazelle_generation_test",
+    srcs = ["gazelle_generation_test.py"],
+    args = ["$(rootpath :gazelle_bin)"],
+    data = [
+        ":gazelle_app_fixture",
+        ":gazelle_bin",
+    ],
+    main = "gazelle_generation_test.py",
+    deps = ["@bazel_tools//tools/python/runfiles"],
+)
+
 # Test basic rule functionality
 dart_library(
     name = "test_dart_lib",
@@ -42,6 +59,7 @@ build_test(
 test_suite(
     name = "integration_tests",
     tests = [
+        ":gazelle_generation_test",
         ":single_pub_dependency_build_test",
         ":smoke_test",
         "//dart_package:dart_package_test",

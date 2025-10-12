@@ -1,0 +1,12 @@
+load("@rules_flutter//flutter:defs.bzl", "flutter_library")
+
+flutter_library(
+    name = "lib",
+    srcs = ["lib/main.dart"],
+    pubspec = "pubspec.yaml",
+    deps = [
+        "@flutter_macos//flutter/packages/flutter",
+        "@flutter_macos//flutter/packages/flutter_test",
+        "@pub_cupertino_icons//:cupertino_icons",
+    ],
+)

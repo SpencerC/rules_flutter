@@ -1,0 +1,4 @@
+module(
+    name = "gazelle_app",
+    version = "0.0.0",
+)
