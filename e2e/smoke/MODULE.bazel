@@ -25,21 +25,6 @@ register_toolchains("@flutter_toolchains//:all")
 
 # Pub.dev dependencies
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
-pub.package(
-    name = "pub_lints",
-    package = "lints",
-    version = "2.1.1",
-)
-pub.package(
-    name = "pub_flutter_lints",
-    package = "flutter_lints",
-    version = "2.0.3",
-)
-pub.package(
-    name = "pub_intl_utils",
-    package = "intl_utils",
-    version = "2.8.11",
-)
 use_repo(
     pub,
     "pub_analyzer",
