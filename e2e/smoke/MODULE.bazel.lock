@@ -248,8 +248,7 @@
         "recordedFileInputs": {
           "@@//dart_package/pub_deps.json": "73450fe56d893cfd0ff653d4d46d420ebee41b94efd9d983aa81582d1f6ffb6f",
           "@@//flutter_app/pub_deps.json": "8a007e1950c80b4221db97807f08563208d6d24ac7bf9e740f9dadf9d41bf8b3",
-          "@@//gazelle_app/pub_deps.json": "d4873da35e844de30eb02195cc6093827348bac6428bd7c45619c1981716ed25",
-          "@@//multiplatform/pub_deps.json": "268bd1cab7f7cb528d2f4bda6b1b49a1c0dcbd93b115d32f700dcc663bf9ad09"
+          "@@//gazelle_app/pub_deps.json": "d4873da35e844de30eb02195cc6093827348bac6428bd7c45619c1981716ed25"
         },
         "recordedDirentsInputs": {},
         "envVariables": {},

@@ -224,7 +224,6 @@ Check out the [e2e smoke test](e2e/smoke/) for a complete working example of an 
 For comprehensive test examples, see:
 
 - [Flutter App Integration](e2e/smoke/flutter_app/) - Basic Flutter app with widget tests
-- [Multi-platform Integration](e2e/smoke/multiplatform/) - Building for multiple targets
 - [Toolchain Tests](flutter/tests/toolchain/) - Dart library and toolchain integration
 
 ## Development

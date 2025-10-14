@@ -64,7 +64,6 @@ test_suite(
         ":smoke_test",
         "//dart_package:dart_package_test",
         "//flutter_app:app_build_test",
-        "//multiplatform:multiplatform_build_test",
     ],
 )
 
