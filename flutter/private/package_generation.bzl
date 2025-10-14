@@ -350,7 +350,7 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
                 repo_name = _sanitize_repo_name(pkg)
                 deps.append("@{}//:{}".format(repo_name, pkg))
             elif source == "sdk":
-                label = _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo)
+                label = _sdk_dep_label(package_dir, pkg, sdk_repo)
                 if label:
                     deps.append(label)
     elif fallback_packages:
@@ -363,7 +363,7 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
                 repo_name = _sanitize_repo_name(pkg)
                 deps.append("@{}//:{}".format(repo_name, pkg))
             elif source == "sdk":
-                label = _sdk_dep_label(repository_ctx, package_dir, pkg, sdk_repo)
+                label = _sdk_dep_label(package_dir, pkg, sdk_repo)
                 if label:
                     deps.append(label)
 

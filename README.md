@@ -17,9 +17,9 @@ Build Flutter applications with Bazel! This repository provides Bazel rules for 
 
 From the release you wish to use:
 <https://github.com/spencerc/rules_flutter/releases>
-copy the WORKSPACE snippet into your `WORKSPACE` file.
+add the module snippet below to your `MODULE.bazel`.
 
-### Using Bzlmod with Bazel 6 or greater
+### Bzlmod Setup (Bazel 6 or greater)
 
 1. (Bazel 6 only) Enable with `common --enable_bzlmod` in `.bazelrc`.
 2. Update your `MODULE.bazel` file:
@@ -59,28 +59,6 @@ use_repo(pub, "pub_fixnum", "pub_freezed")
 ```
 
 Auto-discovered repositories become available once `pub_deps.json` files exist (run `bazel run //:app_lib.update` after dependency changes). Explicit `pub.package(...)` declarations override or extend the generated repositories when you need custom names or mirrors.
-
-### Using WORKSPACE
-
-Paste this snippet into your `WORKSPACE.bazel` file:
-
-```starlark
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-http_archive(
-    name = "com_github_spencerc_rules_flutter",
-    sha256 = "<SHA256>",
-    strip_prefix = "rules_flutter-<VERSION>",
-    url = "https://github.com/spencerc/rules_flutter/releases/download/v<VERSION>/rules_flutter-v<VERSION>.tar.gz",
-)
-
-# Fetches the rules_flutter dependencies.
-# If you want to have a different version of some dependency,
-# you should fetch it *before* calling this.
-load("@com_github_spencerc_rules_flutter//flutter:repositories.bzl", "rules_flutter_dependencies")
-
-rules_flutter_dependencies()
-```
 
 ## Quick Start
 

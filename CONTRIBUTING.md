@@ -27,9 +27,9 @@ Run `bazel run //:gazelle` to keep them up-to-date.
 
 ## Using this as a development dependency of other rules
 
-You'll commonly find that you develop in another WORKSPACE, such as
+You'll commonly find that you develop in another Bazel module, such as
 some other ruleset that depends on rules_flutter, or in the nested
-`e2e/smoke` workspace used for integration tests.
+`e2e/smoke` module used for integration tests.
 
 To always tell Bazel to use this directory rather than some release
 artifact or a version fetched from the internet, run this from this

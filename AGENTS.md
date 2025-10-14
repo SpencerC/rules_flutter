@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-- Root: `MODULE.bazel`, `.bazelrc`, `BUILD.bazel`, `WORKSPACE.bazel`.
+- Root: `MODULE.bazel`, `.bazelrc`, `BUILD.bazel`.
 - Rules: `flutter/*.bzl` (public), `flutter/private/*` (internal helpers, toolchains).
 - Tests: `flutter/tests/*` (unit/toolchain), `e2e/smoke/*` (integration & smoke tests).
 - Tooling: `tools/` (Bazel-run binaries), `scripts/` (maintenance scripts), `docs/` (generated API docs).

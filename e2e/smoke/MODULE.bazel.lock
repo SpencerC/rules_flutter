@@ -198,7 +198,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "c5EwR8uUjQJoGWuBYMrFCPk2QbOnJ/+Jd+lRgzD/Qzg=",
+        "bzlTransitiveDigest": "py3Kvu38nDutxQr2uho6reUgYch0E3r80Aw5/JjX/II=",
         "usagesDigest": "j1+3MZmNcCkACb5AMJa9d5IkO756wppC6h0X/AYbCWM=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -238,18 +238,12 @@
             }
           }
         },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_flutter+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
+        "recordedRepoMappingEntries": []
       }
     },
     "@@rules_flutter+//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "c5EwR8uUjQJoGWuBYMrFCPk2QbOnJ/+Jd+lRgzD/Qzg=",
+        "bzlTransitiveDigest": "py3Kvu38nDutxQr2uho6reUgYch0E3r80Aw5/JjX/II=",
         "usagesDigest": "KEg5I7AQAQfUg6XINJJPmeVAjMBJCteoV+x5CXZoA6w=",
         "recordedFileInputs": {
           "@@//dart_package/pub_deps.json": "73450fe56d893cfd0ff653d4d46d420ebee41b94efd9d983aa81582d1f6ffb6f",
@@ -597,13 +591,7 @@
             }
           }
         },
-        "recordedRepoMappingEntries": [
-          [
-            "rules_flutter+",
-            "bazel_tools",
-            "bazel_tools"
-          ]
-        ]
+        "recordedRepoMappingEntries": []
       }
     },
     "@@rules_fuzzing+//fuzzing/private:extensions.bzl%non_module_dependencies": {
