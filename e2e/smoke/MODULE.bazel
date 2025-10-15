@@ -3,6 +3,7 @@ bazel_dep(name = "bazel_skylib", version = "1.7.1", dev_dependency = True)
 
 bazel_dep(name = "rules_go", version = "0.57.0")
 bazel_dep(name = "gazelle", version = "0.36.0", repo_name = "bazel_gazelle")
+bazel_dep(name = "protobuf", version = "32.1")
 
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
 
@@ -52,6 +53,8 @@ use_repo(
     "pub_meta",
     "pub_path",
     "pub_petitparser",
+    "pub_protobuf",
+    "pub_protoc_plugin",
     "pub_source_span",
     "pub_stack_trace",
     "pub_stream_channel",

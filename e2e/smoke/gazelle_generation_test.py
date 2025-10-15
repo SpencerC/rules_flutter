@@ -50,6 +50,8 @@ def main() -> int:
             "BUILD.bazel.golden",
             "MODULE.bazel",
             "lib/main.dart",
+            "protos/api/v1/BUILD.bazel.golden",
+            "protos/api/v1/service.proto",
             "pub_deps.json",
             "pubspec.yaml",
         ]
@@ -78,21 +80,27 @@ def main() -> int:
             sys.stderr.write(err.stderr or "")
             raise
 
-        generated = (project_dir / "BUILD.bazel").read_text()
-        golden = (project_dir / "BUILD.bazel.golden").read_text()
+        comparisons = [
+            ("BUILD.bazel", "BUILD.bazel.golden"),
+            ("protos/api/v1/BUILD.bazel", "protos/api/v1/BUILD.bazel.golden"),
+        ]
 
-        if generated != golden:
-            diff = "".join(
-                difflib.unified_diff(
-                    golden.splitlines(keepends=True),
-                    generated.splitlines(keepends=True),
-                    fromfile="BUILD.bazel.golden",
-                    tofile="BUILD.bazel",
+        for generated_rel, golden_rel in comparisons:
+            generated = (project_dir / generated_rel).read_text()
+            golden = (project_dir / golden_rel).read_text()
+
+            if generated != golden:
+                diff = "".join(
+                    difflib.unified_diff(
+                        golden.splitlines(keepends=True),
+                        generated.splitlines(keepends=True),
+                        fromfile=golden_rel,
+                        tofile=generated_rel,
+                    )
                 )
-            )
-            sys.stderr.write("Gazelle output did not match golden BUILD file:\n")
-            sys.stderr.write(diff)
-            return 1
+                sys.stderr.write(f"Gazelle output did not match golden BUILD file for {generated_rel}:\n")
+                sys.stderr.write(diff)
+                return 1
     finally:
         shutil.rmtree(tmp_root)
 

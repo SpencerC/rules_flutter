@@ -18,17 +18,10 @@ import (
 func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.GenerateResult {
 	fc := GetFlutterConfig(args.Config)
 
-	// Skip if generation is disabled
-	if !fc.Generate {
+	if !fc.Generate || fc.IsExcluded(args.Rel) {
 		return language.GenerateResult{}
 	}
 
-	// Skip if directory is excluded
-	if fc.IsExcluded(args.Rel) {
-		return language.GenerateResult{}
-	}
-
-	// Check if pubspec.yaml exists in this directory
 	hasPubspec := false
 	for _, f := range args.RegularFiles {
 		if f == "pubspec.yaml" {
@@ -41,7 +34,6 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		return language.GenerateResult{}
 	}
 
-	// Check if pub_deps.json exists (for dependencies)
 	hasPubDeps := false
 	var pubDeps *PubDeps
 	for _, f := range args.RegularFiles {
@@ -56,7 +48,6 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
-	// Check if lib/ directory exists
 	hasLib := false
 	for _, d := range args.Subdirs {
 		if d == "lib" {
@@ -65,36 +56,25 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
-	// Parse pubspec.yaml to determine rule type
 	pubspecYamlPath := filepath.Join(args.Dir, "pubspec.yaml")
 	pubspecYaml, err := ParsePubspecYaml(pubspecYamlPath)
 	if err != nil {
-		// If we can't parse, default to flutter_library
 		pubspecYaml = nil
 	}
 
-	// Determine rule kind based on environment
-	// If environment.flutter is set -> flutter_library
-	// If only environment.sdk is set -> dart_library
 	ruleKind := "flutter_library"
 	if pubspecYaml != nil {
 		hasFlutter := HasFlutterEnvironment(pubspecYaml)
 		hasSDK := HasSDKEnvironment(pubspecYaml)
 
 		if !hasFlutter && hasSDK {
-			// Pure Dart package
 			ruleKind = "dart_library"
 		}
 	}
 
-	// Generate the appropriate rule
 	r := rule.NewRule(ruleKind, fc.LibraryName)
-
-	// Set pubspec attribute for both flutter_library and dart_library
-	// (dart_library uses it optionally for dependency preparation)
 	r.SetAttr("pubspec", "pubspec.yaml")
 
-	// Set srcs attribute - explicitly list all source files in lib/ directory only
 	if hasLib {
 		srcs := collectSourceFiles(args.Dir, hasLib)
 		if len(srcs) > 0 {
@@ -102,7 +82,6 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
-	// Set deps attribute from pub_deps.json if available
 	if hasPubDeps && pubDeps != nil {
 		deps := generateDeps(pubDeps, fc)
 		if len(deps) > 0 {
@@ -110,8 +89,7 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 		}
 	}
 
-	// Must return same number of imports as rules
-	// Since we have 1 rule, return 1 empty import
+	// Must return same number of imports as rules (1)
 	imports := []interface{}{[]resolve.ImportSpec{}}
 
 	return language.GenerateResult{

@@ -39,6 +39,9 @@ bzl_library(
     deps = [
         ":toolchain",
         "//flutter/private:flutter_actions",
+        "@bazel_skylib//lib:paths",
+        "@protobuf//bazel/common:proto_common_bzl",
+        "@protobuf//bazel/common:proto_info_bzl",
     ],
 )
 

@@ -1,0 +1,13 @@
+load("@rules_flutter//flutter:defs.bzl", "dart_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "gazelle_app_api_v1_proto",
+    srcs = ["service.proto"],
+    visibility = ["//visibility:public"],
+)
+
+dart_proto_library(
+    name = "gazelle_app_api_v1_proto_dart",
+    deps = [":gazelle_app_api_v1_proto"],
+)

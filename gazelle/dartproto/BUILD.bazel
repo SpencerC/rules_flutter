@@ -1,0 +1,27 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "dartproto",
+    srcs = [
+        "generate.go",
+        "language.go",
+        "resolve.go",
+    ],
+    importpath = "github.com/spencerconnaughton/rules_flutter/gazelle/dartproto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//gazelle/flutter",
+        "@bazel_gazelle//config",
+        "@bazel_gazelle//label",
+        "@bazel_gazelle//language",
+        "@bazel_gazelle//repo",
+        "@bazel_gazelle//resolve",
+        "@bazel_gazelle//rule",
+    ],
+)
+
+go_test(
+    name = "dartproto_test",
+    srcs = ["generate_test.go"],
+    embed = [":dartproto"],
+)

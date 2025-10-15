@@ -1,0 +1,16 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@rules_flutter//flutter:defs.bzl", "dart_library")
+
+dart_library(
+    name = "proto_client",
+    srcs = ["lib/client.dart"],
+    deps = ["//protos/api/v1:services_api_v1_proto_dart"],
+)
+
+build_test(
+    name = "proto_generation_test",
+    targets = [
+        "//protos/api/v1:services_api_v1_proto_dart",
+        ":proto_client",
+    ],
+)

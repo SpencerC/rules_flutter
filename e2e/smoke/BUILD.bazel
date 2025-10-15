@@ -10,7 +10,9 @@ gazelle_binary(
     name = "gazelle_bin",
     languages = [
         "@bazel_skylib_gazelle_plugin//bzl",
+        "@bazel_gazelle//language/proto",
         "@rules_flutter//gazelle/flutter",
+        "@rules_flutter//gazelle/dartproto",
     ],
 )
 
@@ -33,6 +35,7 @@ py_test(
         ":gazelle_bin",
     ],
     main = "gazelle_generation_test.py",
+    tags = ["no-sandbox"],
     deps = ["@bazel_tools//tools/python/runfiles"],
 )
 
@@ -64,6 +67,7 @@ test_suite(
         ":smoke_test",
         "//dart_package:dart_package_test",
         "//flutter_app:app_build_test",
+        "//proto_service:proto_generation_test",
     ],
 )
 

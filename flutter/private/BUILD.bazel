@@ -30,6 +30,12 @@ bzl_library(
 )
 
 bzl_library(
+    name = "sdk_repo",
+    srcs = ["sdk_repo.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)
+
+bzl_library(
     name = "toolchains_repo",
     srcs = ["toolchains_repo.bzl"],
     visibility = ["//flutter:__subpackages__"],

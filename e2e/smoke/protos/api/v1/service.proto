@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package smoke.proto.api.v1;
+
+message GreetingRequest {
+  string name = 1;
+}
+
+message GreetingResponse {
+  string message = 1;
+}
