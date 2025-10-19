@@ -1,26 +1,25 @@
 # Bazel rules for Flutter
 
-Build Flutter applications with Bazel! This repository provides Bazel rules for building, testing, and packaging Flutter applications across multiple platforms.
+Build Flutter applications with Bazel. `rules_flutter` supplies hermetic Flutter
+toolchains, module extensions for pub.dev dependencies, Gazelle language
+support, and first-class protobuf generation so teams can ship Flutter code from
+CI with confidence.
 
-## Features
+## Highlights
 
-- ✅ **Flutter SDK toolchain**: Download and verify Flutter SDK releases, and make executables available to Bazel targets.
-- ✅ **Hermetic Flutter builds/tests**: Assemble dependencies with `dart_library` and `flutter_library`. Run tests with `flutter_test`.
-- ✅ **Multi-platform builds**: Use `flutter_app` to target web, Android, iOS, macOS, Windows, and Linux.
-- ✅ **Bzlmod + pub.dev integration**: Module extensions cache SDK and hosted packages automatically.
+- Flutter SDK toolchains with integrity verification and multi-platform support.
+- Hermetic Flutter builds/tests that reuse prepared pub caches.
+- Protobuf to Dart workflows powered by `dart_proto_library`.
+- Gazelle plugins that keep Flutter, Dart, and proto BUILD files in sync.
 
-## Installation
+## Getting Started
 
-**⚠️ Development Status**: This project is in active development. The Flutter rules (`flutter_app`, `flutter_test`, `flutter_library`, `dart_library`) execute `flutter build`/`flutter test` commands after assembling hermetic pub caches. Expect sharp edges.
+> **Development status:** These rules are evolving quickly. Expect some sharp
+> edges while the APIs stabilize.
 
-From the release you wish to use:
-<https://github.com/spencerc/rules_flutter/releases>
-add the module snippet below to your `MODULE.bazel`.
+### Bzlmod setup (Bazel 6+)
 
-### Bzlmod Setup (Bazel 6 or greater)
-
-1. (Bazel 6 only) Enable with `common --enable_bzlmod` in `.bazelrc`.
-2. Update your `MODULE.bazel` file:
+Add the module snippet below to your `MODULE.bazel`:
 
 ```starlark
 bazel_dep(name = "com_github_spencerc_rules_flutter", version = "1.0.0")
@@ -35,13 +34,15 @@ use_repo(
 register_toolchains("@flutter_toolchains//:all")
 ```
 
-The extension materializes a `flutter_sdk` alias that always points at the host platform SDK, and a `flutter_toolchains` repository. Registering the toolchains ensures Bazel can resolve Flutter for all actions.
+The Flutter extension resolves a platform-appropriate SDK and registers
+toolchains so every action can locate Flutter binaries without relying on host
+installs.
 
 #### Managing pub.dev dependencies
 
-`rules_flutter` ships a `pub` module extension that scans every
-`pub_deps.json` (generated with `flutter pub deps --json`) in the module graph and creates repositories for each hosted
-dependency. Pair it with the Flutter extension:
+`rules_flutter` ships a `pub` module extension that scans every `pub_deps.json`
+and creates Bazel repositories for hosted packages. Pair it with the Flutter
+extension:
 
 ```starlark
 pub = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "pub")
@@ -49,17 +50,98 @@ pub = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl"
 # Optional overrides pin versions or add extra packages.
 pub.package(name = "pub_freezed", package = "freezed", version = "2.4.5")
 
-# Repositories follow the pub_<package> naming convention and must be opt-in.
+# Repositories follow the pub_<package> naming convention.
 use_repo(pub, "pub_fixnum", "pub_freezed")
 ```
 
-Auto-discovered repositories become available once `pub_deps.json` files exist (run `bazel run //:app_lib.update` after dependency changes). Explicit `pub.package(...)` declarations override or extend the generated repositories when you need custom names or mirrors.
+Generate each `pub_deps.json` alongside its `pubspec.yaml` by running the `*.update` helper target (for example
+`bazel run //:app_lib.update`) whenever dependencies change.
 
-## Quick Start
+### Workspace best practices
 
-### 1. Basic Flutter App
+The external workspace under `e2e/smoke` is the canonical reference for how to
+structure a Flutter+Bazel project. Key takeaways:
 
-Create a `BUILD` file in your Flutter project:
+- **Register toolchains up front:** Mirror `e2e/smoke/MODULE.bazel` so Bazel
+  always knows which Flutter SDK to use.
+- **Keep pubspec assets colocated:** Place `pubspec.yaml`, `pub_deps.json`, and
+  `flutter_library` targets in the same package. Declare code generators in
+  `codegen = [...]` (see `e2e/smoke/flutter_app/BUILD.bazel`).
+- **Regenerate BUILD files with Gazelle:** The workspace defines a custom
+  `gazelle_binary` that understands Flutter, proto, and Starlark sources.
+
+## Protobuf generation
+
+`dart_proto_library` wraps the Dart protoc plugin so you can pair protobuf
+schemas with generated Dart libraries. The smoke workspace demonstrates the
+pattern:
+
+```starlark
+# protos/api/v1/BUILD.bazel
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_flutter//flutter:defs.bzl", "dart_proto_library")
+
+proto_library(
+    name = "services_api_v1_proto",
+    srcs = ["service.proto"],
+    visibility = ["//visibility:public"],
+)
+
+dart_proto_library(
+    name = "services_api_v1_proto_dart",
+    visibility = ["//visibility:public"],
+    deps = [":services_api_v1_proto"],
+)
+```
+
+Downstream targets depend on the generated Dart package just like any other
+dependency:
+
+```starlark
+# proto_service/BUILD.bazel
+load("@rules_flutter//flutter:defs.bzl", "dart_library")
+
+dart_library(
+    name = "proto_client",
+    srcs = ["lib/client.dart"],
+    deps = ["//protos/api/v1:services_api_v1_proto_dart"],
+)
+```
+
+## Gazelle automation
+
+`rules_flutter` ships Gazelle plugins to keep BUILD files in sync with your
+Flutter sources and proto schemas. Enable them by composing a custom binary, for example:
+
+```starlark
+# BUILD.bazel
+load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
+
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = [
+        "@bazel_skylib_gazelle_plugin//bzl",
+        "@bazel_gazelle//language/proto",
+        "@rules_flutter//gazelle/flutter",
+        "@rules_flutter//gazelle/dartproto",
+    ],
+)
+
+gazelle(
+    name = "gazelle",
+    gazelle = "gazelle_bin",
+)
+```
+
+Run Gazelle whenever files move or dependencies change:
+
+```bash
+bazel run //:gazelle            # from the root workspace
+```
+
+## Quick start: build a Flutter app
+
+Create a `BUILD.bazel` file next to your Flutter sources:
 
 ```starlark
 load(
@@ -88,191 +170,31 @@ flutter_test(
 )
 ```
 
-`flutter_library` assembles a reusable pub cache, `pub_deps.json`, and
-workspace snapshot without invoking `pub get`. Both `flutter_app` and
-`flutter_test` reuse those outputs via the `embed` attribute and run
-`flutter pub get --offline` using the prepared cache, keeping builds and tests
-fast and hermetic.
-
-Whenever dependencies change, run `bazel run //:app_lib.update` to copy the
-fresh `pub_deps.json` (generated via `flutter pub deps --json`) into your workspace next to `pubspec.yaml`.
-
-### 2. Build your app
+Build and test targets just like any other Bazel rule:
 
 ```bash
-# Build for web (aliased as //:my_app)
 bazel build //:my_app.web
-
-# Build for Android (requires Android SDK setup)
-bazel build //:my_app.apk
-
-# Run the web app locally (serves build artifacts over HTTP)
-bazel run //:my_app.web
-
-# Run tests
 bazel test //:my_app_test
 ```
 
-### 3. Multi-platform builds
-
-```starlark
-flutter_library(
-    name = "app_lib",
-    srcs = glob(["lib/**"]),
-    pubspec = "pubspec.yaml",
-)
-
-flutter_app(
-    name = "my_app",
-    embed = [":app_lib"],
-    web = glob(["web/**"]),
-    apk = glob(["android/**"]),
-    ios = glob(["ios/**"]),
-)
-```
-
-## Rules
-
-### flutter_library
-
-Prepares a Flutter package by assembling its pub cache and dependency metadata
-without running `pub get`. The generated workspace, pub cache, and pubspec
-artifacts are reused by other rules.
-
-**Attributes:**
-
-| Name      | Description                       | Type         | Mandatory | Default |
-| --------- | --------------------------------- | ------------ | --------- | ------- |
-| `srcs`    | Flutter sources and resources     | `label_list` |           |         |
-| `pubspec` | `pubspec.yaml` for the package    | `label`      | ✅        |         |
-| `deps`    | Additional `flutter_library` deps | `label_list` |           |         |
-
-### flutter_app
-
-Generates runnable Flutter application targets for the platforms you opt into.
-
-**Attributes:**
-
-| Name      | Description                                                           | Type         | Mandatory | Default |
-| --------- | --------------------------------------------------------------------- | ------------ | --------- | ------- |
-| `embed`   | Prepared `flutter_library` targets to use                             | `label_list` | ✅        |         |
-| `srcs`    | Files copied into every platform-specific Flutter workspace           | `label_list` |           |         |
-| `web`     | Files specific to Flutter web builds; enables the `<name>.web` target | `label_list` |           |         |
-| `apk`     | Files specific to Android builds; enables the `<name>.apk` target     | `label_list` |           |         |
-| `ios`     | Files specific to iOS builds; enables the `<name>.ios` target         | `label_list` |           |         |
-| `macos`   | Files specific to macOS builds; enables the `<name>.macos` target     | `label_list` |           |         |
-| `linux`   | Files specific to Linux builds; enables the `<name>.linux` target     | `label_list` |           |         |
-| `windows` | Files specific to Windows builds; enables the `<name>.windows` target | `label_list` |           |         |
-
-Targets are created only for the platforms you specify. Each generated target is
-named `<name>.<platform>` and is runnable (`bazel run` will execute a simple
-launcher; for web it serves the built assets locally). The macro also emits an
-alias named `<name>` that points at the first declared platform for convenience.
-
-### flutter_test
-
-Runs Flutter tests.
-
-**Attributes:**
-
-| Name         | Description                                 | Type          | Mandatory | Default     |
-| ------------ | ------------------------------------------- | ------------- | --------- | ----------- |
-| `embed`      | Prepared `flutter_library` targets to use   | `label_list`  | ✅        |             |
-| `srcs`       | Test source files copied into the workspace | `label_list`  |           |             |
-| `test_files` | Test files or directories to run            | `string_list` |           | `["test/"]` |
-
-### dart_library
-
-Defines a Dart library.
-
-**Attributes:**
-
-| Name   | Description               | Type         | Mandatory | Default |
-| ------ | ------------------------- | ------------ | --------- | ------- |
-| `srcs` | Dart source files         | `label_list` | ✅        |         |
-| `deps` | Dart library dependencies | `label_list` |           |         |
-
-## Configuration
-
-### Flutter SDK Versions
-
-Configure Flutter SDK version in your `MODULE.bazel`:
-
-```starlark
-flutter = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "flutter")
-flutter.toolchain(flutter_version = "3.24.0")  # or "3.27.0", "3.29.0"
-use_repo(flutter, "flutter_toolchains", "flutter_sdk")
-```
-
-### Supported Platforms
-
-The following platforms are supported for Flutter SDK downloads:
-
-- **macOS**: Both Intel and Apple Silicon
-- **Linux**: x86_64
-- **Windows**: x86_64
-
-## Examples
-
-Check out the [e2e smoke test](e2e/smoke/) for a complete working example of an external workspace using rules_flutter.
-
-For comprehensive test examples, see:
-
-- [Flutter App Integration](e2e/smoke/flutter_app/) - Basic Flutter app with widget tests
-- [Toolchain Tests](flutter/tests/toolchain/) - Dart library and toolchain integration
-
-## Development
-
-### Running Tests
+When dependencies change, rerun the generated helper to refresh your pub cache
+snapshot:
 
 ```bash
-# Run all tests
-bazel test //...
-
-# Run just Flutter tests
-bazel test //flutter/tests:all_tests
-
-# Run integration tests
-cd e2e/smoke && bazel test //:integration_tests
-
-# Run unit tests
-bazel test //flutter/tests:versions_test
-
-# Run smoke tests
-cd e2e/smoke && bazel test //:smoke_test
+bazel run //:app_lib.update
 ```
 
-### Updating Flutter SDK Versions
+## Development workflows
 
-To update the supported Flutter SDK versions and their integrity hashes:
+- **Run all tests:** `bazel test //...`
+- **Core rule coverage:** `bazel test //flutter/tests:all_tests`
+- **External smoke tests:** `cd e2e/smoke && bazel test //:integration_tests`
+- **Regenerate BUILD files:** `bazel run //:gazelle` (and the smoke workspace equivalent)
+- **Format BUILD/Starlark:** `bazel run @buildifier_prebuilt//:buildifier`
+- **Update Flutter SDK metadata:** `bazel run //tools:update_flutter_versions`
+- **Install hooks:** `pre-commit install`
 
-```bash
-# Update Flutter SDK versions from official releases
-bazel run //tools:update_flutter_versions
-
-# Or run the script directly
-./scripts/update_flutter_versions.sh
-```
-
-This script automatically fetches the latest release information from Flutter's official APIs and updates the integrity hashes in `flutter/private/versions.bzl`. The script supports Flutter versions 3.24.0, 3.27.0, and 3.29.0 across macOS, Linux, and Windows platforms.
-
-### Prerequisites
-
-- Bazel 6.0+ (with Bzlmod enabled)
-- For Android builds: Android SDK
-- For iOS builds: Xcode (macOS only)
-
-### Setup Development Environment
-
-```bash
-# Install pre-commit hooks
-pre-commit install
-
-# Run buildifier to format BUILD files
-bazel run @buildifier_prebuilt//:buildifier
-```
-
-## Development Roadmap
+## Roadmap
 
 `rules_flutter` is being delivered in three major stages—Alpha, Beta, and Production-readiness. This roadmap captures what is already in place and what remains to ship a dependable 1.0.
 
@@ -281,20 +203,22 @@ bazel run @buildifier_prebuilt//:buildifier
 - Established Bazel workspace layout, CI scaffolding, and contributor tooling (buildifier, pre-commit, update scripts).
 - Implemented Flutter SDK toolchains with version pinning, integrity verification, and bzlmod module extensions.
 - Landed core rules (`dart_library`, `flutter_library`, `flutter_app`, `flutter_test`) with providers, transitions, and pub cache management.
-- Delivered hermetic execution scaffolding: offline pub caches, reproducible `flutter build/test` invocation, and staged workspace assets.
+- Delivered hermetic execution scaffolding: offline pub caches, reproducible `flutter build/test` invocation.
+- Implemented `dart_proto_library`.
+- Implemented Gazelle plugins.
 - Added verification suites: unit tests, smoke e2e workspace, and publishing of SDK metadata through automation.
 
 ### 🚢 Beta: Hermetic cross-platform builds (in progress)
 
-- Harden failure surfacing with structured action logs, actionable diagnostics, and better toolchain validation.
+- Native support for `build_runner`.
 - Normalize build outputs for APK/AAB/IPA/web bundles and document how to consume them from Bazel.
 - Optimize incremental and remote builds by trimming redundant copies, exercising RBE, and benchmarking cache hit rates.
+- Harden failure surfacing with structured action logs, actionable diagnostics, and better toolchain validation.
 - Expand automated coverage: multi-platform e2e matrix (Linux/macOS/Windows), release build assertions, and remote execution smoke tests.
 - Produce task-oriented docs: quickstarts, troubleshooting, and upgrade guides covering common Flutter/Bazel workflows.
 
 ### 🛫 Production readiness (planned)
 
-- Native support for `build_runner`.
 - Ship CI-backed Android packaging (APK/AAB) with managed SDKs, signing hooks, and release build examples.
 - Complete iOS/macOS pipelines with codesign-aware actions, xcframework integration, and Apple toolchain configuration rules.
 - Deliver Windows and Linux desktop bundling, including runtime discovery, asset staging, and exe/appimage installers.
