@@ -28,7 +28,9 @@ jobs:
       exclude: |
         [
           {"folder": ".", "bzlmodEnabled": false}
+          {"folder": "e2e/smoke", "bzlmodEnabled": false}
         ]
+      exclude_windows: true
   pre-commit:
     runs-on: ubuntu-latest
     steps:
