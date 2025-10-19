@@ -22,9 +22,9 @@ CI with confidence.
 Add the module snippet below to your `MODULE.bazel`:
 
 ```starlark
-bazel_dep(name = "com_github_spencerc_rules_flutter", version = "1.0.0")
+bazel_dep(name = "rules_flutter", version = "1.0.0")
 
-flutter = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "flutter")
+flutter = use_extension("@rules_flutter//flutter:extensions.bzl", "flutter")
 flutter.toolchain(flutter_version = "3.29.0")
 use_repo(
     flutter,
@@ -45,7 +45,7 @@ and creates Bazel repositories for hosted packages. Pair it with the Flutter
 extension:
 
 ```starlark
-pub = use_extension("@com_github_spencerc_rules_flutter//flutter:extensions.bzl", "pub")
+pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
 
 # Optional overrides pin versions or add extra packages.
 pub.package(name = "pub_freezed", package = "freezed", version = "2.4.5")
@@ -145,7 +145,7 @@ Create a `BUILD.bazel` file next to your Flutter sources:
 
 ```starlark
 load(
-    "@com_github_spencerc_rules_flutter//flutter:defs.bzl",
+    "@rules_flutter//flutter:defs.bzl",
     "flutter_app",
     "flutter_library",
     "flutter_test",
