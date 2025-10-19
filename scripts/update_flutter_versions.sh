@@ -33,8 +33,17 @@ URLS=(
 # Platform mapping from Flutter's naming to our internal naming
 # Note: Using simple approach since associative arrays may not be available in all shells
 
-# Supported Flutter versions (add new versions here)
-SUPPORTED_VERSIONS=("3.24.0" "3.27.0" "3.29.0")
+# Minimum Flutter version that we include when auto-detecting releases.
+# Versions below this threshold are ignored unless explicitly provided as arguments.
+MIN_SUPPORTED_VERSION="3.24.4"
+
+# Versions that must always be present in the generated metadata regardless of
+# the detected releases. Keep older toolchains working while auto-expanding to
+# newer stable releases.
+ALWAYS_INCLUDED_VERSIONS=("3.24.0")
+
+# User can optionally supply explicit versions as script arguments.
+SUPPORTED_VERSIONS=("$@")
 
 info "Fetching Flutter release information..."
 
@@ -61,6 +70,117 @@ for URL in "${URLS[@]}"; do
 done
 
 info "Processing release data..."
+
+# Determine which versions to process.
+if [[ ${#SUPPORTED_VERSIONS[@]} -eq 0 ]]; then
+    info "Auto-detecting stable Flutter versions >= ${MIN_SUPPORTED_VERSION}..."
+    PYTHON_OUTPUT=$(python3 - "$MIN_SUPPORTED_VERSION" "${TEMP_FILES[@]}" <<'PY'
+import json
+import sys
+
+def parse_version(raw: str):
+    parts = []
+    for segment in raw.split("."):
+        # Stop split on pre-release or build metadata.
+        if "-" in segment:
+            segment = segment.split("-", 1)[0]
+        if segment.isdigit():
+            parts.append(int(segment))
+        else:
+            return None
+    return tuple(parts)
+
+def main(argv) -> None:
+    if len(argv) < 2:
+        sys.exit("minimum version and at least one JSON path are required")
+
+    min_version_raw = argv[0]
+    min_version = parse_version(min_version_raw)
+    if not min_version:
+        sys.exit(f"invalid minimum version: {min_version_raw}")
+
+    versions = set()
+    for path in argv[1:]:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        for release in data.get("releases", []):
+            if release.get("channel") != "stable":
+                continue
+            version_raw = release.get("version")
+            if not isinstance(version_raw, str):
+                continue
+            parsed = parse_version(version_raw)
+            if not parsed:
+                continue
+            if parsed >= min_version:
+                versions.add((parsed, version_raw))
+
+    for _, version_raw in sorted(versions):
+        print(version_raw)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+PY
+    )
+    if [[ $? -ne 0 ]]; then
+        error "Failed to determine supported versions from release metadata"
+        exit 1
+    fi
+    while IFS= read -r version; do
+        if [[ -n "$version" ]]; then
+            SUPPORTED_VERSIONS+=("$version")
+        fi
+    done <<< "$PYTHON_OUTPUT"
+fi
+
+# Always include pinned versions and normalize the final list (sorted, deduplicated).
+CANDIDATE_VERSIONS=("${ALWAYS_INCLUDED_VERSIONS[@]}")
+CANDIDATE_VERSIONS+=("${SUPPORTED_VERSIONS[@]}")
+
+SORTED_VERSIONS_OUTPUT=$(python3 - "${CANDIDATE_VERSIONS[@]}" <<'PY'
+import sys
+
+def parse_version(raw: str):
+    parts = []
+    for segment in raw.split("."):
+        if "-" in segment:
+            segment = segment.split("-", 1)[0]
+        if segment.isdigit():
+            parts.append(int(segment))
+        else:
+            return None
+    return tuple(parts)
+
+def main(argv):
+    versions = set()
+    for version_raw in argv:
+        parsed = parse_version(version_raw)
+        if not parsed:
+            continue
+        versions.add((parsed, version_raw))
+    for _, version_raw in sorted(versions):
+        print(version_raw)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+PY
+)
+if [[ $? -ne 0 ]]; then
+    error "Failed to normalize Flutter version list"
+    exit 1
+fi
+
+SUPPORTED_VERSIONS=()
+while IFS= read -r version; do
+    if [[ -n "$version" ]]; then
+        SUPPORTED_VERSIONS+=("$version")
+    fi
+done <<< "$SORTED_VERSIONS_OUTPUT"
+
+if [[ ${#SUPPORTED_VERSIONS[@]} -eq 0 ]]; then
+    error "No supported versions were found. Provide explicit versions as arguments."
+    exit 1
+fi
 
 # Function to convert SHA-256 to SHA-384 SRI format
 # Note: Flutter provides SHA-256, but Bazel expects SHA-384 for integrity checking
@@ -100,16 +220,26 @@ for version in "${SUPPORTED_VERSIONS[@]}"; do
     for i in "${!URLS[@]}"; do
         platform_file="${TEMP_FILES[$i]}"
         platform_name=""
+        archive_path=""
         
         # Determine platform name from URL
         case "${URLS[$i]}" in
-            *macos*) platform_name="macos" ;;
-            *linux*) platform_name="linux" ;;
-            *windows*) platform_name="windows" ;;
+            *macos*)
+                platform_name="macos"
+                archive_path="stable/macos/flutter_macos_${version}-stable.zip"
+                ;;
+            *linux*)
+                platform_name="linux"
+                archive_path="stable/linux/flutter_linux_${version}-stable.tar.xz"
+                ;;
+            *windows*)
+                platform_name="windows"
+                archive_path="stable/windows/flutter_windows_${version}-stable.zip"
+                ;;
         esac
         
         # Extract SHA-256 hash for this version and platform (stable channel only)
-        sha256_hash=$(jq -r ".releases[] | select(.version == \"$version\" and .channel == \"stable\") | .sha256" "$platform_file" 2>/dev/null | head -1)
+        sha256_hash=$(jq -r ".releases[] | select(.version == \"$version\" and .channel == \"stable\" and (\"${archive_path}\" == \"\" or .archive == \"${archive_path}\")) | .sha256" "$platform_file" 2>/dev/null | head -1)
         
         if [[ "$sha256_hash" != "null" && -n "$sha256_hash" ]]; then
             sri_hash=$(sha256_to_sri "$sha256_hash")

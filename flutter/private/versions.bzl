@@ -15,14 +15,139 @@ TOOL_VERSIONS = {
         "linux": "sha256-1SpdEvF9i8+GjRzMAf4Pf/sFtT2WKKohsHoY+dM2IfI=",
         "windows": "sha256-aNvLaLOhk6Z/aZJL+fpI6ONOyMqULeqRLSD5EG0Hqbk=",
     },
+    "3.24.4": {
+        "macos": "sha256-f+Ov3L03S6o8pOrrpnfNrnS6kbTtQUpYM7e36QizlN8=",
+        "linux": "sha256-LOeNSlHwY++n8EZmrgENAm0Rnupr3qfgi3NoQP6I3bQ=",
+        "windows": "sha256-dOpYxJtQcgkpQx2tbrfSoqMyHy8sHZg7wwyl+U9d37Y=",
+    },
+    "3.24.5": {
+        "macos": "sha256-MPM3rrL3oNMkz66aNxjByqilq8sZ7/kzszczJGX5z+g=",
+        "linux": "sha256-p8gvVRqergGOB49rsYYXHlp3kg01o9daYdmlk9Cp5K4=",
+        "windows": "sha256-uKdIWs08b7I6dresCfiejZPWL7/3FHxvX4xWhtlJ7qw=",
+    },
     "3.27.0": {
-        "macos": "sha256-2lSPEFvq82gSqkhfIcsUApQECQmnYYKlJWCF0ZarqxU=",
+        "macos": "sha256-PnwdJUCNntgXhVVYR0We7piwtmT66mD3c70QeGIpiPg=",
         "linux": "sha256-wFkhM8xh18TUJ2IofehLfguv3T/WLrJuqts0LEMJ1UE=",
         "windows": "sha256-wVi6+1yXvYHj0pNq9XEds7nOUZ3uXzrATB+soFdsqio=",
+    },
+    "3.27.1": {
+        "macos": "sha256-Oi55LEAUvmLfnY39nN8bjhgKEMrBEUQxDz0u4UmBDPU=",
+        "linux": "sha256-YUl+tkzXs6qZypkRzNkhyNq3mv2QnKHJ/5VGBn689so=",
+        "windows": "sha256-fnK3GzVwoRfGBwpZNbzzzNAlSm1j5e/5nUvE3bUAbKk=",
+    },
+    "3.27.2": {
+        "macos": "sha256-Jsls1+RoL/wVp0HSljsVuHEjh1yy+7isXb3BruQfU4g=",
+        "linux": "sha256-W6d6zisnSKJRRzqJeF6LgwXO/T6dr6/XoZfNoLgDxVo=",
+        "windows": "sha256-7UrnGjDf3QSooQU9njVDFKuV9HMZMNOdm2VtNiCcxB0=",
+    },
+    "3.27.3": {
+        "macos": "sha256-sRF8ThqArhOhumKBuBQeQpy2L8U4I4bip44A0SpCNwY=",
+        "linux": "sha256-tbYEJMUf8RtizC+tRM2zNMesSctzeuh0UcnAnhOqAdY=",
+        "windows": "sha256-zRpmcE/gdajIvCxVjdTc7Bcbo5aoSuqI49SMI4UtYsM=",
+    },
+    "3.27.4": {
+        "macos": "sha256-ThC3SKAVmaec5BSmJX5kZdxxvvoSjzho1lnQ/KmDpIU=",
+        "linux": "sha256-ZN9Cc95iVDPHukGWeTK3gvX5q/MZnbgzB4LWRQg3k0Q=",
+        "windows": "sha256-EUHT7bZMRUJz/qyI8x+ElFofMwmnLFiqml8rsrD8jbM=",
     },
     "3.29.0": {
         "macos": "sha256-07LQG39nE/Oow8UepKT7d6J3XPxpcI9gi9L/aISTJCo=",
         "linux": "sha256-H5jz3ikx4dCXlw5W32kbA19oQKoFvmMsT6KiKYx8/dg=",
         "windows": "sha256-CwCAkS+Fa2aEOiBhvHPnOrHqILaPBoEAlW2ml4O0ynA=",
+    },
+    "3.29.1": {
+        "macos": "sha256-LJQJWMvEgAyj46xeUiF0HRrkzM/S2LJWftdOJyjm8D8=",
+        "linux": "sha256-ZbHI2C7g58+gcuzmDax7fmfy1Hbes6gEo6V1Jv78wCc=",
+        "windows": "sha256-3H8FPPCjtgcCYIW6C+ztZCntPCO+3IFMkivWgbfYj6Q=",
+    },
+    "3.29.2": {
+        "macos": "sha256-G25xed1p0I7Hkd9twYxMmpnk4KnuIC7S8qp2J4ceCWc=",
+        "linux": "sha256-YJbyE3B3MJPsGSQOEzZkwcEuuLWoVgWpLRbORioY6sQ=",
+        "windows": "sha256-r6LQjBCKv0czinDdAXEW7+7irEYPC/rEyDJCZ/8/XSU=",
+    },
+    "3.29.3": {
+        "macos": "sha256-2WJqKSCm1sCLAtvDYq1twg6r5HfwboaDJCui5bahrnI=",
+        "linux": "sha256-ipCKWt1Twd/CAx2inlja79WabR1S+1y2H17lLHPjbhU=",
+        "windows": "sha256-XV1ueOI02dyfuNp/tUuFsaa2vkF0vT2Ic7+bBaZ8eJQ=",
+    },
+    "3.32.0": {
+        "macos": "sha256-pRtWq1TIgKWppnVIHbWrD6pQQ3gMJCFjaV457FZtmhc=",
+        "linux": "sha256-p+6LEbb+r/oK3Ab4LHFHqqMU/tsEmTSKpf9NtGiDevA=",
+        "windows": "sha256-xlnYr1NHqKESDa86ROKAMUkPRihqTNWTCdAYV0Vy+fU=",
+    },
+    "3.32.1": {
+        "macos": "sha256-xvymgJQwoV87ybOF5zNKRhZIG19D5x4Gnq7uDDppQN4=",
+        "linux": "sha256-7ocBzu4VGDBIDsFpLPUQpBARhsr2RRUW94gn3ds+Rg8=",
+        "windows": "sha256-t2Hj9KDBBiHFPlK1me/pTa+I262nBAOzYiCxdCficeg=",
+    },
+    "3.32.2": {
+        "macos": "sha256-1XzlmhOIVqJhqUfLCAAlnsxg19Y1eEmaSzOWE7xefo0=",
+        "linux": "sha256-FXqheXJzB3TxyPhswYZNS8+2co4m9KGD8BNMcTf+qMw=",
+        "windows": "sha256-AAWpKrQZIjzPTc1lpvf8BtT0M2pakl0vtWDk6/tm1hA=",
+    },
+    "3.32.3": {
+        "macos": "sha256-d09Fx7ETQ27SNV+Kf/qwNzJ1wQf2lEnRK+ovS+0/Wk4=",
+        "linux": "sha256-eh/Kj/VlMmk8SPuS0clEsazjbj+4otOsWiNNiYfki0s=",
+        "windows": "sha256-NpIz7FTo56204zKR19V6wkd0IU0F+uFcyZIMRKEuMU0=",
+    },
+    "3.32.4": {
+        "macos": "sha256-YWsRO4eza7mvzopxNUyAZxMep5PynYWGuaK9Rtq1yU8=",
+        "linux": "sha256-rq5MdHgkCPg8c9dLRSrjWq1y7QNIg6cN39JWOxcdxHw=",
+        "windows": "sha256-7at9MS88+6GRTv2IfchuYlYLXyhYCZ6djLTkuL7ZYYA=",
+    },
+    "3.32.5": {
+        "macos": "sha256-g/ZUQEZFU/0qCmtwxU4hVaQ2Q902nxGzC5m2N1iXUlo=",
+        "linux": "sha256-NOk+d2nYc5xG3UVOhgK3kBYZpICTn+qkAfUjgxW6f6M=",
+        "windows": "sha256-ToN2XnqkvIMAnFEQKa2mjQei2RMgswc9Ff2g6kU051g=",
+    },
+    "3.32.6": {
+        "macos": "sha256-NN8jZMjRXg1QRuwsDtd5bnCbovOejTNkFX2nTN+Z10s=",
+        "linux": "sha256-HIOP6N1b+Tciv0K/XaWUJb+AnL/tF/6oOFdx54zPRCs=",
+        "windows": "sha256-BE6qdvvCmHcfGjGJtiL5RSz7WlF3zNaB/LJb5+1XS3k=",
+    },
+    "3.32.7": {
+        "macos": "sha256-HRoAzBJXDKcHooAYvhDamFTZKecRgRQd/x/pNC1kXbw=",
+        "linux": "sha256-EjC+tNCSUNsGuz5iIx8jBpKzGmTwYGgIXGU/6CEx7II=",
+        "windows": "sha256-TosV2W+YifRCweK00ATMYqUfmLEOyuZhgwdx5FXpYX0=",
+    },
+    "3.32.8": {
+        "macos": "sha256-i8NF+FVlNGoCsq+hkKWLul8e4XqmQjP1lcTo4xnvoj0=",
+        "linux": "sha256-wsfXX5vlPxDz/bovfgQrLvCFLMCIOSs3S87DTGIE7Yw=",
+        "windows": "sha256-bWHS+7Ov5oZ1hkCIk3rYS0WSCXSxLPcaErTRjQLrEYY=",
+    },
+    "3.35.0": {
+        "macos": "sha256-SvigFRl5LFu2RfngALolA37FEYLYIxOsvsRTLl8fi/U=",
+        "linux": "sha256-/y2UdNdo/bYcG41rdv1OuYI1wnHmixCr9BvZ+0G8Jz0=",
+        "windows": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    },
+    "3.35.1": {
+        "macos": "sha256-w5H1M6T+OMDv/996aUDJiIAVOdiggAKevNOx5w5SzR0=",
+        "linux": "sha256-WO/Z0eVwob+XbiGM+7zKPyOyG4c9dlp04EXVuQIqtRU=",
+        "windows": "sha256-+2t7SUMmrMzGT2ip61OtzoaaCR8215hRvltb6h8Q1yg=",
+    },
+    "3.35.2": {
+        "macos": "sha256-McqL3b5pYzD65NCwM9WUuunO5mSxrctY7N5IAXw6xlg=",
+        "linux": "sha256-8BMQgLR7+qH8xpjn6PWBT6dBuDXrizu8cP3pqTgIKLQ=",
+        "windows": "sha256-hQYDIOKq2/0zEiFXxBhqFDlxr2OEx4seVTe17wOKFzg=",
+    },
+    "3.35.3": {
+        "macos": "sha256-PXoUqQCKKshgXn0Z3UodvKZb/drS+V3cGPJkTyziHJ0=",
+        "linux": "sha256-eRVQZS4pqViIFcDjqsfPfNHR1dah8WMdRssUboouGh0=",
+        "windows": "sha256-xFXpQDGH42W2of/eiOVvOs0STWNqpnIZAnEyquHk4/w=",
+    },
+    "3.35.4": {
+        "macos": "sha256-m2u6RhDDZlWWOiAf0s7mZALb5x2ajdmBxItFEh0T/hg=",
+        "linux": "sha256-FRx1U5qhwBuHSVTXtuAAamIqPxLHb9fx/K+tJ+ai1oo=",
+        "windows": "sha256-lipdrrWeOyxtflmeIy/O5I3xWhEYjBFBY34fsjPsPFQ=",
+    },
+    "3.35.5": {
+        "macos": "sha256-Sc1kMU7Dze3dAz0e9DoO/BHmz6foya+tJFeb+Xe+jRg=",
+        "linux": "sha256-jurWnl2EEx/Puyz9RBZMAOmgTfcl8kZy6iNMa9E2NT0=",
+        "windows": "sha256-X8AfuqjSxdmB6N3LzbooZFSxGVROBxv+Zu92QzUzDsQ=",
+    },
+    "3.35.6": {
+        "macos": "sha256-Qa2kQ7jGFT/hR1HLvodqsIvRsHRjUpTBnWdLKn5Rd4M=",
+        "linux": "sha256-h0k7cpFvEgVBdsKou/lUf+Y8tXVL3d/jACGdm1fmJq8=",
+        "windows": "sha256-+ol1C8LKxsTiIaFvqWKP4uK8Z8dN0PA2+eZUy9QnAtY=",
     },
 }
