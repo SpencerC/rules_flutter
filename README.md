@@ -4,16 +4,14 @@ Build Flutter applications with Bazel! This repository provides Bazel rules for 
 
 ## Features
 
-- ✅ **Hermetic Flutter builds/tests**: Run real `flutter build` and `flutter test` inside Bazel actions using registered toolchains.
-- ✅ **Offline dependency assembly**: `flutter_library` prepares pub caches, `.dart_tool`, and `pub_deps.json` for downstream rules.
-- ✅ **Multi-platform builds**: Target Web, Android, iOS, macOS, Windows, and Linux from a single Bazel workspace.
-- ✅ **Automatic SDK management**: Download and verify Flutter SDK releases with baked-in integrity hashes.
-- ✅ **Bzlmod + pub.dev integration**: Module extensions register Flutter toolchains and mirror hosted packages automatically.
-- ✅ **Toolchain isolation**: Hermetic builds with reproducible inputs and sandbox-friendly workspace staging.
+- ✅ **Flutter SDK toolchain**: Download and verify Flutter SDK releases, and make executables available to Bazel targets.
+- ✅ **Hermetic Flutter builds/tests**: Assemble dependencies with `dart_library` and `flutter_library`. Run tests with `flutter_test`.
+- ✅ **Multi-platform builds**: Use `flutter_app` to target web, Android, iOS, macOS, Windows, and Linux.
+- ✅ **Bzlmod + pub.dev integration**: Module extensions cache SDK and hosted packages automatically.
 
 ## Installation
 
-**⚠️ Development Status**: This project is in active development. The Flutter rules (`flutter_app`, `flutter_test`, `flutter_library`, `dart_library`) execute real `flutter build`/`flutter test` commands after assembling hermetic pub caches. Expect sharp edges: platform builds still require the host SDKs (e.g. Android SDK, Xcode), artifacts focus on validating the pipeline, and we are hardening error reporting. Flutter SDK downloads use real integrity hashes from Flutter's official releases.
+**⚠️ Development Status**: This project is in active development. The Flutter rules (`flutter_app`, `flutter_test`, `flutter_library`, `dart_library`) execute `flutter build`/`flutter test` commands after assembling hermetic pub caches. Expect sharp edges.
 
 From the release you wish to use:
 <https://github.com/spencerc/rules_flutter/releases>
@@ -37,7 +35,7 @@ use_repo(
 register_toolchains("@flutter_toolchains//:all")
 ```
 
-The extension materializes one repository per supported SDK (`flutter_<platform>`), a `flutter_sdk` alias that always points at the host platform SDK, and a `flutter_toolchains` repository. Registering the toolchains ensures Bazel can resolve Flutter for all actions.
+The extension materializes a `flutter_sdk` alias that always points at the host platform SDK, and a `flutter_toolchains` repository. Registering the toolchains ensures Bazel can resolve Flutter for all actions.
 
 #### Managing pub.dev dependencies
 
@@ -260,7 +258,7 @@ This script automatically fetches the latest release information from Flutter's 
 
 ### Prerequisites
 
-- Bazel 6.0+
+- Bazel 6.0+ (with Bzlmod enabled)
 - For Android builds: Android SDK
 - For iOS builds: Xcode (macOS only)
 
@@ -282,7 +280,7 @@ bazel run @buildifier_prebuilt//:buildifier
 
 - Established Bazel workspace layout, CI scaffolding, and contributor tooling (buildifier, pre-commit, update scripts).
 - Implemented Flutter SDK toolchains with version pinning, integrity verification, and bzlmod module extensions.
-- Landed core rules (`flutter_library`, `flutter_app`, `flutter_test`, `dart_library`) with providers, transitions, and pub cache management.
+- Landed core rules (`dart_library`, `flutter_library`, `flutter_app`, `flutter_test`) with providers, transitions, and pub cache management.
 - Delivered hermetic execution scaffolding: offline pub caches, reproducible `flutter build/test` invocation, and staged workspace assets.
 - Added verification suites: unit tests, smoke e2e workspace, and publishing of SDK metadata through automation.
 
@@ -296,6 +294,7 @@ bazel run @buildifier_prebuilt//:buildifier
 
 ### 🛫 Production readiness (planned)
 
+- Native support for `build_runner`.
 - Ship CI-backed Android packaging (APK/AAB) with managed SDKs, signing hooks, and release build examples.
 - Complete iOS/macOS pipelines with codesign-aware actions, xcframework integration, and Apple toolchain configuration rules.
 - Deliver Windows and Linux desktop bundling, including runtime discovery, asset staging, and exe/appimage installers.
