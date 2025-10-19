@@ -33,9 +33,6 @@ use_repo(
     flutter,
     "flutter_toolchains",
     "flutter_sdk",
-    "flutter_linux",
-    "flutter_macos",
-    "flutter_windows",
 )
 register_toolchains("@flutter_toolchains//:all")
 ```
