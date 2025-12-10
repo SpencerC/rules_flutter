@@ -4,8 +4,8 @@ sh_test(
     name = "test_access",
     srcs = ["test_access.sh"],
     data = [
-        "@flutter_sdk//:dart",
-        "@flutter_sdk//:flutter",
+        "@flutter_sdk//:dart_bin",
+        "@flutter_sdk//:flutter_bin",
     ],
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )

@@ -20,38 +20,16 @@ set -e
 
 echo "Looking for dart and flutter binaries..."
 
-# The platform-agnostic targets @flutter_sdk//:dart_binary and @flutter_sdk//:flutter_binary
-# resolve to the correct platform-specific binary via select() in the sdk_repo.bzl.
-# We can find them using the rlocation helper with the canonical repo path.
+# The @flutter_sdk repository provides platform-agnostic symlinks at stable paths.
+# These symlinks point to the actual platform-specific binaries, allowing scripts
+# to use a simple rlocation call without platform-specific logic.
 
-DART_BIN=""
-FLUTTER_BIN=""
+DART_BIN=$(rlocation "rules_flutter++flutter+flutter_sdk/bin/dart")
+FLUTTER_BIN=$(rlocation "rules_flutter++flutter+flutter_sdk/bin/flutter")
 
-# Try to find the binaries via the platform-specific canonical names.
-# The @flutter_sdk aliases resolve via select() but runfiles look up the actual file path.
-# We try each platform in order since only one will exist.
-
-for platform in macos linux windows; do
-    if [[ "$platform" == "windows" ]]; then
-        dart_path="rules_flutter++flutter+flutter_${platform}/flutter/bin/dart.exe"
-        flutter_path="rules_flutter++flutter+flutter_${platform}/flutter/bin/flutter.bat"
-    else
-        dart_path="rules_flutter++flutter+flutter_${platform}/flutter/bin/dart"
-        flutter_path="rules_flutter++flutter+flutter_${platform}/flutter/bin/flutter"
-    fi
-
-    DART_BIN=$(rlocation "$dart_path" 2>/dev/null || true)
-    if [[ -n "$DART_BIN" && -f "$DART_BIN" ]]; then
-        FLUTTER_BIN=$(rlocation "$flutter_path" 2>/dev/null || true)
-        echo "Detected platform: $platform"
-        break
-    fi
-    DART_BIN=""
-done
-
-if [[ -z "$DART_BIN" ]]; then
-    echo "ERROR: Failed to locate dart binary on any platform"
-    echo "Tried: rules_flutter++flutter+flutter_{macos,linux,windows}"
+if [[ -z "$DART_BIN" || ! -f "$DART_BIN" ]]; then
+    echo "ERROR: Failed to locate dart binary"
+    echo "Expected path: rules_flutter++flutter+flutter_sdk/bin/dart"
     exit 1
 fi
 

@@ -27,6 +27,7 @@ def _sdk_repo_impl(repository_ctx):
     if not build_path.exists:
         fail("Unable to locate Flutter SDK repository '{}' for host platform '{}'".format(target_repo, platform))
 
+    _write_binary_symlinks(repository_ctx, canonical_target_repo)
     _write_root_aliases(repository_ctx, canonical_target_repo)
     _write_package_aliases(repository_ctx, build_path.dirname, canonical_target_repo)
 
@@ -42,6 +43,32 @@ def _canonical_target_repo(current_repo_name, target_repo):
         fail("Unexpected canonical repo name '{}' for Flutter SDK alias".format(current_repo_name))
     prefix, _ = current_repo_name.rsplit("+", 1)
     return "{}+{}".format(prefix, target_repo)
+
+def _write_binary_symlinks(repository_ctx, canonical_target_repo):
+    """Create platform-agnostic symlinks to dart/flutter binaries.
+
+    These symlinks allow shell scripts to use stable rlocation paths like:
+    - rules_flutter++flutter+flutter_sdk/bin/dart
+    - rules_flutter++flutter+flutter_sdk/bin/flutter
+    """
+    platform = _host_platform(repository_ctx.os.name)
+
+    if platform == "windows":
+        dart_name = "dart.exe"
+        flutter_name = "flutter.bat"
+    else:
+        dart_name = "dart"
+        flutter_name = "flutter"
+
+    # Create symlinks to the actual binaries in the platform-specific repo
+    repository_ctx.symlink(
+        Label("@@{}//:flutter/bin/{}".format(canonical_target_repo, dart_name)),
+        "bin/dart",
+    )
+    repository_ctx.symlink(
+        Label("@@{}//:flutter/bin/{}".format(canonical_target_repo, flutter_name)),
+        "bin/flutter",
+    )
 
 def _write_root_aliases(repository_ctx, canonical_target_repo):
     """Emit aliases for top-level targets provided by the SDK repository."""
@@ -96,6 +123,21 @@ alias(
     actual = "@@{repo}//:flutter_sdk",
     visibility = ["//visibility:public"],
 )
+
+# Platform-agnostic binary symlinks for shell scripts
+# Use rlocation("rules_flutter++flutter+flutter_sdk/bin/dart") to find these
+filegroup(
+    name = "dart_bin",
+    srcs = ["bin/dart"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "flutter_bin",
+    srcs = ["bin/flutter"],
+    visibility = ["//visibility:public"],
+)
+
 alias(
     name = "flutter_toolchain",
     actual = "@@{repo}//:flutter_toolchain",
