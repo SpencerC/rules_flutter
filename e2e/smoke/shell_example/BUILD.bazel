@@ -1,0 +1,11 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+sh_test(
+    name = "test_access",
+    srcs = ["test_access.sh"],
+    data = [
+        "@flutter_sdk//:dart_binary_unix",
+        "@flutter_sdk//:flutter_binary_unix",
+    ],
+    deps = ["@bazel_tools//tools/bash/runfiles"],
+)

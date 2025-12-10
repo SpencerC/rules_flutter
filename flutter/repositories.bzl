@@ -62,6 +62,18 @@ filegroup(
 )
 
 filegroup(
+    name = "dart_binary_unix",
+    srcs = ["flutter/bin/dart"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "dart_binary_windows", 
+    srcs = ["flutter/bin/dart.exe"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
     name = "flutter_sdk",
     srcs = glob(["flutter/**/*"]) + [{sdk_packages}],
     visibility = ["//visibility:public"],

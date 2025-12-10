@@ -64,3 +64,15 @@ bzl_library(
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
 )
+
+alias(
+    name = "dart",
+    actual = "@flutter_sdk//:dart",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "flutter",
+    actual = "@flutter_sdk//:flutter",
+    visibility = ["//visibility:public"],
+)

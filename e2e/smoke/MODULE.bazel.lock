@@ -239,7 +239,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "JdqLRo9aA6DB526GHOp1A4nM0IPGPZMtELa4meUXTMY=",
+        "bzlTransitiveDigest": "Bi3zxqYzDyMmWe0/01wxOUNbN3JT85kNPYQ0es0j27E=",
         "usagesDigest": "j1+3MZmNcCkACb5AMJa9d5IkO756wppC6h0X/AYbCWM=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
