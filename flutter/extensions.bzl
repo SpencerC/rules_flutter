@@ -36,12 +36,14 @@ def _toolchain_extension(module_ctx):
                 registrations[toolchain.name] = []
             registrations[toolchain.name].append(toolchain.flutter_version)
     for name, versions in registrations.items():
-        if len(versions) > 1:
+        # Deduplicate versions to avoid noise when the same version is registered multiple times
+        unique_versions = {v: True for v in versions}.keys()
+        if len(unique_versions) > 1:
             # TODO: should be semver-aware, using MVS
-            selected = sorted(versions, reverse = True)[0]
+            selected = sorted(unique_versions, reverse = True)[0]
 
             # buildifier: disable=print
-            print("NOTE: flutter toolchain {} has multiple versions {}, selected {}".format(name, versions, selected))
+            print("NOTE: flutter toolchain {} has multiple versions {}, selected {}".format(name, list(unique_versions), selected))
         else:
             selected = versions[0]
 
