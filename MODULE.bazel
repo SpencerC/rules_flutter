@@ -45,31 +45,9 @@ pub.package(
 )
 use_repo(
     pub,
-    "pub_async",
-    "pub_boolean_selector",
-    "pub_characters",
-    "pub_clock",
-    "pub_collection",
-    "pub_fake_async",
     "pub_fixnum",
-    "pub_intl",
-    "pub_leak_tracker",
-    "pub_leak_tracker_flutter_testing",
-    "pub_leak_tracker_testing",
-    "pub_matcher",
-    "pub_material_color_utilities",
-    "pub_meta",
-    "pub_path",
     "pub_protobuf",
     "pub_protoc_plugin",
-    "pub_source_span",
-    "pub_stack_trace",
-    "pub_stream_channel",
-    "pub_string_scanner",
-    "pub_term_glyph",
-    "pub_test_api",
-    "pub_vector_math",
-    "pub_vm_service",
 )
 
 # Go dependencies for gazelle plugin
