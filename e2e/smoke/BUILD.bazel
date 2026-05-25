@@ -59,10 +59,20 @@ build_test(
     targets = ["@pub_intl_utils//:intl_utils"],
 )
 
+build_test(
+    name = "pub_tooling_dependency_build_test",
+    targets = [
+        "@pub_analyzer//:analyzer",
+        "@pub_path//:path",
+        "@pub_protoc_plugin//:protoc_plugin",
+    ],
+)
+
 test_suite(
     name = "integration_tests",
     tests = [
         ":gazelle_generation_test",
+        ":pub_tooling_dependency_build_test",
         ":single_pub_dependency_build_test",
         ":smoke_test",
         "//dart_package:dart_package_test",

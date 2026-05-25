@@ -45,8 +45,11 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir):
 
     command, tool = _find_pub_command(repository_ctx)
     if not command:
-        fail("""Unable to locate a Dart or Flutter executable while preparing '{}' to run `pub deps --json`.
-Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".format(package_name))
+        repository_ctx.report_progress(
+            "No Dart or Flutter executable found for {}; falling back to pubspec.yaml dependency metadata".format(package_name),
+        )
+        _write_fallback_pub_deps(repository_ctx, package_name, package_dir, pub_deps_rel)
+        return True
 
     workdir = str(repository_ctx.path(package_dir if package_dir not in (".", "") else "."))
     run_env = {
@@ -88,7 +91,8 @@ Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".
             repository_ctx.report_progress(
                 "Skipping pub deps generation for {} due to unsupported dependency source; falling back to pubspec.yaml".format(package_name),
             )
-            return False
+            _write_fallback_pub_deps(repository_ctx, package_name, package_dir, pub_deps_rel)
+            return True
         fail("Failed to run `{tool} pub deps --json` for package '{pkg}' (dir: {dir}).\nstdout: {stdout}\nstderr: {stderr}".format(
             tool = tool,
             pkg = package_name,
@@ -118,6 +122,37 @@ Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".
         json_text += "\n"
     repository_ctx.file(pub_deps_rel, json_text)
     return True
+
+def _write_fallback_pub_deps(repository_ctx, package_name, package_dir, pub_deps_rel):
+    """Write minimal dependency metadata from pubspec.yaml when pub cannot solve."""
+
+    metadata = _parse_pubspec_metadata(repository_ctx, package_dir)
+    root_name = metadata.get("name") or package_name
+    root_version = metadata.get("version") or "0.0.0"
+
+    packages = [
+        {
+            "name": root_name,
+            "version": root_version,
+            "source": "root",
+            "dependency": "root",
+            "description": {"path": "."},
+        },
+    ]
+
+    for dep in _parse_pubspec_dependencies(repository_ctx, package_dir):
+        entry = {
+            "name": dep["name"],
+            "source": dep["source"],
+            "dependency": "direct main",
+        }
+        if dep["source"] == "path":
+            entry["description"] = {"path": dep.get("path", "")}
+        elif dep["source"] == "sdk":
+            entry["description"] = dep.get("sdk", "")
+        packages.append(entry)
+
+    repository_ctx.file(pub_deps_rel, json.encode({"packages": packages}) + "\n")
 
 def _find_pub_command(repository_ctx):
     """Locate a flutter or dart executable and return the pub command prefix."""
@@ -202,6 +237,7 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         lines.append("    ],")
 
     lines.append('    pubspec = "pubspec.yaml",')
+    lines.append('    pub_deps = "pub_deps.json",')
 
     if deps:
         lines.append("    deps = [")
@@ -279,40 +315,69 @@ def _determine_rule_kind(repository_ctx, package_dir):
         return "dart_library"
     return "flutter_library"
 
-def _collect_lib_sources(repository_ctx, package_dir):
-    """Collect all files under lib/ using a Python helper."""
+def _parse_pubspec_metadata(repository_ctx, package_dir):
+    """Extract root package metadata from pubspec.yaml."""
 
-    lib_rel = "lib" if package_dir in (".", "") else package_dir + "/lib"
-    lib_path = repository_ctx.path(lib_rel)
-    if not lib_path.exists or not lib_path.is_dir:
+    pubspec_rel = "pubspec.yaml" if package_dir in (".", "") else package_dir + "/pubspec.yaml"
+    pubspec_path = repository_ctx.path(pubspec_rel)
+    if not pubspec_path.exists:
+        return {}
+
+    metadata = {}
+    for raw_line in repository_ctx.read(pubspec_rel).splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        if key in ["name", "version"]:
+            metadata[key] = value.strip().strip("'\"")
+        if "name" in metadata and "version" in metadata:
+            break
+
+    return metadata
+
+def _collect_lib_sources(repository_ctx, package_dir):
+    """Collect Dart sources needed for a generated pub package target."""
+
+    source_roots = []
+    for source_dir in ["lib", "bin"]:
+        rel = source_dir if package_dir in (".", "") else package_dir + "/" + source_dir
+        path = repository_ctx.path(rel)
+        if path.exists and path.is_dir:
+            source_roots.append((source_dir, path))
+
+    if not source_roots:
         return []
 
     python = repository_ctx.which("python3") or repository_ctx.which("python")
     if not python:
-        fail("Unable to locate python3 to enumerate lib/ sources")
-
-    result = repository_ctx.execute([
-        python,
-        "-c",
-        _LIB_DISCOVERY_SCRIPT,
-        str(lib_path),
-    ], quiet = True)
-
-    if result.return_code:
-        fail(
-            "Failed to enumerate lib/ sources (code {}): {}".format(
-                result.return_code,
-                result.stderr or result.stdout,
-            ),
-        )
+        fail("Unable to locate python3 to enumerate Dart sources")
 
     sources = []
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if line:
-            # Only include .dart files for dart_library rule
-            if line.endswith(".dart"):
-                sources.append("lib/{}".format(line))
+    for source_dir, root_path in source_roots:
+        result = repository_ctx.execute([
+            python,
+            "-c",
+            _LIB_DISCOVERY_SCRIPT,
+            str(root_path),
+        ], quiet = True)
+
+        if result.return_code:
+            fail(
+                "Failed to enumerate {}/ sources (code {}): {}".format(
+                    source_dir,
+                    result.return_code,
+                    result.stderr or result.stdout,
+                ),
+            )
+
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line and line.endswith(".dart"):
+                sources.append("{}/{}".format(source_dir, line))
 
     return sorted(sources)
 
@@ -403,9 +468,9 @@ def _parse_pubspec_dependencies(repository_ctx, package_dir):
         if indent <= deps_indent:
             if current_name:
                 if current_block != None and "path" in current_block:
-                    pass
+                    deps.append({"name": current_name, "source": "path", "path": current_block.get("path")})
                 elif current_block != None and current_block.get("sdk"):
-                    deps.append({"name": current_name, "source": "sdk"})
+                    deps.append({"name": current_name, "source": "sdk", "sdk": current_block.get("sdk")})
                 elif current_name:
                     deps.append({"name": current_name, "source": "hosted"})
             current_name = ""
@@ -435,9 +500,9 @@ def _parse_pubspec_dependencies(repository_ctx, package_dir):
 
         if current_name:
             if current_block != None and "path" in current_block:
-                pass
+                deps.append({"name": current_name, "source": "path", "path": current_block.get("path")})
             elif current_block != None and current_block.get("sdk"):
-                deps.append({"name": current_name, "source": "sdk"})
+                deps.append({"name": current_name, "source": "sdk", "sdk": current_block.get("sdk")})
             else:
                 deps.append({"name": current_name, "source": "hosted"})
             current_block = None
@@ -453,9 +518,9 @@ def _parse_pubspec_dependencies(repository_ctx, package_dir):
 
     if current_name:
         if current_block != None and "path" in current_block:
-            pass
+            deps.append({"name": current_name, "source": "path", "path": current_block.get("path")})
         elif current_block != None and current_block.get("sdk"):
-            deps.append({"name": current_name, "source": "sdk"})
+            deps.append({"name": current_name, "source": "sdk", "sdk": current_block.get("sdk")})
         elif current_name:
             deps.append({"name": current_name, "source": "hosted"})
 

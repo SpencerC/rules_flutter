@@ -3,6 +3,7 @@ load("@rules_flutter//flutter:defs.bzl", "flutter_library")
 flutter_library(
     name = "lib",
     srcs = ["lib/main.dart"],
+    pub_deps = "pub_deps.json",
     pubspec = "pubspec.yaml",
     deps = [
         "@flutter_sdk//flutter/packages/flutter",

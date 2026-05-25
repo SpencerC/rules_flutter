@@ -12,13 +12,20 @@ func TestGenerateDepsIncludesAllDirectDependencies(t *testing.T) {
 			{Name: "flutter_test", Dependency: "direct dev", Source: "sdk"},
 			{Name: "flutter", Dependency: "direct main", Source: "sdk"},
 			{Name: "flutter_lints", Dependency: "direct dev", Source: "hosted"},
+			{
+				Name:        "local_models",
+				Dependency:  "direct main",
+				Source:      "path",
+				Description: map[string]interface{}{"path": "../local_models"},
+			},
 			{Name: "collection", Dependency: "transitive", Source: "hosted"},
 		},
 	}
 
 	fc := &FlutterConfig{SDKRepo: "@flutter_sdk"}
-	got := generateDeps(deps, fc)
+	got := generateDeps(deps, fc, "apps/example")
 	want := []string{
+		"//apps/local_models:lib",
 		"@flutter_sdk//flutter/packages/flutter:flutter",
 		"@flutter_sdk//flutter/packages/flutter_test:flutter_test",
 		"@pub_flutter_lints//:flutter_lints",

@@ -74,6 +74,9 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 
 	r := rule.NewRule(ruleKind, fc.LibraryName)
 	r.SetAttr("pubspec", "pubspec.yaml")
+	if hasPubDeps {
+		r.SetAttr("pub_deps", "pub_deps.json")
+	}
 
 	if hasLib {
 		srcs := collectSourceFiles(args.Dir, hasLib)
@@ -83,7 +86,7 @@ func (fl *flutterLang) GenerateRules(args language.GenerateArgs) language.Genera
 	}
 
 	if hasPubDeps && pubDeps != nil {
-		deps := generateDeps(pubDeps, fc)
+		deps := generateDeps(pubDeps, fc, args.Rel)
 		if len(deps) > 0 {
 			r.SetAttr("deps", deps)
 		}
@@ -134,7 +137,7 @@ func walkDir(dir string, baseDir string) []string {
 }
 
 // generateDeps creates a list of dependency labels from pub_deps.json
-func generateDeps(depsFile *PubDeps, fc *FlutterConfig) []string {
+func generateDeps(depsFile *PubDeps, fc *FlutterConfig, rel string) []string {
 	directDeps := GetDirectDependencies(depsFile)
 	if len(directDeps) == 0 {
 		return nil
@@ -155,12 +158,43 @@ func generateDeps(depsFile *PubDeps, fc *FlutterConfig) []string {
 			if sdkLabel := sdkDependencyLabel(pkg, fc); sdkLabel != "" {
 				deps = append(deps, sdkLabel)
 			}
+		case "path":
+			if pathLabel := pathDependencyLabel(meta, fc, rel); pathLabel != "" {
+				deps = append(deps, pathLabel)
+			}
 		}
 	}
 
 	// Sort for consistent output
 	sortStrings(deps)
 	return deps
+}
+
+// pathDependencyLabel returns the Bazel label for a local path dependency.
+func pathDependencyLabel(pkg PubDepsPackage, fc *FlutterConfig, rel string) string {
+	pathValue := ""
+	switch desc := pkg.Description.(type) {
+	case string:
+		pathValue = desc
+	case map[string]interface{}:
+		if value, ok := desc["path"].(string); ok {
+			pathValue = value
+		}
+	}
+	if pathValue == "" {
+		return ""
+	}
+
+	cleanPath := filepath.Clean(filepath.Join(rel, pathValue))
+	if cleanPath == "." || strings.HasPrefix(cleanPath, "..") {
+		return ""
+	}
+
+	targetName := "lib"
+	if fc != nil && fc.LibraryName != "" {
+		targetName = fc.LibraryName
+	}
+	return fmt.Sprintf("//%s:%s", filepath.ToSlash(cleanPath), targetName)
 }
 
 // sdkDependencyLabel returns the Bazel label for an SDK provided package.

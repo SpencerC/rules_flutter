@@ -105,7 +105,7 @@
     },
     {
       "name": "http",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "kind": "transitive",
       "source": "hosted",
       "dependencies": ["async", "http_parser", "meta", "web"]
@@ -203,7 +203,7 @@
     },
     {
       "name": "watcher",
-      "version": "1.1.4",
+      "version": "1.2.1",
       "kind": "transitive",
       "source": "hosted",
       "dependencies": ["async", "path"]
@@ -238,7 +238,7 @@
     },
     {
       "name": "crypto",
-      "version": "3.0.6",
+      "version": "3.0.7",
       "kind": "transitive",
       "source": "hosted",
       "dependencies": ["typed_data"]
@@ -259,14 +259,14 @@
     },
     {
       "name": "archive",
-      "version": "4.0.7",
+      "version": "4.0.9",
       "kind": "transitive",
       "source": "hosted",
-      "dependencies": ["crypto", "path", "posix"]
+      "dependencies": ["path", "posix"]
     },
     {
       "name": "posix",
-      "version": "6.0.3",
+      "version": "6.5.0",
       "kind": "transitive",
       "source": "hosted",
       "dependencies": ["ffi", "meta", "path"]

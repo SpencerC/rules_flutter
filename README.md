@@ -155,6 +155,7 @@ flutter_library(
     name = "app_lib",
     srcs = glob(["lib/**"]),
     pubspec = "pubspec.yaml",
+    pub_deps = "pub_deps.json",
 )
 
 flutter_app(
