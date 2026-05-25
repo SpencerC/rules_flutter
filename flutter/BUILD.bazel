@@ -59,12 +59,6 @@ bzl_library(
     deps = ["//flutter/private:pub_repository"],
 )
 
-bzl_library(
-    name = "toolchain",
-    srcs = ["toolchain.bzl"],
-    visibility = ["//visibility:public"],
-)
-
 alias(
     name = "dart",
     actual = "@flutter_sdk//:dart",
@@ -74,5 +68,11 @@ alias(
 alias(
     name = "flutter",
     actual = "@flutter_sdk//:flutter",
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "toolchain",
+    srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
 )

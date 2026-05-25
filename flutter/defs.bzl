@@ -1229,7 +1229,7 @@ def _dart_library_impl(ctx):
         ),
     )
 
-    # Create enhanced analysis output that validates the toolchain and library structure
+    # Emit a small metadata artifact so build tests can validate analysis output.
     analysis_output = ctx.actions.declare_file(ctx.label.name + "_analysis.txt")
 
     analysis_info = """=== Dart Library Analysis ===
@@ -1243,10 +1243,8 @@ Has pubspec: {has_pubspec}
 ✓ Flutter toolchain resolved successfully
 ✓ Dart library structure validated
 ✓ Dependencies processed
-✓ Ready for compilation
 
-Status: SUCCESS - Real Dart compilation infrastructure ready
-Note: Enhanced placeholder demonstrating Dart library analysis
+Status: ANALYSIS_ONLY - Dart source metadata emitted
 """.format(
         name = ctx.label.name,
         flutter_bin = flutter_bin,

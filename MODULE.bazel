@@ -39,6 +39,11 @@ pub.package(
     version = "3.1.0",
 )
 pub.package(
+    name = "pub_path",
+    package = "path",
+    version = "1.9.0",
+)
+pub.package(
     name = "pub_protoc_plugin",
     package = "protoc_plugin",
     version = "21.1.1",
@@ -46,6 +51,7 @@ pub.package(
 use_repo(
     pub,
     "pub_fixnum",
+    "pub_path",
     "pub_protobuf",
     "pub_protoc_plugin",
 )

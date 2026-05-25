@@ -75,14 +75,16 @@ Install Flutter or Dart on PATH, or check in pub_deps.json for this package.""".
         # fails with a path resolution error. Allow falling back to pubspec parsing
         # so repository generation can continue.
         lower_stderr = stderr.lower()
-        if (
-            "path" in lower_stderr and (
-                "could not find package" in lower_stderr or
-                "which doesn't exist" in lower_stderr
-            )
-        ) or (
-            "from sdk" in lower_stderr and "doesn't match any versions" in lower_stderr
-        ):
+        unsupported_path_dep = "path" in lower_stderr and (
+            "could not find package" in lower_stderr or
+            "which doesn't exist" in lower_stderr
+        )
+        unsupported_sdk_dep = "from sdk" in lower_stderr and (
+            "could not find package" in lower_stderr or
+            "doesn't exist" in lower_stderr or
+            "doesn't match any versions" in lower_stderr
+        )
+        if unsupported_path_dep or unsupported_sdk_dep:
             repository_ctx.report_progress(
                 "Skipping pub deps generation for {} due to unsupported dependency source; falling back to pubspec.yaml".format(package_name),
             )

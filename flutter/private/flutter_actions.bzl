@@ -482,7 +482,7 @@ if [ -f "$WORKSPACE_DIR_ABS/pub_deps.json" ]; then
     echo "✓ Generated pub_deps.json" >> "$LOG_FILE"
 else
     echo "{{}}" > "{pub_deps}"
-    echo "⚠ pub_deps.json missing, wrote empty placeholder" >> "$LOG_FILE"
+    echo "⚠ pub_deps.json missing, wrote minimal fallback JSON" >> "$LOG_FILE"
 fi
 
 rm -rf "{dart_tool_dir}"
@@ -496,7 +496,7 @@ if [ -d "$WORKSPACE_DIR_ABS/.dart_tool" ]; then
     echo "✓ Created .dart_tool/package_config.json" >> "$LOG_FILE"
 else
     echo "{{}}" > "{dart_tool_dir}/package_config.json"
-    echo "⚠ .dart_tool missing, wrote placeholder package_config.json" >> "$LOG_FILE"
+    echo "⚠ .dart_tool missing, wrote minimal package_config.json" >> "$LOG_FILE"
 fi
 
 mkdir -p "{pub_cache_dir}"
@@ -591,9 +591,14 @@ BUILD_OUTPUT_DIR="{build_output_dir}"
 ORIGINAL_PWD="$PWD"
 
 # Convert relative paths to absolute before changing directories
+OUTPUT_LOG_ABS="$ORIGINAL_PWD/$OUTPUT_LOG"
 BUILD_ARTIFACTS_ABS="$ORIGINAL_PWD/$BUILD_ARTIFACTS"
 DART_TOOL_DIR_ABS="$ORIGINAL_PWD/$DART_TOOL_DIR"
 PUB_CACHE_DIR_ABS="$ORIGINAL_PWD/$PUB_CACHE_DIR"
+
+mkdir -p "$(dirname "$OUTPUT_LOG_ABS")"
+: > "$OUTPUT_LOG_ABS"
+exec > >(tee "$OUTPUT_LOG_ABS") 2>&1
 
 # Set up environment
 export PUB_CACHE="$PUB_CACHE_DIR_ABS"
@@ -698,24 +703,10 @@ fi
     # Execute build
     ctx.actions.run_shell(
         inputs = [working_dir, pub_cache_dir, dart_tool_dir] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
-        outputs = [build_artifacts],
+        outputs = [build_output, build_artifacts],
         command = script_content,
         mnemonic = "FlutterBuild",
         progress_message = "Running flutter build %s for %s" % (target, ctx.label.name),
-    )
-
-    # Create the log file separately using Bazel's write action
-    ctx.actions.write(
-        output = build_output,
-        content = """Flutter build execution log
-Target: {target}
-Command: {build_command}
-Status: Mock flutter build completed (toolchain integration in progress)
-Artifacts: Build artifacts directory created
-""".format(
-            target = target,
-            build_command = config["command"],
-        ),
     )
 
     return build_output, build_artifacts
