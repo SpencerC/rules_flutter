@@ -277,6 +277,15 @@ if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
 else
     echo "No dependency caches supplied"
 fi
+
+if [ -d "$WORKSPACE_DIR_ABS/.pub_cache" ]; then
+    echo "Merging package-local .pub_cache"
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a "$WORKSPACE_DIR_ABS/.pub_cache/" "$PUB_CACHE_DIR_ABS/"
+    else
+        cp -RL "$WORKSPACE_DIR_ABS/.pub_cache/." "$PUB_CACHE_DIR_ABS/"
+    fi
+fi
 echo ""
 
 export PUBSPEC_PATH="$WORKSPACE_DIR_ABS/pubspec.yaml"

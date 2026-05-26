@@ -125,6 +125,7 @@ def _generate_flutter_packages(repository_ctx):
                 package_name = package_name,
                 package_dir = package_dir,
                 include_hosted_deps = False,
+                include_pub_cache_data = True,
             )
 
             package_labels.append("//{}:{}_files".format(package_dir, package_name))

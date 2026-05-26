@@ -1273,7 +1273,7 @@ def _dart_library_impl(ctx):
             pubspec_file,
             direct_srcs,
             [],
-            [],
+            list(ctx.files.data),
         )
 
         # Prepare dependency cache and package metadata from declared pub_deps.json.
@@ -1354,6 +1354,10 @@ _dart_library_rule = rule(
         "deps": attr.label_list(
             doc = "Dart library or flutter_library dependencies",
             providers = [[DartLibraryInfo], [FlutterLibraryInfo], [DartProtoLibraryInfo]],
+        ),
+        "data": attr.label_list(
+            allow_files = True,
+            doc = "Additional files needed while preparing dependency metadata and cache artifacts.",
         ),
         "pubspec": attr.label(
             allow_single_file = True,

@@ -21,7 +21,7 @@ _DEF_LOAD_STMT = 'load("@rules_flutter//flutter:defs.bzl", "dart_library", "flut
 
 _DEF_VISIBILITY = '    visibility = ["//visibility:public"],'
 
-def _ensure_pub_deps(repository_ctx, package_name, package_dir):
+def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_on_failure = False):
     """Ensure pub_deps.json exists by running pub deps --json when necessary."""
 
     if package_dir in (".", ""):
@@ -58,6 +58,7 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir):
     }
     if tool == "flutter":
         run_env["FLUTTER_SUPPRESS_ANALYTICS"] = "true"
+        run_env["FLUTTER_UPDATE_DISABLED"] = "true"
         run_env["CI"] = "true"
 
     repository_ctx.report_progress(
@@ -90,6 +91,12 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir):
         if unsupported_path_dep or unsupported_sdk_dep:
             repository_ctx.report_progress(
                 "Skipping pub deps generation for {} due to unsupported dependency source; falling back to pubspec.yaml".format(package_name),
+            )
+            _write_fallback_pub_deps(repository_ctx, package_name, package_dir, pub_deps_rel)
+            return True
+        if allow_fallback_on_failure:
+            repository_ctx.report_progress(
+                "Skipping pub deps generation for {} after pub failed; falling back to pubspec.yaml".format(package_name),
             )
             _write_fallback_pub_deps(repository_ctx, package_name, package_dir, pub_deps_rel)
             return True
@@ -176,10 +183,6 @@ def _find_pub_command(repository_ctx):
         if path.exists:
             return _pub_command_prefix(str(path)), "flutter"
 
-    host_flutter = repository_ctx.which("flutter.bat" if os_name.startswith("windows") else "flutter")
-    if host_flutter:
-        return _pub_command_prefix(str(host_flutter)), "flutter"
-
     for candidate in dart_candidates:
         path = repository_ctx.path(candidate)
         if path.exists:
@@ -189,6 +192,10 @@ def _find_pub_command(repository_ctx):
     if host_dart:
         return _pub_command_prefix(str(host_dart)), "dart"
 
+    host_flutter = repository_ctx.which("flutter.bat" if os_name.startswith("windows") else "flutter")
+    if host_flutter:
+        return _pub_command_prefix(str(host_flutter)), "flutter"
+
     return None, None
 
 def _pub_command_prefix(executable):
@@ -196,7 +203,7 @@ def _pub_command_prefix(executable):
         return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
     return [executable, "pub"]
 
-def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True, include_pub_cache_data = False):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
@@ -210,9 +217,17 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
             pub_deps.json as external repositories. Flutter SDK packages pass
             False because their hosted deps are already vendored in the SDK and
             should not pull from pub.dev.
+        include_pub_cache_data: When true and the package contains a local
+            `.pub_cache`, expose it as data so package preparation can publish
+            those vendored artifacts transitively.
     """
 
-    _ensure_pub_deps(repository_ctx, package_name, package_dir)
+    _ensure_pub_deps(
+        repository_ctx,
+        package_name,
+        package_dir,
+        allow_fallback_on_failure = not include_hosted_deps,
+    )
     rule_kind = _determine_rule_kind(repository_ctx, package_dir)
     srcs = _collect_lib_sources(repository_ctx, package_dir)
     deps = _collect_direct_deps(
@@ -221,6 +236,9 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         sdk_repo,
         include_hosted_deps = include_hosted_deps,
     )
+    pub_cache_files_target = None
+    if include_pub_cache_data and _package_pub_cache_exists(repository_ctx, package_dir):
+        pub_cache_files_target = "_pub_cache_files"
 
     lines = [
         "# Generated BUILD file for package: {}".format(package_name),
@@ -245,11 +263,23 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
             lines.append('        "{}",'.format(dep))
         lines.append("    ],")
 
+    if pub_cache_files_target:
+        lines.append('    data = [":{}"],'.format(pub_cache_files_target))
+
     if rule_kind == "dart_library":
         lines.append("    pub_package = True,")
 
     lines.append(_DEF_VISIBILITY)
     lines.append(")")
+
+    if pub_cache_files_target:
+        lines.extend([
+            "",
+            "filegroup(",
+            '    name = "{}",'.format(pub_cache_files_target),
+            '    srcs = glob([".pub_cache/**"]),',
+            ")",
+        ])
 
     lines.extend([
         "",
@@ -268,6 +298,11 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
 
     build_path = "BUILD.bazel" if package_dir in (".", "") else package_dir + "/BUILD.bazel"
     repository_ctx.file(build_path, "\n".join(lines) + "\n")
+
+def _package_pub_cache_exists(repository_ctx, package_dir):
+    pub_cache_rel = ".pub_cache" if package_dir in (".", "") else package_dir + "/.pub_cache"
+    pub_cache_path = repository_ctx.path(pub_cache_rel)
+    return pub_cache_path.exists and pub_cache_path.is_dir
 
 def _determine_rule_kind(repository_ctx, package_dir):
     """Decide which rule kind (flutter or dart) to emit."""
