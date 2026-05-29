@@ -14,7 +14,7 @@ FlutterLibraryInfo = provider(
     doc = "Outputs from flutter_library needed to build or test Flutter targets.",
     fields = {
         "workspace": "Prepared Flutter workspace tree artifact containing project sources and pub outputs.",
-        "pub_get_log": "Captured log from dependency preparation (pub deps, cache assembly, and codegen).",
+        "pub_get_log": "Captured log from dependency preparation (pub deps, cache assembly, and generation commands).",
         "pub_cache": "Tree artifact containing the assembled pub cache for this library.",
         "pub_deps": "JSON dependency report copied from checked-in or repository-generated pub_deps.json.",
         "dart_tool": "Tree artifact containing the generated .dart_tool/package_config.json.",
@@ -251,6 +251,238 @@ _pub_deps_update = rule(
     doc = "Creates an executable that refreshes pub_deps.json from pubspec.yaml.",
 )
 
+_BUILD_RUNNER_MODES = [
+    "build",
+    "test",
+    "watch",
+    "serve",
+]
+
+def _shell_quote(arg):
+    return "'" + arg.replace("'", "'\"'\"'") + "'"
+
+def _normalize_build_runner_modes(modes):
+    seen = {}
+    normalized = []
+    for mode in modes:
+        if mode not in _BUILD_RUNNER_MODES:
+            fail("Unsupported build_runner mode '{}'. Expected one of {}.".format(mode, _BUILD_RUNNER_MODES))
+        if mode in seen:
+            continue
+        seen[mode] = True
+        normalized.append(mode)
+    return normalized
+
+def _has_build_runner_config(kwargs):
+    for key in [
+        "build_runner_modes",
+        "build_runner_common_args",
+        "build_runner_build_args",
+        "build_runner_test_args",
+        "build_runner_watch_args",
+        "build_runner_serve_args",
+    ]:
+        if key in kwargs and kwargs[key]:
+            return True
+    return False
+
+def _validate_build_runner_config(rule_name, kwargs, build_runner_modes, has_explicit_build_runner_modes):
+    if build_runner_modes:
+        return
+    if not has_explicit_build_runner_modes:
+        return
+
+    for key in [
+        "build_runner_common_args",
+        "build_runner_build_args",
+        "build_runner_test_args",
+        "build_runner_watch_args",
+        "build_runner_serve_args",
+    ]:
+        if key in kwargs and kwargs[key]:
+            fail("{} sets '{}' but does not enable any build_runner mode in 'build_runner_modes'.".format(rule_name, key))
+
+def _build_runner_modes_for_run_targets(has_explicit_build_runner_modes, build_runner_modes):
+    if has_explicit_build_runner_modes:
+        return build_runner_modes
+    return _BUILD_RUNNER_MODES
+
+def _render_build_runner_runner_script(pubspec_file, flutter_bin, mode, common_args, mode_args):
+    pubspec_rel = pubspec_file.short_path
+    common_args_quoted = " ".join([_shell_quote(arg) for arg in common_args])
+    mode_args_quoted = " ".join([_shell_quote(arg) for arg in mode_args])
+    return """#!/bin/bash
+set -euo pipefail
+
+resolve_runfile() {{
+    local rel="$1"
+    local candidate
+    for root in "${{RUNFILES_DIR:-}}" "$PWD" "$PWD.runfiles"; do
+        if [ -z "$root" ]; then
+            continue
+        fi
+        candidate="$root/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    if [ -e "$rel" ]; then
+        echo "$rel"
+        return 0
+    fi
+    return 1
+}}
+
+WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
+    exit 1
+fi
+
+PUBSPEC_REL="{pubspec_rel}"
+SOURCE_PACKAGE_DIR="$WORKSPACE_DIR"
+if [ -n "$PUBSPEC_REL" ]; then
+    SOURCE_PACKAGE_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
+fi
+
+if [ ! -f "$SOURCE_PACKAGE_DIR/pubspec.yaml" ]; then
+    echo "✗ pubspec.yaml source missing: $SOURCE_PACKAGE_DIR/pubspec.yaml" >&2
+    exit 1
+fi
+
+FLUTTER_BIN="$(resolve_runfile "{flutter_bin}")"
+if [ -z "$FLUTTER_BIN" ] || [ ! -x "$FLUTTER_BIN" ]; then
+    echo "✗ Unable to locate Flutter binary in runfiles: {flutter_bin}" >&2
+    exit 1
+fi
+
+FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN")/.." && pwd)"
+DART_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+if [ ! -x "$DART_BIN" ]; then
+    DART_BIN="$(command -v dart || true)"
+fi
+if [ -z "$DART_BIN" ] || [ ! -x "$DART_BIN" ]; then
+    echo "✗ Unable to locate Dart executable for build_runner" >&2
+    exit 1
+fi
+
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export CI=true
+export PUB_ENVIRONMENT="flutter_tool:bazel_run"
+
+cd "$SOURCE_PACKAGE_DIR"
+
+BUILD_RUNNER_COMMON_ARGS=({common_args})
+BUILD_RUNNER_MODE_ARGS=({mode_args})
+CMD=("$DART_BIN" "run" "build_runner" "{mode}")
+if [ ${{#BUILD_RUNNER_COMMON_ARGS[@]}} -gt 0 ]; then
+    CMD+=("${{BUILD_RUNNER_COMMON_ARGS[@]}}")
+fi
+if [ ${{#BUILD_RUNNER_MODE_ARGS[@]}} -gt 0 ]; then
+    CMD+=("${{BUILD_RUNNER_MODE_ARGS[@]}}")
+fi
+if [ $# -gt 0 ]; then
+    CMD+=("$@")
+fi
+
+echo "Running in workspace directory: $SOURCE_PACKAGE_DIR"
+echo "Executing: ${{CMD[*]}}"
+exec "${{CMD[@]}}"
+""".format(
+        pubspec_rel = pubspec_rel,
+        flutter_bin = flutter_bin,
+        mode = mode,
+        common_args = common_args_quoted,
+        mode_args = mode_args_quoted,
+    )
+
+def _build_runner_command_impl(ctx):
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    if not flutter_toolchain.flutterinfo.tool_files:
+        fail("No tool files found in Flutter toolchain")
+    flutter_bin = flutter_toolchain.flutterinfo.tool_files[0]
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
+    ctx.actions.write(
+        output = runner,
+        content = _render_build_runner_runner_script(
+            ctx.file.pubspec,
+            flutter_bin.short_path,
+            ctx.attr.mode,
+            ctx.attr.common_args,
+            ctx.attr.mode_args,
+        ),
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([runner]),
+            runfiles = ctx.runfiles(
+                files = [runner, ctx.file.pubspec] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
+            ),
+        ),
+    ]
+
+_build_runner_command_rule = rule(
+    implementation = _build_runner_command_impl,
+    attrs = {
+        "pubspec": attr.label(
+            allow_single_file = True,
+            mandatory = True,
+            doc = "Source pubspec.yaml used to locate the workspace package directory.",
+        ),
+        "mode": attr.string(
+            values = _BUILD_RUNNER_MODES,
+            mandatory = True,
+            doc = "build_runner command mode to execute.",
+        ),
+        "common_args": attr.string_list(
+            doc = "Args shared by all build_runner command modes.",
+            default = [],
+        ),
+        "mode_args": attr.string_list(
+            doc = "Mode-specific args forwarded to build_runner.",
+            default = [],
+        ),
+    },
+    executable = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = "Internal executable target that runs build_runner in the source workspace.",
+)
+
+def _emit_build_runner_targets(name, kwargs, build_runner_modes):
+    if not kwargs.get("build_runner_create_run_targets", True):
+        return
+    if not build_runner_modes:
+        return
+
+    mode_arg_map = {
+        "build": kwargs.get("build_runner_build_args", []),
+        "test": kwargs.get("build_runner_test_args", []),
+        "watch": kwargs.get("build_runner_watch_args", []),
+        "serve": kwargs.get("build_runner_serve_args", []),
+    }
+
+    for mode in build_runner_modes:
+        target_name = "{}.build_runner_{}".format(name, mode)
+        target_args = {
+            "name": target_name,
+            "pubspec": kwargs["pubspec"],
+            "mode": mode,
+            "common_args": kwargs.get("build_runner_common_args", []),
+            "mode_args": mode_arg_map.get(mode, []),
+        }
+        if "visibility" in kwargs:
+            target_args["visibility"] = kwargs["visibility"]
+        if "tags" in kwargs:
+            target_args["tags"] = kwargs["tags"]
+        if kwargs.get("testonly", False):
+            target_args["testonly"] = True
+        _build_runner_command_rule(**target_args)
+
 def _compute_relative_to_package(ctx, file):
     """Return file path relative to the package directory."""
 
@@ -306,7 +538,10 @@ def _flutter_library_impl(ctx):
         pubspec_file,
         pub_deps_file,
         transitive_pub_caches,
-        ctx.attr.codegen,
+        generator_commands = ctx.attr.generator_commands,
+        build_runner_common_args = ctx.attr.build_runner_common_args,
+        build_runner_build_args = ctx.attr.build_runner_build_args,
+        run_build_runner_build = "build" in ctx.attr.build_runner_modes,
     )
 
     output_files = [
@@ -362,9 +597,37 @@ _flutter_library_rule = rule(
             allow_files = True,
             doc = "Additional files (assets, l10n data, etc.) needed for code generation or embedding.",
         ),
-        "codegen": attr.string_list(
-            doc = "List of code generation commands to run via `dart run` (e.g., ['intl_utils:generate'])",
+        "generator_commands": attr.string_list(
+            doc = "List of one-shot generator commands to run via `dart run` (e.g., ['intl_utils:generate']).",
             default = [],
+        ),
+        "build_runner_modes": attr.string_list(
+            doc = "Explicit build_runner modes. 'build' runs in Bazel actions; when omitted, bazel run helpers are emitted for build/test/watch/serve by default.",
+            default = [],
+        ),
+        "build_runner_common_args": attr.string_list(
+            doc = "CLI args shared by all build_runner modes.",
+            default = [],
+        ),
+        "build_runner_build_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner build`.",
+            default = [],
+        ),
+        "build_runner_test_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner test` run helper.",
+            default = [],
+        ),
+        "build_runner_watch_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner watch` run helper.",
+            default = [],
+        ),
+        "build_runner_serve_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner serve` run helper.",
+            default = [],
+        ),
+        "build_runner_create_run_targets": attr.bool(
+            doc = "Whether to emit executable build_runner helper targets for enabled modes.",
+            default = True,
         ),
     },
     toolchains = ["//flutter:toolchain_type"],
@@ -393,39 +656,50 @@ def flutter_library(
     if "pubspec" not in kwargs or not kwargs["pubspec"]:
         fail("flutter_library requires the 'pubspec' attribute to be set")
 
+    if "codegen" in kwargs:
+        fail("flutter_library no longer supports 'codegen'; use 'generator_commands' and/or 'build_runner_*' attributes.")
+
     if "pub_deps" not in kwargs:
         kwargs["pub_deps"] = "pub_deps.json"
+
+    has_explicit_build_runner_modes = "build_runner_modes" in kwargs
+    build_runner_modes = _normalize_build_runner_modes(kwargs.get("build_runner_modes", []))
+    _validate_build_runner_config("flutter_library", kwargs, build_runner_modes, has_explicit_build_runner_modes)
+    run_target_build_runner_modes = _build_runner_modes_for_run_targets(
+        has_explicit_build_runner_modes,
+        build_runner_modes,
+    )
+    kwargs["build_runner_modes"] = build_runner_modes
 
     _flutter_library_rule(
         name = name,
         **kwargs
     )
+    _emit_build_runner_targets(name, kwargs, run_target_build_runner_modes)
 
-    if not create_update_target:
-        return
+    if create_update_target:
+        update_args = {
+            "name": name + ".update",
+            "pubspec": kwargs["pubspec"],
+        }
 
-    update_args = {
-        "name": name + ".update",
-        "pubspec": kwargs["pubspec"],
-    }
+        if update_visibility != None:
+            update_args["visibility"] = update_visibility
+        elif "visibility" in kwargs:
+            update_args["visibility"] = kwargs["visibility"]
 
-    if update_visibility != None:
-        update_args["visibility"] = update_visibility
-    elif "visibility" in kwargs:
-        update_args["visibility"] = kwargs["visibility"]
+        tags = None
+        if update_tags != None:
+            tags = update_tags
+        elif "tags" in kwargs:
+            tags = kwargs["tags"]
+        if tags != None:
+            update_args["tags"] = tags
 
-    tags = None
-    if update_tags != None:
-        tags = update_tags
-    elif "tags" in kwargs:
-        tags = kwargs["tags"]
-    if tags != None:
-        update_args["tags"] = tags
+        if kwargs.get("testonly", False):
+            update_args["testonly"] = True
 
-    if kwargs.get("testonly", False):
-        update_args["testonly"] = True
-
-    _pub_deps_update(**update_args)
+        _pub_deps_update(**update_args)
 
 def _create_flutter_run_script(ctx, build_artifacts):
     """Render the runner script that powers `bazel run` for flutter_app targets."""
@@ -1284,7 +1558,10 @@ def _dart_library_impl(ctx):
             pubspec_file,
             pub_deps_input,
             transitive_pub_caches,
-            ctx.attr.codegen,
+            generator_commands = ctx.attr.generator_commands,
+            build_runner_common_args = ctx.attr.build_runner_common_args,
+            build_runner_build_args = ctx.attr.build_runner_build_args,
+            run_build_runner_build = "build" in ctx.attr.build_runner_modes,
             is_pub_package = ctx.attr.pub_package,
         )
         pub_deps = pub_deps_file
@@ -1367,9 +1644,37 @@ _dart_library_rule = rule(
             allow_single_file = True,
             doc = "Checked-in pub_deps.json generated from this package's pubspec.yaml.",
         ),
-        "codegen": attr.string_list(
-            doc = "List of code generation commands to run via `dart run` (e.g., ['intl_utils:generate'])",
+        "generator_commands": attr.string_list(
+            doc = "List of one-shot generator commands to run via `dart run` (e.g., ['intl_utils:generate']).",
             default = [],
+        ),
+        "build_runner_modes": attr.string_list(
+            doc = "Explicit build_runner modes. 'build' runs in Bazel actions; when omitted, bazel run helpers are emitted for build/test/watch/serve by default.",
+            default = [],
+        ),
+        "build_runner_common_args": attr.string_list(
+            doc = "CLI args shared by all build_runner modes.",
+            default = [],
+        ),
+        "build_runner_build_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner build`.",
+            default = [],
+        ),
+        "build_runner_test_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner test` run helper.",
+            default = [],
+        ),
+        "build_runner_watch_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner watch` run helper.",
+            default = [],
+        ),
+        "build_runner_serve_args": attr.string_list(
+            doc = "CLI args forwarded to `build_runner serve` run helper.",
+            default = [],
+        ),
+        "build_runner_create_run_targets": attr.bool(
+            doc = "Whether to emit executable build_runner helper targets for enabled modes.",
+            default = True,
         ),
         "pub_package": attr.bool(
             doc = "True if this target represents a hosted pub.dev package (enables cache publishing).",
@@ -1396,13 +1701,31 @@ def dart_library(
       **kwargs: Forwarded to the underlying dart_library rule.
     """
 
+    if "codegen" in kwargs:
+        fail("dart_library no longer supports 'codegen'; use 'generator_commands' and/or 'build_runner_*' attributes.")
+
     if "pubspec" in kwargs and kwargs["pubspec"] and "pub_deps" not in kwargs:
         kwargs["pub_deps"] = "pub_deps.json"
+
+    has_explicit_build_runner_modes = "build_runner_modes" in kwargs
+    build_runner_modes = _normalize_build_runner_modes(kwargs.get("build_runner_modes", []))
+    _validate_build_runner_config("dart_library", kwargs, build_runner_modes, has_explicit_build_runner_modes)
+    run_target_build_runner_modes = _build_runner_modes_for_run_targets(
+        has_explicit_build_runner_modes,
+        build_runner_modes,
+    )
+    kwargs["build_runner_modes"] = build_runner_modes
+
+    if ("pubspec" not in kwargs or not kwargs["pubspec"]) and _has_build_runner_config(kwargs):
+        fail("dart_library build_runner configuration requires a 'pubspec' attribute.")
 
     _dart_library_rule(
         name = name,
         **kwargs
     )
+
+    if "pubspec" in kwargs and kwargs["pubspec"]:
+        _emit_build_runner_targets(name, kwargs, run_target_build_runner_modes)
 
     # Only create update target if pubspec is provided
     if not create_update_target or "pubspec" not in kwargs or not kwargs["pubspec"]:

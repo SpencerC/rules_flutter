@@ -110,7 +110,7 @@ Outputs from flutter_library needed to build or test Flutter targets.
 | Name  | Description |
 | :------------- | :------------- |
 | <a id="FlutterLibraryInfo-workspace"></a>workspace |  Prepared Flutter workspace tree artifact containing project sources and pub outputs.    |
-| <a id="FlutterLibraryInfo-pub_get_log"></a>pub_get_log |  Captured log from dependency preparation (pub deps, cache assembly, and codegen).    |
+| <a id="FlutterLibraryInfo-pub_get_log"></a>pub_get_log |  Captured log from dependency preparation (pub deps, cache assembly, and generation commands).    |
 | <a id="FlutterLibraryInfo-pub_cache"></a>pub_cache |  Tree artifact containing the assembled pub cache for this library.    |
 | <a id="FlutterLibraryInfo-pub_deps"></a>pub_deps |  JSON dependency report produced by flutter pub deps --json.    |
 | <a id="FlutterLibraryInfo-dart_tool"></a>dart_tool |  Tree artifact containing the generated .dart_tool/package_config.json.    |
@@ -203,5 +203,4 @@ Defines a flutter_library target and optional .update helper.
 | <a id="flutter_library-update_visibility"></a>update_visibility |  Optional visibility override for the `.update` target.   |  `None` |
 | <a id="flutter_library-update_tags"></a>update_tags |  Optional tag list override for the `.update` target.   |  `None` |
 | <a id="flutter_library-kwargs"></a>kwargs |  Forwarded to the underlying flutter_library rule.   |  none |
-
 

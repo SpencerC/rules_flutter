@@ -135,7 +135,18 @@ done < "$MANIFEST_FILE"
 
     return working_dir, input_files
 
-def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, pub_deps_file, dependency_pub_caches = [], codegen_commands = [], is_pub_package = False):
+def flutter_pub_get_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        pubspec_file,
+        pub_deps_file,
+        dependency_pub_caches = [],
+        generator_commands = [],
+        build_runner_common_args = [],
+        build_runner_build_args = [],
+        run_build_runner_build = False,
+        is_pub_package = False):
     """Prepare Flutter/Dart dependencies from declared pub_deps.json metadata.
 
     Args:
@@ -145,7 +156,14 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, pu
         pubspec_file: The pubspec.yaml file for the library.
         pub_deps_file: Checked-in or repository-generated pub_deps.json.
         dependency_pub_caches: Files or depsets with pub cache directories from dependencies.
-        codegen_commands: Optional list of code generation commands (package:script).
+        generator_commands: Optional list of one-shot code generation commands
+            (package:script).
+        build_runner_common_args: Optional list of CLI args shared by all
+            build_runner modes.
+        build_runner_build_args: Optional list of CLI args passed to
+            `build_runner build`.
+        run_build_runner_build: Whether to run `dart run build_runner build`
+            in this action.
         is_pub_package: Whether the target represents a hosted pub.dev package.
 
     Returns:
@@ -174,7 +192,12 @@ def flutter_pub_get_action(ctx, flutter_toolchain, working_dir, pubspec_file, pu
     for dep_cache in dep_pub_cache_files:
         dep_pub_cache_args.append(dep_cache.path)
 
-    codegen_args = ["\"{}\"".format(cmd) for cmd in codegen_commands]
+    def _shell_quote(arg):
+        return "'" + arg.replace("'", "'\"'\"'") + "'"
+
+    generator_args = [_shell_quote(cmd) for cmd in generator_commands]
+    build_runner_common_args_quoted = [_shell_quote(arg) for arg in build_runner_common_args]
+    build_runner_build_args_quoted = [_shell_quote(arg) for arg in build_runner_build_args]
 
     script_content = """#!/bin/bash
 set -euo pipefail
@@ -521,14 +544,14 @@ with open(config_path, "w", encoding="utf-8") as fh:
     fh.write("\\n")
 PY
 
-CODEGEN_COMMANDS=({codegen_commands})
-if [ ${{#CODEGEN_COMMANDS[@]}} -gt 0 ]; then
+GENERATOR_COMMANDS=({generator_commands})
+if [ ${{#GENERATOR_COMMANDS[@]}} -gt 0 ]; then
     DART_BIN_LOCAL="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
     if [ ! -x "$DART_BIN_LOCAL" ]; then
         echo "✗ FATAL ERROR: Dart binary not found at $DART_BIN_LOCAL" >&2
         exit 1
     fi
-    for CODEGEN_CMD in "${{CODEGEN_COMMANDS[@]}}"; do
+    for CODEGEN_CMD in "${{GENERATOR_COMMANDS[@]}}"; do
         if [ -n "$CODEGEN_CMD" ]; then
             echo "Running code generation: $CODEGEN_CMD"
             CODEGEN_ENTRYPOINT="$(
@@ -553,7 +576,7 @@ else:
     executable = command
 
 if not package or not executable:
-    sys.stderr.write("Invalid codegen command: {{}}\\n".format(os.environ["CODEGEN_CMD"]))
+    sys.stderr.write("Invalid generator command: {{}}\\n".format(os.environ["CODEGEN_CMD"]))
     sys.exit(1)
 
 with open(config_path, "r", encoding="utf-8") as fh:
@@ -587,13 +610,54 @@ print(entrypoint)
 PY
             )"
             if ! "$DART_BIN_LOCAL" --packages="$PACKAGE_CONFIG_PATH" "$CODEGEN_ENTRYPOINT"; then
-                echo "✗ FATAL ERROR: Code generation command '$CODEGEN_CMD' failed" >&2
+                echo "✗ FATAL ERROR: Generator command '$CODEGEN_CMD' failed" >&2
                 exit 1
             fi
         fi
     done
     rm -f .dart_tool/version 2>/dev/null || true
     rm -f .dart_tool/package_config_subset 2>/dev/null || true
+fi
+
+BUILD_RUNNER_COMMON_ARGS=({build_runner_common_args})
+BUILD_RUNNER_BUILD_ARGS=({build_runner_build_args})
+if [ "{run_build_runner_build}" = "1" ]; then
+    DART_BIN_LOCAL="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+    if [ ! -x "$DART_BIN_LOCAL" ]; then
+        echo "✗ FATAL ERROR: Dart binary not found at $DART_BIN_LOCAL" >&2
+        exit 1
+    fi
+
+    if ! "$PYTHON_BIN" - "$WORKSPACE_ABS/pub_deps.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+
+for entry in data.get("packages", []):
+    if entry.get("name") == "build_runner":
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+    then
+        echo "✗ FATAL ERROR: build_runner requested but not present in pub_deps.json" >&2
+        exit 1
+    fi
+
+    CMD=("$DART_BIN_LOCAL" "run" "build_runner" "build")
+    if [ ${{#BUILD_RUNNER_COMMON_ARGS[@]}} -gt 0 ]; then
+        CMD+=("${{BUILD_RUNNER_COMMON_ARGS[@]}}")
+    fi
+    if [ ${{#BUILD_RUNNER_BUILD_ARGS[@]}} -gt 0 ]; then
+        CMD+=("${{BUILD_RUNNER_BUILD_ARGS[@]}}")
+    fi
+
+    echo "Running build_runner build: ${{CMD[*]}}"
+    if ! "${{CMD[@]}}"; then
+        echo "✗ FATAL ERROR: build_runner build failed" >&2
+        exit 1
+    fi
 fi
 
 echo ""
@@ -607,7 +671,10 @@ echo "=== Dependency preparation complete ==="
         dart_tool_dir = dart_tool_dir.path,
         flutter_bin = flutter_bin,
         dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
-        codegen_commands = " ".join(codegen_args),
+        generator_commands = " ".join(generator_args),
+        build_runner_common_args = " ".join(build_runner_common_args_quoted),
+        build_runner_build_args = " ".join(build_runner_build_args_quoted),
+        run_build_runner_build = "1" if run_build_runner_build else "0",
         is_pub_package = "1" if is_pub_package else "0",
     )
 

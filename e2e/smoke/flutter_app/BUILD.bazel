@@ -4,8 +4,8 @@ load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flut
 flutter_library(
     name = "lib",
     srcs = ["lib/main.dart"],
-    codegen = ["intl_utils:generate"],
     data = glob(["l10n/**"]),
+    generator_commands = ["intl_utils:generate"],
     pubspec = "pubspec.yaml",
     deps = [
         "@flutter_sdk//flutter/packages/flutter",
@@ -37,6 +37,16 @@ flutter_app(
 build_test(
     name = "app_build_test",
     targets = [":app.web"],
+)
+
+build_test(
+    name = "build_runner_mode_targets_test",
+    targets = [
+        ":lib.build_runner_build",
+        ":lib.build_runner_test",
+        ":lib.build_runner_watch",
+        ":lib.build_runner_serve",
+    ],
 )
 
 filegroup(

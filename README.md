@@ -65,8 +65,8 @@ structure a Flutter+Bazel project. Key takeaways:
 - **Register toolchains up front:** Mirror `e2e/smoke/MODULE.bazel` so Bazel
   always knows which Flutter SDK to use.
 - **Keep pubspec assets colocated:** Place `pubspec.yaml`, `pub_deps.json`, and
-  `flutter_library` targets in the same package. Declare code generators in
-  `codegen = [...]` (see `e2e/smoke/flutter_app/BUILD.bazel`).
+  `flutter_library` targets in the same package. Declare generator commands in
+  `generator_commands = [...]` (see `e2e/smoke/flutter_app/BUILD.bazel`).
 - **Regenerate BUILD files with Gazelle:** The workspace defines a custom
   `gazelle_binary` that understands Flutter, proto, and Starlark sources.
 
