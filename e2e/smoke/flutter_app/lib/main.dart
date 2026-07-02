@@ -7,6 +7,11 @@ import 'package:hello_world/generated/l10n.dart';
 // ARB files are in l10n/ and generated files will be emitted into
 // lib/generated/ after running 'flutter pub run intl_utils:generate'.
 
+// Injected by the flutter_app dart_defines attribute; rendered below so the
+// constant survives tree shaking and the e2e test can assert on the bundle.
+const String smokeDefine =
+    String.fromEnvironment('SMOKE_DEFINE', defaultValue: 'smoke-define-unset');
+
 void main() {
   runApp(const MyApp());
 }
@@ -69,6 +74,7 @@ class _MyHomePageState extends State<MyHomePage> {
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+            const Text(smokeDefine),
           ],
         ),
       ),

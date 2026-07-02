@@ -223,6 +223,38 @@ bazel build //:my_app.web
 bazel test //:my_app_test
 ```
 
+### Customizing builds: dart_defines, build_args, and mode
+
+`flutter_app` supports compile-time configuration shared across platforms or
+scoped per platform. Each platform attribute accepts either overlay files (as
+above) or a dict spec with `srcs`, `dart_defines`, `build_args`, `mode`, and
+`env` keys:
+
+```starlark
+flutter_app(
+    name = "my_app",
+    embed = [":app_lib"],
+    # Shared by all platforms; select() is supported for per-environment
+    # config keyed off a string_flag.
+    dart_defines = select({
+        "//:prod": {"API_ENDPOINT": "api.example.com", "ENV_NAME": "prod"},
+        "//conditions:default": {"API_ENDPOINT": "api.dev.example.com", "ENV_NAME": "dev"},
+    }),
+    build_args = ["--no-tree-shake-icons"],
+    web = {
+        "srcs": glob(["web/**"]),
+        "build_args": ["--source-maps"],  # appended after the shared args
+        "mode": "release",                # or "profile" / "debug"
+    },
+)
+```
+
+Values read via `String.fromEnvironment` in Dart receive the configured
+`--dart-define` pairs. Per-platform `build_args` concatenate after the shared
+list; `dart_defines`/`env` dicts merge with platform keys winning. One
+Starlark limitation to know about: two `select()`s cannot be merged, so when
+using `select()` compose the complete dict per branch.
+
 When dependencies change, rerun the generated helper to refresh your pub cache
 snapshot:
 

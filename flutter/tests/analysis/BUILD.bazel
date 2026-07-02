@@ -1,0 +1,64 @@
+load("//flutter:defs.bzl", "flutter_app", "flutter_library")
+load(":defs_analysis_test.bzl", "build_command_test")
+
+# Fixture targets are analysis-only: the analysis tests inspect their action
+# graphs without executing them. Tagged manual so wildcard builds skip them.
+flutter_library(
+    name = "fixture_lib",
+    srcs = ["lib/main.dart"],
+    pubspec = "pubspec.yaml",
+    tags = ["manual"],
+)
+
+flutter_app(
+    name = "fixture_app",
+    build_args = ["--no-tree-shake-icons"],
+    dart_defines = {"COMMON_DEFINE": "common-value"},
+    embed = [":fixture_lib"],
+    tags = ["manual"],
+    web = {
+        "srcs": [],
+        "build_args": ["--source-maps"],
+        "dart_defines": {"WEB_DEFINE": "web value with spaces"},
+        "mode": "profile",
+    },
+)
+
+flutter_app(
+    name = "fixture_default_app",
+    embed = [":fixture_lib"],
+    tags = ["manual"],
+    web = [],
+)
+
+build_command_test(
+    name = "build_command_customization_test",
+    absent_substrings = ["--release"],
+    expected_substrings = [
+        "'--profile'",
+        "'--dart-define=COMMON_DEFINE=common-value'",
+        "'--dart-define=WEB_DEFINE=web value with spaces'",
+        "'--no-tree-shake-icons' '--source-maps'",
+    ],
+    target_under_test = ":fixture_app.web",
+)
+
+build_command_test(
+    name = "build_command_defaults_test",
+    absent_substrings = [
+        "--dart-define",
+        "--profile",
+    ],
+    expected_substrings = [
+        "'build' 'web' '--no-pub' '--release'",
+    ],
+    target_under_test = ":fixture_default_app.web",
+)
+
+test_suite(
+    name = "analysis_tests",
+    tests = [
+        ":build_command_customization_test",
+        ":build_command_defaults_test",
+    ],
+)

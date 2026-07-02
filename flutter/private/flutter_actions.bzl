@@ -1,5 +1,9 @@
 """Flutter command execution actions for Bazel rules."""
 
+def shell_quote(arg):
+    """Quote a string for safe interpolation into a bash script."""
+    return "'" + arg.replace("'", "'\"'\"'") + "'"
+
 def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files):
     """Create a working directory structure for Flutter commands.
 
@@ -192,12 +196,9 @@ def flutter_pub_get_action(
     for dep_cache in dep_pub_cache_files:
         dep_pub_cache_args.append(dep_cache.path)
 
-    def _shell_quote(arg):
-        return "'" + arg.replace("'", "'\"'\"'") + "'"
-
-    generator_args = [_shell_quote(cmd) for cmd in generator_commands]
-    build_runner_common_args_quoted = [_shell_quote(arg) for arg in build_runner_common_args]
-    build_runner_build_args_quoted = [_shell_quote(arg) for arg in build_runner_build_args]
+    generator_args = [shell_quote(cmd) for cmd in generator_commands]
+    build_runner_common_args_quoted = [shell_quote(arg) for arg in build_runner_common_args]
+    build_runner_build_args_quoted = [shell_quote(arg) for arg in build_runner_build_args]
 
     script_content = """#!/bin/bash
 set -euo pipefail
@@ -742,7 +743,17 @@ echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
 
     return prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir
 
-def flutter_build_action(ctx, flutter_toolchain, working_dir, target, pub_cache_dir, dart_tool_dir):
+def flutter_build_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        target,
+        pub_cache_dir,
+        dart_tool_dir,
+        mode = "release",
+        dart_defines = {},
+        build_args = [],
+        env = {}):
     """Execute flutter build command for the specified target.
 
     Args:
@@ -752,6 +763,10 @@ def flutter_build_action(ctx, flutter_toolchain, working_dir, target, pub_cache_
         target: Build target (web, apk, ios, etc.)
         pub_cache_dir: Assembled pub cache directory used for offline resolution
         dart_tool_dir: Prepared .dart_tool directory containing package_config metadata
+        mode: Flutter build mode (release, profile, or debug)
+        dart_defines: Dict of compile-time --dart-define key/value pairs
+        build_args: Extra args appended verbatim to the flutter build command
+        env: Extra environment variables exported before invoking flutter
 
     Returns:
         Tuple of (build_output, build_artifacts_dir)
@@ -767,35 +782,57 @@ def flutter_build_action(ctx, flutter_toolchain, working_dir, target, pub_cache_
     build_output = ctx.actions.declare_file(ctx.label.name + "_build.log")
     build_artifacts = ctx.actions.declare_directory(ctx.label.name + "_build_artifacts")
 
-    # Map targets to Flutter build commands and output paths
+    # Map targets to Flutter build args and output paths. {mode}/{Mode} are
+    # substituted with the requested build mode.
     target_configs = {
         "web": {
-            "command": "build web --release --no-pub",
+            "args": ["build", "web", "--no-pub"],
             "output_dir": "build/web",
         },
         "apk": {
-            "command": "build apk --release --no-pub",
+            "args": ["build", "apk", "--no-pub"],
             "output_dir": "build/app/outputs/flutter-apk",
         },
         "ios": {
-            "command": "build ios --release --no-codesign --no-pub",
+            "args": ["build", "ios", "--no-codesign", "--no-pub"],
             "output_dir": "build/ios/iphoneos",
         },
         "macos": {
-            "command": "build macos --release --no-pub",
-            "output_dir": "build/macos/Build/Products/Release",
+            "args": ["build", "macos", "--no-pub"],
+            "output_dir": "build/macos/Build/Products/{Mode}",
         },
         "linux": {
-            "command": "build linux --release --no-pub",
-            "output_dir": "build/linux/x64/release/bundle",
+            "args": ["build", "linux", "--no-pub"],
+            "output_dir": "build/linux/x64/{mode}/bundle",
         },
         "windows": {
-            "command": "build windows --release --no-pub",
-            "output_dir": "build/windows/x64/runner/Release",
+            "args": ["build", "windows", "--no-pub"],
+            "output_dir": "build/windows/x64/runner/{Mode}",
         },
     }
 
     config = target_configs.get(target, target_configs["web"])
+
+    command_args = list(config["args"])
+    command_args.append("--" + mode)
+    for key in sorted(dart_defines.keys()):
+        command_args.append("--dart-define={}={}".format(key, dart_defines[key]))
+    command_args.extend(build_args)
+    build_command = " ".join([shell_quote(arg) for arg in command_args])
+
+    output_dir = config["output_dir"].replace("{mode}", mode).replace("{Mode}", mode.capitalize())
+
+    env_exports = "\n".join([
+        "export {}={}".format(key, shell_quote(env[key]))
+        for key in sorted(env.keys())
+    ])
+
+    # TODO(mobile): once an Android SDK toolchain is wired up, export the real
+    # ANDROID_HOME/JAVA_HOME for Android targets instead of skipping the blank.
+    if target in ["apk", "appbundle"]:
+        android_env_exports = ""
+    else:
+        android_env_exports = "export ANDROID_HOME=\"\"\nexport ANDROID_SDK_ROOT=\"\""
 
     script_content = """#!/bin/bash
 set -euo pipefail
@@ -806,7 +843,6 @@ DART_TOOL_DIR="{dart_tool_dir}"
 FLUTTER_BIN="{flutter_bin}"
 OUTPUT_LOG="{output_log}"
 BUILD_ARTIFACTS="{build_artifacts}"
-BUILD_COMMAND="{build_command}"
 BUILD_OUTPUT_DIR="{build_output_dir}"
 ORIGINAL_PWD="$PWD"
 
@@ -847,10 +883,10 @@ FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN_ABS")/.." && pwd -P)"
 export FLUTTER_SUPPRESS_ANALYTICS=true
 export CI=true
 export PUB_ENVIRONMENT="flutter_tool:bazel"
-export ANDROID_HOME=""
-export ANDROID_SDK_ROOT=""
+{android_env_exports}
 export FLUTTER_ROOT
 export PATH="$FLUTTER_ROOT/bin:$PATH"
+{env_exports}
 
 # Copy the prepared workspace input into a mutable directory for Flutter. Bazel
 # may present input tree artifacts as read-only in the sandbox.
@@ -1073,9 +1109,11 @@ fi
         flutter_bin = flutter_bin,
         output_log = build_output.path,
         build_artifacts = build_artifacts.path,
-        build_command = config["command"],
-        build_output_dir = config["output_dir"],
+        build_command = build_command,
+        build_output_dir = output_dir,
         target = target,
+        env_exports = env_exports,
+        android_env_exports = android_env_exports,
     )
 
     # Execute build

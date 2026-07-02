@@ -1,0 +1,6 @@
+name: analysis_fixture
+description: Fixture package for rules_flutter analysis tests.
+publish_to: "none"
+version: 0.0.1
+environment:
+  sdk: ">=3.0.0 <4.0.0"

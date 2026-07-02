@@ -845,6 +845,10 @@ fi
         ctx.attr.target,
         library_info.pub_cache,
         library_info.dart_tool,
+        mode = ctx.attr.mode,
+        dart_defines = ctx.attr.dart_defines,
+        build_args = ctx.attr.build_args,
+        env = ctx.attr.env,
     )
 
     runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
@@ -888,6 +892,25 @@ _flutter_app_rule = rule(
             values = ["web", "apk", "ios", "macos", "linux", "windows"],
             doc = "Flutter build target platform",
         ),
+        "mode": attr.string(
+            values = ["release", "profile", "debug"],
+            default = "release",
+            doc = "Flutter build mode passed to `flutter build` (--release/--profile/--debug).",
+        ),
+        "dart_defines": attr.string_dict(
+            default = {},
+            doc = """Compile-time --dart-define key/value pairs, rendered sorted by key.
+Configurable with select(); when using select(), compose the complete dict per
+branch (Starlark cannot merge two selects).""",
+        ),
+        "build_args": attr.string_list(
+            default = [],
+            doc = "Extra arguments appended verbatim to the flutter build command (e.g. --source-maps, --build-name=1.2.3).",
+        ),
+        "env": attr.string_dict(
+            default = {},
+            doc = "Extra environment variables exported in the build action before invoking flutter.",
+        ),
     },
     executable = True,
     toolchains = ["//flutter:toolchain_type"],
@@ -901,6 +924,42 @@ def _to_label_list(value):
         return value
     return [value]
 
+_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env"]
+
+def _normalize_platform_spec(platform, value):
+    """Normalize a flutter_app platform argument to a dict spec.
+
+    Accepts the legacy forms (a label or list of labels, treated as srcs) or a
+    dict with keys from _PLATFORM_SPEC_KEYS.
+    """
+    if type(value) != type({}):
+        return {"srcs": _to_label_list(value)}
+    for key in value.keys():
+        if key not in _PLATFORM_SPEC_KEYS:
+            fail("flutter_app platform '{}' spec has unknown key '{}'. Allowed keys: {}.".format(
+                platform,
+                key,
+                _PLATFORM_SPEC_KEYS,
+            ))
+    return value
+
+def _merge_dict_attr(name, platform, common, override):
+    """Merge a common and per-platform dict attribute (platform keys win).
+
+    select() values cannot be merged in Starlark, so when either side is a
+    select the platform spec must carry the complete dict.
+    """
+    if override == None:
+        return common
+    if common == None:
+        return override
+    if type(common) == type({}) and type(override) == type({}):
+        merged = dict(common)
+        merged.update(override)
+        return merged
+    fail("flutter_app platform '{}' and the common attribute both set '{}' and at least one is a select(). ".format(platform, name) +
+         "Compose the complete dict on the platform spec instead.")
+
 def flutter_app(
         *,
         name,
@@ -909,6 +968,10 @@ def flutter_app(
         visibility = None,
         tags = None,
         testonly = False,
+        dart_defines = None,
+        build_args = None,
+        mode = None,
+        env = None,
         web = None,
         apk = None,
         ios = None,
@@ -918,9 +981,14 @@ def flutter_app(
     """Macro that defines flutter_app platform targets.
 
     Each platform attribute (`web`, `apk`, `ios`, `macos`, `linux`, `windows`) accepts
-    labels for files that should be overlaid into the Flutter workspace when building
-    for that platform. A target is emitted only when the corresponding attribute is
-    provided.
+    either labels for files that should be overlaid into the Flutter workspace when
+    building for that platform, or a dict spec with any of the keys `srcs`,
+    `dart_defines`, `build_args`, `mode`, and `env` to customize that platform's
+    build. A target is emitted only when the corresponding attribute is provided.
+
+    Common `dart_defines`/`build_args`/`mode`/`env` apply to every platform;
+    per-platform values merge over them (`build_args` concatenates, dicts merge
+    with platform keys winning, `mode` overrides).
 
     Args:
       name: The base name for the flutter_app targets.
@@ -929,12 +997,17 @@ def flutter_app(
       visibility: Visibility specification for generated targets.
       tags: Tags to apply to generated targets.
       testonly: Whether the targets are testonly.
-      web: Label for web-specific files (e.g., web/index.html). If provided, generates {name}.web target.
-      apk: Label for Android APK-specific files. If provided, generates {name}.apk target.
-      ios: Label for iOS-specific files. If provided, generates {name}.ios target.
-      macos: Label for macOS-specific files. If provided, generates {name}.macos target.
-      linux: Label for Linux-specific files. If provided, generates {name}.linux target.
-      windows: Label for Windows-specific files. If provided, generates {name}.windows target.
+      dart_defines: Dict of --dart-define key/value pairs shared by all platforms.
+        Supports select(); compose complete dicts per select() branch.
+      build_args: Extra flutter build arguments shared by all platforms.
+      mode: Build mode (release, profile, debug) shared by all platforms.
+      env: Extra action environment variables shared by all platforms.
+      web: Files or dict spec for the {name}.web target.
+      apk: Files or dict spec for the {name}.apk target.
+      ios: Files or dict spec for the {name}.ios target.
+      macos: Files or dict spec for the {name}.macos target.
+      linux: Files or dict spec for the {name}.linux target.
+      windows: Files or dict spec for the {name}.windows target.
     """
 
     platform_specs = {
@@ -950,17 +1023,38 @@ def flutter_app(
 
     generated = []
 
-    for platform, platform_srcs in platform_specs.items():
-        if platform_srcs == None:
+    for platform, platform_value in platform_specs.items():
+        if platform_value == None:
             continue
+
+        spec = _normalize_platform_spec(platform, platform_value)
 
         target_name = "{}.{}".format(name, platform)
         rule_args = {
             "name": target_name,
             "embed": embed,
-            "srcs": common_srcs + _to_label_list(platform_srcs),
+            "srcs": common_srcs + _to_label_list(spec.get("srcs")),
             "target": platform,
         }
+
+        merged_dart_defines = _merge_dict_attr("dart_defines", platform, dart_defines, spec.get("dart_defines"))
+        if merged_dart_defines != None:
+            rule_args["dart_defines"] = merged_dart_defines
+
+        merged_env = _merge_dict_attr("env", platform, env, spec.get("env"))
+        if merged_env != None:
+            rule_args["env"] = merged_env
+
+        # select() values cannot be truth-tested, so compare against None only.
+        platform_build_args = spec.get("build_args")
+        if build_args != None or platform_build_args != None:
+            common_build_args = build_args if build_args != None else []
+            extra_build_args = platform_build_args if platform_build_args != None else []
+            rule_args["build_args"] = common_build_args + extra_build_args
+
+        platform_mode = spec.get("mode", mode)
+        if platform_mode != None:
+            rule_args["mode"] = platform_mode
 
         if visibility != None:
             rule_args["visibility"] = visibility

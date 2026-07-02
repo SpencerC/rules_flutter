@@ -1,6 +1,7 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flutter_test")
 load("@rules_multirun//:defs.bzl", "command", "multirun")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 flutter_library(
     name = "lib",
@@ -27,17 +28,28 @@ flutter_test(
     visibility = ["//visibility:public"],
 )
 
-# Flutter app in the same directory as pubspec.yaml
+# Flutter app in the same directory as pubspec.yaml. The web platform uses a
+# dict spec to exercise dart_defines and extra build args end to end.
 flutter_app(
     name = "app",
+    dart_defines = {"SMOKE_DEFINE": "smoke-define-e2e-value"},
     embed = [":lib"],
     visibility = ["//visibility:public"],
-    web = ":web_files",
+    web = {
+        "srcs": [":web_files"],
+        "build_args": ["--source-maps"],
+    },
 )
 
 build_test(
     name = "app_build_test",
     targets = [":app.web"],
+)
+
+sh_test(
+    name = "web_build_args_test",
+    srcs = ["web_build_args_test.sh"],
+    data = [":app.web"],
 )
 
 build_test(

@@ -1,0 +1,12 @@
+{
+  "root": "analysis_fixture",
+  "packages": [
+    {
+      "name": "analysis_fixture",
+      "version": "0.0.1",
+      "kind": "root",
+      "source": "root",
+      "dependencies": []
+    }
+  ]
+}

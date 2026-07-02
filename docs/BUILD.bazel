@@ -1,10 +1,18 @@
 # This load statement must be in the docs/ package rather than anything users depend on
 # so that the dependency on stardoc doesn't leak to them.
-load("@aspect_bazel_lib//lib:docs.bzl", "stardoc_with_diff_test", "update_docs")
+load("@aspect_bazel_lib//lib:docs.bzl", "stardoc_with_diff_test")
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 
 stardoc_with_diff_test(
     name = "rules",
     bzl_library_target = "//flutter:defs",
 )
 
-update_docs(name = "update")
+# Explicit file map rather than update_docs(): the auto-discovery in
+# update_docs matched nothing here, silently writing no files and creating no
+# diff test, which let docs/rules.md go stale. This also emits :update_test,
+# which gates staleness in //flutter/tests:all_tests.
+write_source_files(
+    name = "update",
+    files = {"rules.md": ":rules-docgen.md"},
+)
