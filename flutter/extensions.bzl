@@ -186,10 +186,26 @@ def _extract_description_url(description):
         )
     return None
 
-def _register_repo(repo_map, repo_name, package, version, origin):
-    """Merge repository metadata ensuring consistency across lockfiles/tags."""
+def _register_repo(repo_map, repo_name, package, version, origin, from_root = True):
+    """Merge repository metadata ensuring consistency across lockfiles/tags.
+
+    Root-module registrations (pub_deps.json scans and root pub.package tags)
+    take precedence: a conflicting non-root tag — e.g. a ruleset pinning a
+    default tooling version — is silently ignored when the root already pinned
+    the package.
+    """
     existing = repo_map.get(repo_name)
     if existing:
+        if not from_root and existing["from_root"]:
+            return
+        if from_root and not existing["from_root"]:
+            repo_map[repo_name] = {
+                "package": package,
+                "version": version,
+                "origins": [origin],
+                "from_root": True,
+            }
+            return
         if existing["package"] != package:
             fail(
                 "Repository '{}' resolves to multiple packages: '{}' from {} vs '{}' from {}".format(
@@ -219,6 +235,7 @@ def _register_repo(repo_map, repo_name, package, version, origin):
         "package": package,
         "version": version,
         "origins": [origin],
+        "from_root": from_root,
     }
 
 def _pub_extension(module_ctx):
@@ -251,13 +268,14 @@ def _pub_extension(module_ctx):
 
     for mod in module_ctx.modules:
         for pkg in mod.tags.package:
-            origin = "MODULE.bazel:{}".format(pkg.name)
+            origin = "{}/MODULE.bazel:{}".format(mod.name or "root", pkg.name)
             _register_repo(
                 repos,
                 pkg.name,
                 pkg.package,
                 pkg.version,
                 origin,
+                from_root = mod.is_root,
             )
 
     for repo_name in sorted(repos.keys()):

@@ -1840,20 +1840,6 @@ dart_format_test = rule(
     doc = "Fails when any of the given Dart sources are not dart-format clean.",
 )
 
-def _compute_repo_relative_path(ctx, artifact, repo_name):
-    """Compute relative path from generated artifact to an external repository root."""
-
-    bin_segments = [segment for segment in ctx.bin_dir.path.split("/") if segment]
-    short_dir = paths.dirname(artifact.short_path)
-    short_segments = []
-    if short_dir and short_dir != ".":
-        short_segments = [segment for segment in short_dir.split("/") if segment]
-
-    up_count = len(bin_segments) + len(short_segments)
-    components = [".."] * up_count
-    components.extend(["external", repo_name, "lib"])
-    return "/".join(components).replace("+", "%2B")
-
 def _dart_proto_aspect_impl(target, ctx):
     """Generate Dart sources for one proto_library node in the deps closure."""
 
@@ -1874,46 +1860,20 @@ def _dart_proto_aspect_impl(target, ctx):
     dart_bin = paths.normalize(paths.join(flutter_bin_dir, "cache", "dart-sdk", "bin", "dart"))
 
     tree = ctx.actions.declare_directory(ctx.label.name + ".dart_pb")
-    package_config = ctx.actions.declare_file(ctx.label.name + ".dart_pb_package_config.json")
     wrapper_script = ctx.actions.declare_file(ctx.label.name + ".dart_pb_protoc_gen_dart.sh")
 
     plugin_repo = ctx.attr._dart_plugin_files.label.workspace_name
     protobuf_repo = ctx.attr._protobuf_pkg.label.workspace_name
     fixnum_repo = ctx.attr._fixnum_pkg.label.workspace_name
     path_repo = ctx.attr._path_pkg.label.workspace_name
+    meta_repo = ctx.attr._meta_pkg.label.workspace_name
 
-    package_entries = []
-    for (pkg, repo) in [
-        ("protoc_plugin", plugin_repo),
-        ("protobuf", protobuf_repo),
-        ("fixnum", fixnum_repo),
-        ("path", path_repo),
-    ]:
-        package_entries.append(
-            """    {{
-      "name": "{name}",
-      "rootUri": "{root}",
-      "packageUri": "lib/",
-      "languageVersion": "2.19"
-    }}""".format(
-                name = pkg,
-                root = _compute_repo_relative_path(ctx, package_config, repo),
-            ),
-        )
-
-    package_config_content = "{\n  \"configVersion\": 2,\n  \"packages\": [\n" + ",\n".join(package_entries) + "\n  ]\n}\n"
-
-    ctx.actions.write(
-        output = package_config,
-        content = package_config_content,
-    )
-
+    # The plugin's package config is generated at runtime so each package's
+    # languageVersion is derived from its own pubspec (a hardcoded value breaks
+    # whenever the pinned protoc_plugin generation moves across Dart releases).
     wrapper_content = """#!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DART_PACKAGE_CONFIG="$SCRIPT_DIR/{package_config}"
-export DART_PACKAGE_CONFIG
 DART_BIN="{dart}"
 if [ ! -x "$DART_BIN" ]; then
     if [ -x "${{DART_BIN}}.exe" ]; then
@@ -1921,11 +1881,58 @@ if [ ! -x "$DART_BIN" ]; then
     fi
 fi
 
-exec "$DART_BIN" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
+PYTHON_BIN="$(command -v python3 || command -v python)"
+PKG_CONFIG="$(mktemp -d)/package_config.json"
+
+PKG_CONFIG="$PKG_CONFIG" PKG_ROOTS="protoc_plugin=$PWD/external/{plugin_repo} protobuf=$PWD/external/{protobuf_repo} fixnum=$PWD/external/{fixnum_repo} path=$PWD/external/{path_repo} meta=$PWD/external/{meta_repo}" "$PYTHON_BIN" <<'PYEOF'
+import json
+import os
+
+def language_version(root):
+    pubspec = os.path.join(root, "pubspec.yaml")
+    version = "3.0"
+    if not os.path.exists(pubspec):
+        return version
+    capture = False
+    with open(pubspec, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped.startswith("environment:"):
+                capture = True
+                continue
+            if capture and stripped.startswith("sdk:"):
+                spec = stripped.split(":", 1)[1].strip().strip("'").strip('"')
+                spec = spec.replace(">=", " ").replace("^", " ").split()
+                if spec:
+                    parts = spec[0].split(".")
+                    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                        version = parts[0] + "." + parts[1]
+                break
+    return version
+
+packages = []
+for item in os.environ["PKG_ROOTS"].split():
+    name, root = item.split("=", 1)
+    packages.append({{
+        "name": name,
+        "rootUri": "file://" + root,
+        "packageUri": "lib/",
+        "languageVersion": language_version(root),
+    }})
+
+with open(os.environ["PKG_CONFIG"], "w", encoding="utf-8") as fh:
+    json.dump({{"configVersion": 2, "packages": packages}}, fh, indent=2)
+PYEOF
+
+export DART_PACKAGE_CONFIG="$PKG_CONFIG"
+exec "$DART_BIN" --packages="$PKG_CONFIG" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
 """.format(
-        package_config = package_config.basename,
         dart = dart_bin,
         plugin_repo = plugin_repo,
+        protobuf_repo = protobuf_repo,
+        fixnum_repo = fixnum_repo,
+        path_repo = path_repo,
+        meta_repo = meta_repo,
     )
 
     ctx.actions.write(
@@ -1936,12 +1943,12 @@ exec "$DART_BIN" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
 
     tool_inputs = depset(flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files)
     additional_inputs = depset(
-        direct = [package_config],
         transitive = [
             ctx.attr._dart_plugin_files[DefaultInfo].files,
             ctx.attr._protobuf_pkg[DefaultInfo].files,
             ctx.attr._fixnum_pkg[DefaultInfo].files,
             ctx.attr._path_pkg[DefaultInfo].files,
+            ctx.attr._meta_pkg[DefaultInfo].files,
             tool_inputs,
         ],
     )
@@ -2001,6 +2008,9 @@ _dart_proto_aspect = aspect(
         ),
         "_path_pkg": attr.label(
             default = Label("@pub_path//:path_files"),
+        ),
+        "_meta_pkg": attr.label(
+            default = Label("@pub_meta//:meta_files"),
         ),
     },
     required_providers = [ProtoInfo],
