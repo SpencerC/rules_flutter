@@ -5,7 +5,11 @@ load("@rules_flutter//flutter:defs.bzl", "dart_proto_library")
 proto_library(
     name = "services_api_v1_proto",
     srcs = ["service.proto"],
+    # Import path becomes api/v1/service.proto, matching consumer monorepos
+    # that root proto imports below a protos/ directory.
+    strip_import_prefix = "/protos/",
     visibility = ["//visibility:public"],
+    deps = ["@protobuf//:timestamp_proto"],
 )
 
 dart_proto_library(

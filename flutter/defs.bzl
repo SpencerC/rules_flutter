@@ -42,11 +42,17 @@ DartLibraryInfo = provider(
 DartProtoLibraryInfo = provider(
     doc = "Generated Dart sources produced from .proto files.",
     fields = {
-        "sources": "Depset of generated Dart source files (.pb.dart, .pbgrpc.dart).",
-        "source_roots": """List of structs (file, rel_path) where rel_path is the
-generated file's path relative to the proto source root (i.e. mirroring the
-proto import path, e.g. 'api/v1/service.pb.dart'). Used to mount generated
-sources at a chosen directory inside a Flutter package workspace.""",
+        "sources": """Depset of tree artifacts, one per proto_library in the
+transitive closure, each laid out by proto import path (e.g.
+`api/v1/service.pb.dart`). Mount them into a package workspace with the
+`generated_srcs` attribute of flutter_library/dart_library.""",
+    },
+)
+
+DartProtoAspectInfo = provider(
+    doc = "Internal: per-proto_library Dart generation results, propagated along deps.",
+    fields = {
+        "trees": "Depset of tree artifacts laid out by proto import path.",
     },
 )
 
@@ -503,18 +509,25 @@ def _compute_relative_to_package(ctx, file):
     return file.basename
 
 def _generated_srcs_entries(generated_srcs):
-    """Expand a generated_srcs dict into explicit (rel_path, file) mounts."""
+    """Expand a generated_srcs dict into explicit (rel_path, file) mounts.
+
+    Directory artifacts (e.g. dart_proto_library outputs) are merged into the
+    destination directory; regular files mount flat by basename.
+    """
     entries = []
     for target, dest_dir in generated_srcs.items():
         dest = dest_dir.strip("/")
         if not dest:
             fail("generated_srcs destination for {} must be a non-empty package-relative directory".format(target.label))
         if DartProtoLibraryInfo in target:
-            for entry in target[DartProtoLibraryInfo].source_roots:
-                entries.append((dest + "/" + entry.rel_path, entry.file))
+            for tree in target[DartProtoLibraryInfo].sources.to_list():
+                entries.append((dest, tree))
         else:
             for f in target[DefaultInfo].files.to_list():
-                entries.append((dest + "/" + f.basename, f))
+                if f.is_directory:
+                    entries.append((dest, f))
+                else:
+                    entries.append((dest + "/" + f.basename, f))
     return entries
 
 def _flutter_library_impl(ctx):
@@ -1841,29 +1854,28 @@ def _compute_repo_relative_path(ctx, artifact, repo_name):
     components.extend(["external", repo_name, "lib"])
     return "/".join(components).replace("+", "%2B")
 
-def _proto_import_path(src, proto_info):
-    """Return src's path relative to the proto source root (its import path)."""
-    root = proto_info.proto_source_root
-    path = src.path
-    if root and root != ".":
-        prefix = root + "/"
-        if path.startswith(prefix):
-            return path[len(prefix):]
-    return path
+def _dart_proto_aspect_impl(target, ctx):
+    """Generate Dart sources for one proto_library node in the deps closure."""
 
-def _dart_proto_library_impl(ctx):
-    """Implementation for dart_proto_library rule."""
+    proto_info = target[ProtoInfo]
 
-    if not ctx.attr.deps:
-        fail("dart_proto_library requires the deps attribute to reference at least one proto_library target.")
+    transitive = [
+        dep[DartProtoAspectInfo].trees
+        for dep in getattr(ctx.rule.attr, "deps", [])
+        if DartProtoAspectInfo in dep
+    ]
+
+    if not proto_info.direct_sources:
+        return [DartProtoAspectInfo(trees = depset(transitive = transitive))]
 
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
     flutter_bin = flutter_toolchain.flutterinfo.target_tool_path
     flutter_bin_dir = paths.dirname(flutter_bin)
     dart_bin = paths.normalize(paths.join(flutter_bin_dir, "cache", "dart-sdk", "bin", "dart"))
 
-    package_config = ctx.actions.declare_file(ctx.label.name + "_package_config.json")
-    wrapper_script = ctx.actions.declare_file(ctx.label.name + "_protoc_gen_dart.sh")
+    tree = ctx.actions.declare_directory(ctx.label.name + ".dart_pb")
+    package_config = ctx.actions.declare_file(ctx.label.name + ".dart_pb_package_config.json")
+    wrapper_script = ctx.actions.declare_file(ctx.label.name + ".dart_pb_protoc_gen_dart.sh")
 
     plugin_repo = ctx.attr._dart_plugin_files.label.workspace_name
     protobuf_repo = ctx.attr._protobuf_pkg.label.workspace_name
@@ -1922,19 +1934,14 @@ exec "$DART_BIN" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
         is_executable = True,
     )
 
-    plugin_files = ctx.attr._dart_plugin_files[DefaultInfo].files
-    protobuf_files = ctx.attr._protobuf_pkg[DefaultInfo].files
-    fixnum_files = ctx.attr._fixnum_pkg[DefaultInfo].files
-    path_files = ctx.attr._path_pkg[DefaultInfo].files
-
     tool_inputs = depset(flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files)
     additional_inputs = depset(
         direct = [package_config],
         transitive = [
-            plugin_files,
-            protobuf_files,
-            fixnum_files,
-            path_files,
+            ctx.attr._dart_plugin_files[DefaultInfo].files,
+            ctx.attr._protobuf_pkg[DefaultInfo].files,
+            ctx.attr._fixnum_pkg[DefaultInfo].files,
+            ctx.attr._path_pkg[DefaultInfo].files,
             tool_inputs,
         ],
     )
@@ -1953,87 +1960,31 @@ exec "$DART_BIN" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
         toolchain_type = None,
     )
 
-    option_components = list(ctx.attr.options)
-    if ctx.attr.grpc and "grpc" not in option_components:
-        option_components.append("grpc")
+    args = ctx.actions.args()
+    args.add("--plugin=protoc-gen-dart=" + wrapper_script.path)
 
-    all_outputs = []
-    source_roots = []
+    # protoc writes each output at <out root>/<proto import path>.pb.dart, so
+    # rooting at the tree artifact reproduces the import-path layout exactly.
+    # gRPC stubs are emitted only for files that declare services, which is why
+    # a directory output is used instead of per-file declarations.
+    args.add("--dart_out=grpc:" + tree.path)
 
-    for dep in ctx.attr.deps:
-        proto_info = dep[ProtoInfo]
-        proto_common.check_collocated(ctx.label, proto_info, proto_lang_toolchain_info)
+    proto_common.compile(
+        ctx.actions,
+        proto_info,
+        proto_lang_toolchain_info,
+        [tree],
+        additional_args = args,
+        additional_inputs = additional_inputs,
+        additional_tools = [wrapper_script],
+    )
 
-        pb_files = proto_common.declare_generated_files(ctx.actions, proto_info, ".pb.dart")
-        pbgrpc_files = []
-        if ctx.attr.grpc:
-            pbgrpc_files = proto_common.declare_generated_files(ctx.actions, proto_info, ".pbgrpc.dart")
+    return [DartProtoAspectInfo(trees = depset([tree], transitive = transitive))]
 
-        generated_files = pb_files + pbgrpc_files
-        if not generated_files:
-            continue
-
-        # declare_generated_files produces one file per direct source, in
-        # order; pair them up to record proto-import-relative paths.
-        direct_sources = proto_info.direct_sources
-        if len(pb_files) != len(direct_sources):
-            fail("dart_proto_library: generated file count ({}) does not match proto source count ({}) for {}".format(
-                len(pb_files),
-                len(direct_sources),
-                dep.label,
-            ))
-        for idx in range(len(direct_sources)):
-            rel_base = _proto_import_path(direct_sources[idx], proto_info)
-            if rel_base.endswith(".proto"):
-                rel_base = rel_base[:-len(".proto")]
-            source_roots.append(struct(file = pb_files[idx], rel_path = rel_base + ".pb.dart"))
-            if pbgrpc_files:
-                source_roots.append(struct(file = pbgrpc_files[idx], rel_path = rel_base + ".pbgrpc.dart"))
-
-        all_outputs.extend(generated_files)
-
-        args = ctx.actions.args()
-        args.add("--plugin=protoc-gen-dart=" + wrapper_script.path)
-
-        out_root = generated_files[0].root.path
-        if option_components:
-            args.add("--dart_out=" + ",".join(option_components) + ":" + out_root)
-        else:
-            args.add("--dart_out=" + out_root)
-
-        proto_common.compile(
-            ctx.actions,
-            proto_info,
-            proto_lang_toolchain_info,
-            generated_files,
-            additional_args = args,
-            additional_inputs = additional_inputs,
-            additional_tools = [wrapper_script],
-        )
-
-    return [
-        DefaultInfo(files = depset(all_outputs)),
-        DartProtoLibraryInfo(
-            sources = depset(all_outputs),
-            source_roots = source_roots,
-        ),
-    ]
-
-dart_proto_library = rule(
-    implementation = _dart_proto_library_impl,
+_dart_proto_aspect = aspect(
+    implementation = _dart_proto_aspect_impl,
+    attr_aspects = ["deps"],
     attrs = {
-        "deps": attr.label_list(
-            mandatory = True,
-            providers = [ProtoInfo],
-            doc = "proto_library targets that define the source protos.",
-        ),
-        "options": attr.string_list(
-            doc = "Additional options forwarded to the Dart protoc plugin (comma separated in --dart_out).",
-        ),
-        "grpc": attr.bool(
-            default = False,
-            doc = "Generate gRPC service stubs alongside message classes.",
-        ),
         "_protoc": attr.label(
             default = Label("@protobuf//:protoc"),
             cfg = "exec",
@@ -2050,6 +2001,46 @@ dart_proto_library = rule(
         ),
         "_path_pkg": attr.label(
             default = Label("@pub_path//:path_files"),
+        ),
+    },
+    required_providers = [ProtoInfo],
+    toolchains = ["//flutter:toolchain_type"],
+    doc = "Generates Dart protobuf sources for every proto_library in the deps closure.",
+)
+
+def _dart_proto_library_impl(ctx):
+    """Implementation for dart_proto_library rule."""
+
+    if not ctx.attr.deps:
+        fail("dart_proto_library requires the deps attribute to reference at least one proto_library target.")
+
+    trees = depset(transitive = [
+        dep[DartProtoAspectInfo].trees
+        for dep in ctx.attr.deps
+    ])
+
+    return [
+        DefaultInfo(files = trees),
+        DartProtoLibraryInfo(sources = trees),
+    ]
+
+dart_proto_library = rule(
+    implementation = _dart_proto_library_impl,
+    attrs = {
+        "deps": attr.label_list(
+            mandatory = True,
+            providers = [ProtoInfo],
+            aspects = [_dart_proto_aspect],
+            doc = """proto_library targets to generate Dart for. Generation covers the
+whole transitive proto closure (including well-known types such as
+google/protobuf/timestamp), matching what generated imports expect.""",
+        ),
+        "options": attr.string_list(
+            doc = "Deprecated and ignored.",
+        ),
+        "grpc": attr.bool(
+            default = True,
+            doc = "Deprecated and ignored: gRPC stubs are always generated for protos that declare services.",
         ),
     },
     toolchains = ["//flutter:toolchain_type"],

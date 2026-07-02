@@ -16,7 +16,7 @@ flutter_library(
     data = glob(["l10n/**"]),
     generated_srcs = {
         # Mounted at lib/generated/<proto import path>.pb.dart, so main.dart
-        # imports package:hello_world/generated/protos/api/v1/service.pb.dart.
+        # imports package:hello_world/generated/api/v1/service.pb.dart.
         "//protos/api/v1:services_api_v1_proto_dart": "lib/generated",
     },
     generator_commands = ["intl_utils:generate"],

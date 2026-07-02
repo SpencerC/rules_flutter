@@ -264,9 +264,6 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
 
     add_entry(pubspec_file, "pubspec.yaml")
 
-    for rel_path, f in extra_entries:
-        add_entry(f, rel_path)
-
     for f in dart_files + other_files + data_files:
         add_entry(f)
 
@@ -275,6 +272,15 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
     for rel_path in sorted(workspace_entries.keys()):
         file = workspace_entries[rel_path]
         manifest_content.append("{}|{}".format(rel_path, file.path))
+
+    # Explicit mounts go last so they take precedence, and several directory
+    # artifacts may merge into the same destination (the setup script merges
+    # directory sources instead of replacing them).
+    for rel_path, f in extra_entries:
+        if f.path in seen:
+            continue
+        seen[f.path] = True
+        manifest_content.append("{}|{}".format(rel_path, f.path))
 
     manifest_payload = "\n".join(manifest_content)
     if manifest_payload:
@@ -302,8 +308,15 @@ while IFS='|' read -r RELATIVE_PATH SOURCE_PATH; do
         continue
     fi
     DEST_PATH="$WORKSPACE_DIR/$RELATIVE_PATH"
-    mkdir -p "$(dirname "$DEST_PATH")"
-    cp -RL "$SOURCE_PATH" "$DEST_PATH"
+    if [ -d "$SOURCE_PATH" ]; then
+        # Merge directory sources so several tree artifacts can share a
+        # destination (e.g. per-proto_library outputs under lib/generated).
+        mkdir -p "$DEST_PATH"
+        cp -RL "$SOURCE_PATH/." "$DEST_PATH/"
+    else
+        mkdir -p "$(dirname "$DEST_PATH")"
+        cp -RL "$SOURCE_PATH" "$DEST_PATH"
+    fi
 done < "$MANIFEST_FILE"
 """,
         is_executable = True,

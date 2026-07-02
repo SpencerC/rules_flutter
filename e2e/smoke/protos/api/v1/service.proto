@@ -2,10 +2,14 @@ syntax = "proto3";
 
 package smoke.proto.api.v1;
 
+import "google/protobuf/timestamp.proto";
+
 message GreetingRequest {
   string name = 1;
 }
 
 message GreetingResponse {
   string message = 1;
+  // Exercises transitive well-known-type generation.
+  google.protobuf.Timestamp created_at = 2;
 }

@@ -41,9 +41,9 @@ Generates Dart sources from proto_library targets using the Dart protoc plugin.
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="dart_proto_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="dart_proto_library-deps"></a>deps |  proto_library targets that define the source protos.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
-| <a id="dart_proto_library-grpc"></a>grpc |  Generate gRPC service stubs alongside message classes.   | Boolean | optional |  `False`  |
-| <a id="dart_proto_library-options"></a>options |  Additional options forwarded to the Dart protoc plugin (comma separated in --dart_out).   | List of strings | optional |  `[]`  |
+| <a id="dart_proto_library-deps"></a>deps |  proto_library targets to generate Dart for. Generation covers the whole transitive proto closure (including well-known types such as google/protobuf/timestamp), matching what generated imports expect.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="dart_proto_library-grpc"></a>grpc |  Deprecated and ignored: gRPC stubs are always generated for protos that declare services.   | Boolean | optional |  `True`  |
+| <a id="dart_proto_library-options"></a>options |  Deprecated and ignored.   | List of strings | optional |  `[]`  |
 
 
 <a id="flutter_analyze_test"></a>
@@ -119,6 +119,25 @@ Information about a Dart library
 | <a id="DartLibraryInfo-transitive_pub_caches"></a>transitive_pub_caches |  Depset of pub cache directories from all transitive dependencies    |
 
 
+<a id="DartProtoAspectInfo"></a>
+
+## DartProtoAspectInfo
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "DartProtoAspectInfo")
+
+DartProtoAspectInfo(<a href="#DartProtoAspectInfo-trees">trees</a>)
+</pre>
+
+Internal: per-proto_library Dart generation results, propagated along deps.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="DartProtoAspectInfo-trees"></a>trees |  Depset of tree artifacts laid out by proto import path.    |
+
+
 <a id="DartProtoLibraryInfo"></a>
 
 ## DartProtoLibraryInfo
@@ -126,7 +145,7 @@ Information about a Dart library
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "DartProtoLibraryInfo")
 
-DartProtoLibraryInfo(<a href="#DartProtoLibraryInfo-sources">sources</a>, <a href="#DartProtoLibraryInfo-source_roots">source_roots</a>)
+DartProtoLibraryInfo(<a href="#DartProtoLibraryInfo-sources">sources</a>)
 </pre>
 
 Generated Dart sources produced from .proto files.
@@ -135,8 +154,7 @@ Generated Dart sources produced from .proto files.
 
 | Name  | Description |
 | :------------- | :------------- |
-| <a id="DartProtoLibraryInfo-sources"></a>sources |  Depset of generated Dart source files (.pb.dart, .pbgrpc.dart).    |
-| <a id="DartProtoLibraryInfo-source_roots"></a>source_roots |  List of structs (file, rel_path) where rel_path is the generated file's path relative to the proto source root (i.e. mirroring the proto import path, e.g. 'api/v1/service.pb.dart'). Used to mount generated sources at a chosen directory inside a Flutter package workspace.    |
+| <a id="DartProtoLibraryInfo-sources"></a>sources |  Depset of tree artifacts, one per proto_library in the transitive closure, each laid out by proto import path (e.g. `api/v1/service.pb.dart`). Mount them into a package workspace with the `generated_srcs` attribute of flutter_library/dart_library.    |
 
 
 <a id="FlutterLibraryInfo"></a>
