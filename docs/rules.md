@@ -2,6 +2,27 @@
 
 Public API for Flutter build rules
 
+<a id="dart_format_test"></a>
+
+## dart_format_test
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "dart_format_test")
+
+dart_format_test(<a href="#dart_format_test-name">name</a>, <a href="#dart_format_test-srcs">srcs</a>)
+</pre>
+
+Fails when any of the given Dart sources are not dart-format clean.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="dart_format_test-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="dart_format_test-srcs"></a>srcs |  Dart sources checked with `dart format --set-exit-if-changed`.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+
+
 <a id="dart_proto_library"></a>
 
 ## dart_proto_library
@@ -23,6 +44,31 @@ Generates Dart sources from proto_library targets using the Dart protoc plugin.
 | <a id="dart_proto_library-deps"></a>deps |  proto_library targets that define the source protos.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
 | <a id="dart_proto_library-grpc"></a>grpc |  Generate gRPC service stubs alongside message classes.   | Boolean | optional |  `False`  |
 | <a id="dart_proto_library-options"></a>options |  Additional options forwarded to the Dart protoc plugin (comma separated in --dart_out).   | List of strings | optional |  `[]`  |
+
+
+<a id="flutter_analyze_test"></a>
+
+## flutter_analyze_test
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "flutter_analyze_test")
+
+flutter_analyze_test(<a href="#flutter_analyze_test-name">name</a>, <a href="#flutter_analyze_test-srcs">srcs</a>, <a href="#flutter_analyze_test-embed">embed</a>, <a href="#flutter_analyze_test-extra_args">extra_args</a>, <a href="#flutter_analyze_test-fatal_infos">fatal_infos</a>, <a href="#flutter_analyze_test-fatal_warnings">fatal_warnings</a>)
+</pre>
+
+Runs `flutter analyze` hermetically against a prepared flutter_library workspace.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="flutter_analyze_test-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="flutter_analyze_test-srcs"></a>srcs |  Additional files overlaid before analyzing (e.g. analysis_options.yaml, test sources).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_analyze_test-embed"></a>embed |  flutter_library targets whose prepared workspace is analyzed.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_analyze_test-extra_args"></a>extra_args |  Additional arguments forwarded to flutter analyze.   | List of strings | optional |  `[]`  |
+| <a id="flutter_analyze_test-fatal_infos"></a>fatal_infos |  Treat info-level issues as fatal (--fatal-infos).   | Boolean | optional |  `False`  |
+| <a id="flutter_analyze_test-fatal_warnings"></a>fatal_warnings |  Treat warnings as fatal; set False to pass --no-fatal-warnings.   | Boolean | optional |  `True`  |
 
 
 <a id="flutter_test"></a>

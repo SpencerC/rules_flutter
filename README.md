@@ -151,6 +151,26 @@ Run with:
 bazel run //:app_dev
 ```
 
+### Static analysis and formatting
+
+`flutter_analyze_test` runs `flutter analyze` hermetically against the same
+prepared workspace your builds and tests use; `dart_format_test` fails when
+sources are not `dart format` clean:
+
+```starlark
+flutter_analyze_test(
+    name = "lib_analyze",
+    srcs = glob(["test/**"]),  # analysis_options.yaml, extra sources
+    embed = [":app_lib"],
+    # fatal_infos = True, fatal_warnings = False, extra_args = [...]
+)
+
+dart_format_test(
+    name = "lib_format",
+    srcs = glob(["lib/**/*.dart", "test/**/*.dart"]),
+)
+```
+
 ### Mounting generated sources (protos) into a package
 
 Generated Dart — most commonly `dart_proto_library` output — can be mounted at

@@ -1,5 +1,12 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flutter_test")
+load(
+    "@rules_flutter//flutter:defs.bzl",
+    "dart_format_test",
+    "flutter_analyze_test",
+    "flutter_app",
+    "flutter_library",
+    "flutter_test",
+)
 load("@rules_multirun//:defs.bzl", "command", "multirun")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
@@ -32,6 +39,24 @@ flutter_test(
     srcs = glob(["test/**"]),
     embed = [":lib"],
     visibility = ["//visibility:public"],
+)
+
+flutter_analyze_test(
+    name = "lib_analyze",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+)
+
+dart_format_test(
+    name = "lib_format",
+    srcs = glob(
+        [
+            "lib/**/*.dart",
+            "test/**/*.dart",
+        ],
+        # intl_utils generated sources are not present in the source tree.
+        exclude = ["lib/generated/**"],
+    ),
 )
 
 # Flutter app in the same directory as pubspec.yaml. The web platform uses a

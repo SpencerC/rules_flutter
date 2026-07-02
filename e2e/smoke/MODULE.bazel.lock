@@ -304,9 +304,9 @@
         "bzlTransitiveDigest": "nS4EVfcuiIGB4m4XK9ZYD8MY00cwG/+TZ9wD+Nnf7wU=",
         "usagesDigest": "jcFAjyhN444cB8BHdfpl9cXoyFWYgpx2Lg0WBfDHoAU=",
         "recordedFileInputs": {
-          "@@//codegen_app/pub_deps.json": "28b663f1290752fb516f4584ed943e5f68c48c689e6d568044e155b498a2413f",
+          "@@//codegen_app/pub_deps.json": "1f360270a671c0b00fd37abb03989d09840cd98b55272670abebcdf6bf11a087",
           "@@//dart_package/pub_deps.json": "73450fe56d893cfd0ff653d4d46d420ebee41b94efd9d983aa81582d1f6ffb6f",
-          "@@//flutter_app/pub_deps.json": "96085cec4f5e756aeacefffc47af9e55037773639a32e27a6aa8a2667e788d6b",
+          "@@//flutter_app/pub_deps.json": "9ce6a63c3ca1975e97b2b4f4299c58a3e3fe1dd718e8b1224afd498121d9533f",
           "@@//gazelle_app/pub_deps.json": "d4873da35e844de30eb02195cc6093827348bac6428bd7c45619c1981716ed25"
         },
         "recordedDirentsInputs": {},

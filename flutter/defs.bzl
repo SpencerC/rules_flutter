@@ -5,6 +5,7 @@ load("@protobuf//bazel/common:proto_common.bzl", "proto_common")
 load("@protobuf//bazel/common:proto_info.bzl", "ProtoInfo")
 load(
     "//flutter/private:flutter_actions.bzl",
+    "PACKAGE_CONFIG_FROM_PUB_DEPS_PY",
     "create_flutter_working_dir",
     "flutter_build_action",
     "flutter_pub_get_action",
@@ -1113,89 +1114,16 @@ def flutter_app(
 
     native.alias(**alias_args)
 
-def _flutter_test_impl(ctx):
-    """Implementation for flutter_test rule."""
+def _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin, log_name = "flutter_test.log"):
+    """Render the bash prologue materializing a mutable runtime workspace.
 
-    if not ctx.attr.embed:
-        fail("flutter_test requires at least one flutter_library in embed")
-
-    if len(ctx.attr.embed) != 1:
-        fail("flutter_test currently supports exactly one entry in embed")
-
-    library_target = ctx.attr.embed[0]
-    library_info = library_target[FlutterLibraryInfo]
-
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    if not flutter_toolchain.flutterinfo.tool_files:
-        fail("No tool files found in Flutter toolchain")
-
-    flutter_bin = flutter_toolchain.flutterinfo.tool_files[0].path
-
-    # Build a mapping of relative paths to actual file objects
-    test_file_mappings = [
-        (_compute_relative_to_package(ctx, f), f)
-        for f in ctx.files.srcs
-    ]
-
-    prepared_workspace = ctx.actions.declare_directory(ctx.label.name + "_test_workspace")
-
-    # Build args for test file copying: pairs of rel_path and abs_path
-    test_file_args = []
-    for rel_path, file_obj in test_file_mappings:
-        test_file_args.extend([rel_path, file_obj.path])
-
-    copy_script_template = """#!/bin/bash
-set -euo pipefail
-
-DEST="$1"
-SRC_WORKSPACE="$2"
-shift 2
-
-rm -rf "$DEST"
-mkdir -p "$DEST"
-
-if command -v rsync >/dev/null 2>&1; then
-    rsync -aL "$SRC_WORKSPACE/" "$DEST/"
-else
-    cp -RL "$SRC_WORKSPACE/." "$DEST/"
-fi
-
-# Copy test files: arguments come in pairs (rel_path, abs_path)
-while [ $# -gt 0 ]; do
-    rel="$1"
-    abs="$2"
-    shift 2
-    if [ -z "$rel" ]; then
-        continue
-    fi
-    mkdir -p "$DEST/$(dirname "$rel")"
-    if [ -f "$abs" ] || [ -d "$abs" ]; then
-        cp -RL "$abs" "$DEST/$rel"
-    fi
-done
-"""
-    copy_script = copy_script_template
-
-    ctx.actions.run_shell(
-        inputs = [library_info.workspace] + ctx.files.srcs,
-        outputs = [prepared_workspace],
-        arguments = [
-            prepared_workspace.path,
-            library_info.workspace.path,
-        ] + test_file_args,
-        command = copy_script,
-        mnemonic = "PrepareFlutterTestWorkspace",
-        progress_message = "Preparing Flutter test workspace for %s" % ctx.label.name,
-    )
-
-    def _escape_pattern(pattern):
-        return pattern.replace("\\", "\\\\").replace("'", "\\'")
-
-    test_patterns_literal = "\n".join([_escape_pattern(pattern) for pattern in ctx.attr.test_files])
-
-    test_runner = ctx.actions.declare_file(ctx.label.name + "_test_runner.sh")
-
-    test_runner_content = """#!/bin/bash
+    After this fragment runs, $RUNTIME_WORKSPACE holds a writable copy of the
+    prepared workspace with its pub cache at $RUNTIME_PUB_CACHE and a
+    regenerated package config; $TEST_LOG points at the log file and
+    $FLUTTER_BIN_ABS/$FLUTTER_ROOT are exported. The current directory is
+    unchanged.
+    """
+    return """#!/bin/bash
 set -euo pipefail
 set -o pipefail
 
@@ -1296,7 +1224,7 @@ fi
 RUNTIME_WORKSPACE="${{TEST_TMPDIR}}/flutter_workspace"
 RUNTIME_PUB_CACHE="${{TEST_TMPDIR}}/pub_cache"
 LOG_ROOT="${{TEST_UNDECLARED_OUTPUTS_DIR:-${{TEST_TMPDIR}}/test_outputs}}"
-TEST_LOG="$LOG_ROOT/flutter_test.log"
+TEST_LOG="$LOG_ROOT/{log_name}"
 
 mkdir -p "$LOG_ROOT"
 : > "$TEST_LOG"
@@ -1338,20 +1266,151 @@ export ANDROID_SDK_ROOT=""
 export FLUTTER_ROOT
 export PATH="$FLUTTER_BIN_DIR:$PATH"
 
-# Regenerate package_config.json with correct paths to RUNTIME_PUB_CACHE
-# This ensures package imports resolve correctly in the test environment
-echo "Regenerating package_config.json for test runtime..."
-pushd "$RUNTIME_WORKSPACE" >/dev/null
-if "$FLUTTER_BIN_ABS" --suppress-analytics --no-version-check pub get --offline > /dev/null 2>&1; then
-    echo "✓ Package config regenerated successfully (offline)" | tee -a "$TEST_LOG"
-else
-    echo "✗ flutter pub get --offline failed in test runtime" | tee -a "$TEST_LOG"
-    popd >/dev/null
+# Regenerate package_config.json directly from the declared pub_deps.json
+# metadata. Do NOT re-run pub resolution here: dependency_overrides are
+# stripped from prepared workspaces, so an offline solve could legitimately
+# fail even though the pinned package set is complete and consistent.
+echo "Regenerating package_config.json for runtime workspace..."
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "✗ python interpreter not found on PATH" | tee -a "$TEST_LOG"
     exit 1
 fi
-popd >/dev/null
+export PUB_DEPS_PATH="$RUNTIME_WORKSPACE/pub_deps.json"
+export PUB_CACHE_ABS="$RUNTIME_PUB_CACHE"
+export WORKSPACE_ABS="$RUNTIME_WORKSPACE"
+export PACKAGE_CONFIG_PATH="$RUNTIME_WORKSPACE/.dart_tool/package_config.json"
+mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
+rm -f "$PACKAGE_CONFIG_PATH"
+if "$PYTHON_BIN" <<'PY'
+{package_config_py}
+PY
+then
+    echo "✓ Package config regenerated from declared metadata" | tee -a "$TEST_LOG"
+else
+    echo "✗ package_config regeneration failed" | tee -a "$TEST_LOG"
+    exit 1
+fi
+""".format(
+        workspace_short = prepared_workspace.short_path,
+        pub_cache_short = library_info.pub_cache.short_path,
+        pub_deps_short = library_info.pub_deps.short_path,
+        dart_tool_short = library_info.dart_tool.short_path,
+        workspace_path = prepared_workspace.path,
+        pub_cache_path = library_info.pub_cache.path,
+        pub_deps_path = library_info.pub_deps.path,
+        dart_tool_path = library_info.dart_tool.path,
+        flutter_bin = flutter_bin,
+        log_name = log_name,
+        package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
+    )
 
-CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test")
+def _single_embedded_library(ctx, rule_name):
+    """Return (library_info, flutter_bin) for a rule embedding one flutter_library."""
+
+    if not ctx.attr.embed:
+        fail("{} requires at least one flutter_library in embed".format(rule_name))
+
+    if len(ctx.attr.embed) != 1:
+        fail("{} currently supports exactly one entry in embed".format(rule_name))
+
+    library_info = ctx.attr.embed[0][FlutterLibraryInfo]
+
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    if not flutter_toolchain.flutterinfo.tool_files:
+        fail("No tool files found in Flutter toolchain")
+
+    return library_info, flutter_toolchain.flutterinfo.tool_files[0].path
+
+def _prepare_overlay_workspace(ctx, library_info, overlay_files, suffix, mnemonic):
+    """Copy the library workspace and overlay extra files into a tree artifact."""
+
+    prepared_workspace = ctx.actions.declare_directory(ctx.label.name + suffix)
+
+    # Build args for file copying: pairs of rel_path and abs_path
+    overlay_args = []
+    for f in overlay_files:
+        overlay_args.extend([_compute_relative_to_package(ctx, f), f.path])
+
+    copy_script = """#!/bin/bash
+set -euo pipefail
+
+DEST="$1"
+SRC_WORKSPACE="$2"
+shift 2
+
+rm -rf "$DEST"
+mkdir -p "$DEST"
+
+if command -v rsync >/dev/null 2>&1; then
+    rsync -aL "$SRC_WORKSPACE/" "$DEST/"
+else
+    cp -RL "$SRC_WORKSPACE/." "$DEST/"
+fi
+
+# Copy overlay files: arguments come in pairs (rel_path, abs_path)
+while [ $# -gt 0 ]; do
+    rel="$1"
+    abs="$2"
+    shift 2
+    if [ -z "$rel" ]; then
+        continue
+    fi
+    mkdir -p "$DEST/$(dirname "$rel")"
+    if [ -f "$abs" ] || [ -d "$abs" ]; then
+        cp -RL "$abs" "$DEST/$rel"
+    fi
+done
+"""
+
+    ctx.actions.run_shell(
+        inputs = [library_info.workspace] + overlay_files,
+        outputs = [prepared_workspace],
+        arguments = [
+            prepared_workspace.path,
+            library_info.workspace.path,
+        ] + overlay_args,
+        command = copy_script,
+        mnemonic = mnemonic,
+        progress_message = "%s for %s" % (mnemonic, ctx.label.name),
+    )
+
+    return prepared_workspace
+
+def _runtime_runfiles(ctx, runner, prepared_workspace, library_info):
+    """Runfiles common to rules that materialize a runtime workspace."""
+    return ctx.runfiles(
+        files = [
+            runner,
+            prepared_workspace,
+            library_info.pub_cache,
+            library_info.pub_deps,
+            library_info.dart_tool,
+        ],
+    )
+
+def _flutter_test_impl(ctx):
+    """Implementation for flutter_test rule."""
+
+    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_test")
+
+    prepared_workspace = _prepare_overlay_workspace(
+        ctx,
+        library_info,
+        list(ctx.files.srcs),
+        "_test_workspace",
+        "PrepareFlutterTestWorkspace",
+    )
+
+    def _escape_pattern(pattern):
+        return pattern.replace("\\", "\\\\").replace("'", "\\'")
+
+    test_patterns_literal = "\n".join([_escape_pattern(pattern) for pattern in ctx.attr.test_files])
+
+    test_runner = ctx.actions.declare_file(ctx.label.name + "_test_runner.sh")
+
+    test_runner_content = _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin) + """
+CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test" "--no-pub")
 IFS=$'\n'
 for pattern in $'{test_patterns}'; do
     if [ -n "$pattern" ]; then
@@ -1378,15 +1437,6 @@ fi
 
 exit "$RESULT"
 """.format(
-        workspace_short = prepared_workspace.short_path,
-        pub_cache_short = library_info.pub_cache.short_path,
-        pub_deps_short = library_info.pub_deps.short_path,
-        dart_tool_short = library_info.dart_tool.short_path,
-        workspace_path = prepared_workspace.path,
-        pub_cache_path = library_info.pub_cache.path,
-        pub_deps_path = library_info.pub_deps.path,
-        dart_tool_path = library_info.dart_tool.path,
-        flutter_bin = flutter_bin,
         test_patterns = test_patterns_literal,
     )
 
@@ -1400,15 +1450,7 @@ exit "$RESULT"
         DefaultInfo(
             executable = test_runner,
             files = depset([test_runner]),
-            runfiles = ctx.runfiles(
-                files = [
-                    test_runner,
-                    prepared_workspace,
-                    library_info.pub_cache,
-                    library_info.pub_deps,
-                    library_info.dart_tool,
-                ],
-            ),
+            runfiles = _runtime_runfiles(ctx, test_runner, prepared_workspace, library_info),
         ),
     ]
 
@@ -1431,6 +1473,188 @@ flutter_test = rule(
     test = True,
     toolchains = ["//flutter:toolchain_type"],
     doc = """Runs Flutter tests using a prepared flutter_library workspace.""",
+)
+
+def _flutter_analyze_test_impl(ctx):
+    """Implementation for flutter_analyze_test rule."""
+
+    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_analyze_test")
+
+    prepared_workspace = _prepare_overlay_workspace(
+        ctx,
+        library_info,
+        list(ctx.files.srcs),
+        "_analyze_workspace",
+        "PrepareFlutterAnalyzeWorkspace",
+    )
+
+    flags = []
+    if ctx.attr.fatal_infos:
+        flags.append("--fatal-infos")
+    if not ctx.attr.fatal_warnings:
+        flags.append("--no-fatal-warnings")
+    flags.extend(ctx.attr.extra_args)
+    flags_literal = " ".join([_shell_quote(flag) for flag in flags])
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_analyze_runner.sh")
+
+    runner_content = _render_runtime_bootstrap(
+        prepared_workspace,
+        library_info,
+        flutter_bin,
+        log_name = "flutter_analyze.log",
+    ) + """
+CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "analyze" "--no-pub" {flags})
+
+pushd "$RUNTIME_WORKSPACE" >/dev/null
+
+set +e
+"${{CMD[@]}}" 2>&1 | tee -a "$TEST_LOG"
+RESULT=${{PIPESTATUS[0]}}
+set -e
+
+popd >/dev/null
+
+echo "" | tee -a "$TEST_LOG"
+if [ "$RESULT" -eq 0 ]; then
+    echo "✓ Flutter analysis passed" | tee -a "$TEST_LOG"
+else
+    echo "✗ Flutter analysis reported issues" | tee -a "$TEST_LOG"
+fi
+
+exit "$RESULT"
+""".format(
+        flags = flags_literal,
+    )
+
+    ctx.actions.write(
+        output = runner,
+        content = runner_content,
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([runner]),
+            runfiles = _runtime_runfiles(ctx, runner, prepared_workspace, library_info),
+        ),
+    ]
+
+flutter_analyze_test = rule(
+    implementation = _flutter_analyze_test_impl,
+    attrs = {
+        "embed": attr.label_list(
+            providers = [FlutterLibraryInfo],
+            doc = "flutter_library targets whose prepared workspace is analyzed.",
+        ),
+        "srcs": attr.label_list(
+            allow_files = True,
+            doc = "Additional files overlaid before analyzing (e.g. analysis_options.yaml, test sources).",
+        ),
+        "fatal_infos": attr.bool(
+            default = False,
+            doc = "Treat info-level issues as fatal (--fatal-infos).",
+        ),
+        "fatal_warnings": attr.bool(
+            default = True,
+            doc = "Treat warnings as fatal; set False to pass --no-fatal-warnings.",
+        ),
+        "extra_args": attr.string_list(
+            default = [],
+            doc = "Additional arguments forwarded to flutter analyze.",
+        ),
+    },
+    test = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = "Runs `flutter analyze` hermetically against a prepared flutter_library workspace.",
+)
+
+def _dart_format_test_impl(ctx):
+    """Implementation for dart_format_test rule."""
+
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    if not flutter_toolchain.flutterinfo.tool_files:
+        fail("No tool files found in Flutter toolchain")
+    flutter_bin_file = flutter_toolchain.flutterinfo.tool_files[0]
+
+    if not ctx.files.srcs:
+        fail("dart_format_test requires at least one file in srcs")
+
+    # Runfiles-relative location of the flutter binary (external repo files
+    # have short_paths beginning with ../<repo>/).
+    flutter_short = flutter_bin_file.short_path
+    if flutter_short.startswith("../"):
+        flutter_rel = flutter_short[len("../"):]
+    else:
+        flutter_rel = ctx.workspace_name + "/" + flutter_short
+
+    files_literal = "\n".join([f.short_path for f in ctx.files.srcs])
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_format_runner.sh")
+    runner_content = """#!/bin/bash
+set -euo pipefail
+
+RUNFILES_ROOT="${{RUNFILES_DIR:-${{TEST_SRCDIR:-$PWD}}}}"
+FLUTTER_BIN="$RUNFILES_ROOT/{flutter_rel}"
+if [ ! -f "$FLUTTER_BIN" ]; then
+    echo "✗ Flutter binary not found at $FLUTTER_BIN" >&2
+    exit 1
+fi
+FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN")/.." && pwd)"
+DART_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+if [ ! -x "$DART_BIN" ]; then
+    echo "✗ Dart binary not found at $DART_BIN" >&2
+    exit 1
+fi
+
+cd "$RUNFILES_ROOT/${{TEST_WORKSPACE:-_main}}"
+
+FILES=()
+IFS=$'\n'
+for f in $'{files}'; do
+    if [ -n "$f" ]; then
+        FILES+=("$f")
+    fi
+done
+unset IFS
+
+exec "$DART_BIN" format --output=none --set-exit-if-changed "${{FILES[@]}}"
+""".format(
+        flutter_rel = flutter_rel,
+        files = files_literal,
+    )
+
+    ctx.actions.write(
+        output = runner,
+        content = runner_content,
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([runner]),
+            runfiles = ctx.runfiles(
+                files = [runner] + ctx.files.srcs +
+                        flutter_toolchain.flutterinfo.tool_files +
+                        flutter_toolchain.flutterinfo.sdk_files,
+            ),
+        ),
+    ]
+
+dart_format_test = rule(
+    implementation = _dart_format_test_impl,
+    attrs = {
+        "srcs": attr.label_list(
+            allow_files = [".dart"],
+            mandatory = True,
+            doc = "Dart sources checked with `dart format --set-exit-if-changed`.",
+        ),
+    },
+    test = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = "Fails when any of the given Dart sources are not dart-format clean.",
 )
 
 def _compute_repo_relative_path(ctx, artifact, repo_name):

@@ -60,6 +60,137 @@ if not os.path.isfile(entrypoint):
 
 print(entrypoint)"""
 
+# Python snippet that writes .dart_tool/package_config.json from declared
+# pub_deps.json metadata. Inputs via env: PUB_DEPS_PATH, PUB_CACHE_ABS,
+# WORKSPACE_ABS, PACKAGE_CONFIG_PATH, FLUTTER_ROOT. Injected as a format
+# *value*, so braces here are single.
+PACKAGE_CONFIG_FROM_PUB_DEPS_PY = """import json
+import os
+
+deps_path = os.environ["PUB_DEPS_PATH"]
+cache_root = os.environ["PUB_CACHE_ABS"]
+workspace_root = os.environ["WORKSPACE_ABS"]
+config_path = os.environ["PACKAGE_CONFIG_PATH"]
+config_dir = os.path.dirname(config_path)
+
+def _read_language_spec(root_path):
+    pubspec = os.path.join(root_path, "pubspec.yaml")
+    if not os.path.exists(pubspec):
+        return ">=3.0.0 <4.0.0"
+
+    capture = False
+    with open(pubspec, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped.startswith("environment:"):
+                capture = True
+                continue
+            if capture:
+                if stripped.startswith("sdk:"):
+                    return stripped.split(":", 1)[1].strip().strip('"').strip("'")
+                if stripped and not stripped.startswith("#") and not stripped.startswith(("flutter:", "flutter_test:", "dart:")):
+                    break
+    return ">=3.0.0 <4.0.0"
+
+def _parse_language(spec):
+    if not spec:
+        return "3.0"
+    spec = spec.replace(">=", " ").replace("<=", " ").replace(">", " ").replace("<", " ").replace("^", " ").split()
+    if spec:
+        version = spec[0].split("+")[0]
+        parts = version.split(".")
+        numeric_parts = []
+        for part in parts:
+            if part.isdigit():
+                numeric_parts.append(part)
+            else:
+                break
+        if len(numeric_parts) >= 2:
+            return ".".join(numeric_parts[:2])
+        if len(numeric_parts) == 1:
+            return numeric_parts[0] + ".0"
+    return "3.0"
+
+def _root_uri(root_path):
+    rel = os.path.relpath(root_path, config_dir).replace(os.sep, "/")
+    if rel != "." and not rel.endswith("/"):
+        rel += "/"
+    return rel
+
+default_language_version = _parse_language(_read_language_spec(workspace_root))
+
+def _package_language_version(root_path):
+    pubspec = os.path.join(root_path, "pubspec.yaml")
+    if not os.path.exists(pubspec):
+        return default_language_version
+
+    capture = False
+    with open(pubspec, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped.startswith("environment:"):
+                capture = True
+                continue
+            if capture:
+                if stripped.startswith("sdk:"):
+                    return _parse_language(stripped.split(":", 1)[1].strip().strip('"').strip("'"))
+                if stripped and not stripped.startswith("#") and not stripped.startswith(("flutter:", "flutter_test:", "dart:")):
+                    break
+    return default_language_version
+
+with open(deps_path, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+
+packages = []
+
+def add_package(name, root_path):
+    if not name or not root_path or not os.path.isdir(root_path):
+        return
+    pkg = dict()
+    pkg["name"] = name
+    pkg["rootUri"] = _root_uri(root_path)
+    pkg["packageUri"] = "lib/"
+    pkg["languageVersion"] = _package_language_version(root_path)
+    packages.append(pkg)
+
+for entry in data.get("packages", []):
+    name = entry.get("name")
+    source = entry.get("source")
+    version = entry.get("version")
+    description = entry.get("description")
+    if not name:
+        continue
+    if source == "hosted" and version:
+        root_path = os.path.join(cache_root, "hosted", "pub.dev", name + "-" + version)
+        add_package(name, root_path)
+    elif source == "root":
+        add_package(name, workspace_root)
+    elif source == "sdk":
+        if name == "sky_engine":
+            root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "pkg", name)
+        elif name == "_macros":
+            root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "dart-sdk", "pkg", name)
+        else:
+            root_path = os.path.join(os.environ["FLUTTER_ROOT"], "packages", name)
+        add_package(name, root_path)
+    elif source == "path":
+        path_value = ""
+        if isinstance(description, str):
+            path_value = description
+        elif isinstance(description, dict):
+            path_value = description.get("path") or ""
+        if path_value:
+            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
+
+config = dict()
+config["configVersion"] = 2
+config["generated"] = True
+config["generator"] = "rules_flutter"
+config["packages"] = packages
+with open(config_path, "w", encoding="utf-8") as fh:
+    json.dump(config, fh, indent=2)
+    fh.write("\\n")"""
+
 def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = []):
     """Create a working directory structure for Flutter commands.
 
@@ -1034,132 +1165,7 @@ export PACKAGE_CONFIG_PATH="$PWD/.dart_tool/package_config.json"
 mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
 rm -f "$PACKAGE_CONFIG_PATH"
 "$PYTHON_BIN" <<'PY'
-import json
-import os
-
-deps_path = os.environ["PUB_DEPS_PATH"]
-cache_root = os.environ["PUB_CACHE_ABS"]
-workspace_root = os.environ["WORKSPACE_ABS"]
-config_path = os.environ["PACKAGE_CONFIG_PATH"]
-config_dir = os.path.dirname(config_path)
-
-def _read_language_spec(root_path):
-    pubspec = os.path.join(root_path, "pubspec.yaml")
-    if not os.path.exists(pubspec):
-        return ">=3.0.0 <4.0.0"
-
-    capture = False
-    with open(pubspec, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.strip()
-            if stripped.startswith("environment:"):
-                capture = True
-                continue
-            if capture:
-                if stripped.startswith("sdk:"):
-                    return stripped.split(":", 1)[1].strip().strip("\\\"").strip("'")
-                if stripped and not stripped.startswith("#") and not stripped.startswith(("flutter:", "flutter_test:", "dart:")):
-                    break
-    return ">=3.0.0 <4.0.0"
-
-def _parse_language(spec):
-    if not spec:
-        return "3.0"
-    spec = spec.replace(">=", " ").replace("<=", " ").replace(">", " ").replace("<", " ").replace("^", " ").split()
-    if spec:
-        version = spec[0].split("+")[0]
-        parts = version.split(".")
-        numeric_parts = []
-        for part in parts:
-            if part.isdigit():
-                numeric_parts.append(part)
-            else:
-                break
-        if len(numeric_parts) >= 2:
-            return ".".join(numeric_parts[:2])
-        if len(numeric_parts) == 1:
-            return numeric_parts[0] + ".0"
-    return "3.0"
-
-def _root_uri(root_path):
-    rel = os.path.relpath(root_path, config_dir).replace(os.sep, "/")
-    if rel != "." and not rel.endswith("/"):
-        rel += "/"
-    return rel
-
-default_language_version = _parse_language(_read_language_spec(workspace_root))
-
-def _package_language_version(root_path):
-    pubspec = os.path.join(root_path, "pubspec.yaml")
-    if not os.path.exists(pubspec):
-        return default_language_version
-
-    capture = False
-    with open(pubspec, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.strip()
-            if stripped.startswith("environment:"):
-                capture = True
-                continue
-            if capture:
-                if stripped.startswith("sdk:"):
-                    return _parse_language(stripped.split(":", 1)[1].strip().strip("\\\"").strip("'"))
-                if stripped and not stripped.startswith("#") and not stripped.startswith(("flutter:", "flutter_test:", "dart:")):
-                    break
-    return default_language_version
-
-with open(deps_path, "r", encoding="utf-8") as fh:
-    data = json.load(fh)
-
-packages = []
-
-def add_package(name, root_path):
-    if not name or not root_path or not os.path.isdir(root_path):
-        return
-    pkg = dict()
-    pkg["name"] = name
-    pkg["rootUri"] = _root_uri(root_path)
-    pkg["packageUri"] = "lib/"
-    pkg["languageVersion"] = _package_language_version(root_path)
-    packages.append(pkg)
-
-for entry in data.get("packages", []):
-    name = entry.get("name")
-    source = entry.get("source")
-    version = entry.get("version")
-    description = entry.get("description")
-    if not name:
-        continue
-    if source == "hosted" and version:
-        root_path = os.path.join(cache_root, "hosted", "pub.dev", name + "-" + version)
-        add_package(name, root_path)
-    elif source == "root":
-        add_package(name, workspace_root)
-    elif source == "sdk":
-        if name == "sky_engine":
-            root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "pkg", name)
-        elif name == "_macros":
-            root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "dart-sdk", "pkg", name)
-        else:
-            root_path = os.path.join(os.environ["FLUTTER_ROOT"], "packages", name)
-        add_package(name, root_path)
-    elif source == "path":
-        path_value = ""
-        if isinstance(description, str):
-            path_value = description
-        elif isinstance(description, dict):
-            path_value = description.get("path") or ""
-        if path_value:
-            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
-
-config = dict()
-config["configVersion"] = 2
-config["generated"] = True
-config["generator"] = "rules_flutter"
-config["packages"] = packages
-with open(config_path, "w", encoding="utf-8") as fh:
-    json.dump(config, fh, indent=2)
-    fh.write("\\n")
+{package_config_py}
 PY
 echo "✓ Package config regenerated from declared metadata"
 echo ""
@@ -1203,6 +1209,7 @@ fi
         target = target,
         env_exports = env_exports,
         android_env_exports = android_env_exports,
+        package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
 
     # Execute build
