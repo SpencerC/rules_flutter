@@ -1,5 +1,6 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flutter_test")
+load("@rules_multirun//:defs.bzl", "command", "multirun")
 
 flutter_library(
     name = "lib",
@@ -46,6 +47,51 @@ build_test(
         ":lib.build_runner_test",
         ":lib.build_runner_watch",
         ":lib.build_runner_serve",
+    ],
+)
+
+command(
+    name = "build_runner_build_cmd",
+    command = ":lib.build_runner_build",
+)
+
+command(
+    name = "build_runner_test_cmd",
+    command = ":lib.build_runner_test",
+)
+
+command(
+    name = "build_runner_watch_cmd",
+    command = ":lib.build_runner_watch",
+)
+
+command(
+    name = "build_runner_serve_cmd",
+    command = ":lib.build_runner_serve",
+)
+
+multirun(
+    name = "build_runner_dev",
+    commands = [
+        ":build_runner_watch_cmd",
+        ":build_runner_serve_cmd",
+    ],
+    jobs = 0,
+)
+
+multirun(
+    name = "build_runner_verify",
+    commands = [
+        ":build_runner_build_cmd",
+        ":build_runner_test_cmd",
+    ],
+)
+
+build_test(
+    name = "build_runner_multirun_target_test",
+    targets = [
+        ":build_runner_dev",
+        ":build_runner_verify",
     ],
 )
 

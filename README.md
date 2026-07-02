@@ -70,6 +70,51 @@ structure a Flutter+Bazel project. Key takeaways:
 - **Regenerate BUILD files with Gazelle:** The workspace defines a custom
   `gazelle_binary` that understands Flutter, proto, and Starlark sources.
 
+### Build runner workflows
+
+`flutter_library` and `dart_library` support one-shot generators plus
+`build_runner` helpers:
+
+- `generator_commands = [...]` runs `dart run <package>:<script>` during
+  dependency preparation.
+- Omitting `build_runner_modes` emits runnable helper targets for all modes:
+  `:<name>.build_runner_build`, `:<name>.build_runner_test`,
+  `:<name>.build_runner_watch`, and `:<name>.build_runner_serve`.
+- Setting `build_runner_modes` narrows both the emitted helper targets and the
+  action-backed `build_runner build` behavior.
+
+These helper targets are normal executables, so they compose directly with
+`rules_multirun`:
+
+```starlark
+load("@rules_multirun//:defs.bzl", "command", "multirun")
+
+command(
+    name = "app_watch",
+    command = "//flutter_app:lib.build_runner_watch",
+)
+
+command(
+    name = "app_serve",
+    command = "//flutter_app:lib.build_runner_serve",
+)
+
+multirun(
+    name = "app_dev",
+    commands = [
+        ":app_watch",
+        ":app_serve",
+    ],
+    jobs = 0,
+)
+```
+
+Run with:
+
+```bash
+bazel run //:app_dev
+```
+
 ## Protobuf generation
 
 `dart_proto_library` wraps the Dart protoc plugin so you can pair protobuf
