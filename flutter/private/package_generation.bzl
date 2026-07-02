@@ -37,6 +37,18 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_o
     if not pubspec_path.exists:
         return False
 
+    # Some packages publish with a leftover `resolution: workspace` marker
+    # (pub workspaces). It only makes sense inside the source monorepo and
+    # causes `pub deps` to refuse to resolve the package standalone.
+    pubspec_content = repository_ctx.read(pubspec_rel)
+    if pubspec_content.lstrip().startswith("resolution:") or "\nresolution:" in pubspec_content:
+        stripped_lines = [
+            line
+            for line in pubspec_content.splitlines()
+            if not line.startswith("resolution:")
+        ]
+        repository_ctx.file(pubspec_rel, "\n".join(stripped_lines) + "\n")
+
     pub_deps_path = repository_ctx.path(pub_deps_rel)
     if pub_deps_path.exists:
         content = repository_ctx.read(pub_deps_rel)
@@ -88,7 +100,15 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_o
             "doesn't exist" in lower_stderr or
             "doesn't match any versions" in lower_stderr
         )
-        if unsupported_path_dep or unsupported_sdk_dep:
+
+        # Pre-null-safety packages (e.g. `color` 3.0.0) ship SDK constraints a
+        # modern pub solver refuses outright; their metadata can still be read
+        # from pubspec.yaml.
+        unresolvable_sdk_constraint = (
+            "null safety" in lower_stderr or
+            "try using the dart sdk version" in lower_stderr
+        )
+        if unsupported_path_dep or unsupported_sdk_dep or unresolvable_sdk_constraint:
             repository_ctx.report_progress(
                 "Skipping pub deps generation for {} due to unsupported dependency source; falling back to pubspec.yaml".format(package_name),
             )
@@ -230,6 +250,7 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
     )
     rule_kind = _determine_rule_kind(repository_ctx, package_dir)
     srcs = _collect_lib_sources(repository_ctx, package_dir)
+    metadata_files = _collect_metadata_files(repository_ctx, package_dir)
     deps = _collect_direct_deps(
         repository_ctx,
         package_dir,
@@ -263,8 +284,11 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
             lines.append('        "{}",'.format(dep))
         lines.append("    ],")
 
+    data_entries = ['"{}"'.format(name) for name in metadata_files]
     if pub_cache_files_target:
-        lines.append('    data = [":{}"],'.format(pub_cache_files_target))
+        data_entries.append('":{}"'.format(pub_cache_files_target))
+    if data_entries:
+        lines.append("    data = [{}],".format(", ".join(data_entries)))
 
     if rule_kind == "dart_library":
         lines.append("    pub_package = True,")
@@ -415,6 +439,19 @@ def _collect_lib_sources(repository_ctx, package_dir):
                 sources.append("{}/{}".format(source_dir, line))
 
     return sorted(sources)
+
+def _collect_metadata_files(repository_ctx, package_dir):
+    """Top-level metadata files that must reach the assembled pub cache.
+
+    build.yaml carries builder definitions that build_runner discovers from
+    the cache copy of the package.
+    """
+    found = []
+    for name in ["build.yaml"]:
+        rel = name if package_dir in (".", "") else package_dir + "/" + name
+        if repository_ctx.path(rel).exists:
+            found.append(name)
+    return found
 
 def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_deps = True):
     """Return Bazel labels for direct dependencies sourced from pub or the SDK.

@@ -83,6 +83,8 @@ test_suite(
         ":sdk_cache_sealed_test",
         ":single_pub_dependency_build_test",
         ":smoke_test",
+        "//codegen_app:codegen_build_test",
+        "//codegen_app:lib_test",
         "//dart_package:dart_package_test",
         "//flutter_app:app_build_test",
         "//flutter_app:build_runner_mode_targets_test",

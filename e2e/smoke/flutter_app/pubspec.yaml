@@ -22,6 +22,12 @@ dev_dependencies:
   flutter_lints: ^2.0.0
   intl_utils: ^2.8.7
 
+dependency_overrides:
+  # Align with codegen_app: the pub module extension requires a single version
+  # per package across all pub_deps.json files, and build_runner 2.4.x needs
+  # dart_style 2.x.
+  dart_style: 2.3.7
+
 flutter:
   uses-material-design: true
 

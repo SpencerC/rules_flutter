@@ -1,0 +1,32 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@rules_flutter//flutter:defs.bzl", "flutter_library", "flutter_test")
+
+# build_runner runs inside the Bazel action (build_runner_modes = ["build"]);
+# the generated model.g.dart and assets.gen.dart are never checked in.
+flutter_library(
+    name = "lib",
+    srcs = glob(["lib/**"]),
+    build_runner_modes = ["build"],
+    data = glob(["assets/**"]),
+    pubspec = "pubspec.yaml",
+    deps = [
+        "@flutter_sdk//flutter/packages/flutter",
+        "@flutter_sdk//flutter/packages/flutter_test",
+        "@pub_build_runner//:build_runner",
+        "@pub_copy_with_extension//:copy_with_extension",
+        "@pub_copy_with_extension_gen//:copy_with_extension_gen",
+        "@pub_flutter_gen_runner//:flutter_gen_runner",
+    ],
+)
+
+build_test(
+    name = "codegen_build_test",
+    targets = [":lib"],
+)
+
+flutter_test(
+    name = "lib_test",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+    visibility = ["//visibility:public"],
+)

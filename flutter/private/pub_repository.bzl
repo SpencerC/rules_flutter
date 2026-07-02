@@ -71,11 +71,23 @@ def _pub_dev_repository_impl(repository_ctx):
     # pub.dev uses the format: https://pub.dev/packages/{package}/versions/{version}.tar.gz
     archive_url = "{}/packages/{}/versions/{}.tar.gz".format(pub_dev_url, package_name, version)
 
-    # Download and extract the package archive
-    repository_ctx.download_and_extract(
+    # Download and extract the package archive. Extraction uses the system tar
+    # because some pub.dev archives carry trailing bytes after the gzip stream
+    # (e.g. hashcodes 2.0.0), which Bazel's strict extractor rejects.
+    archive_name = "_pub_package.tar.gz"
+    repository_ctx.download(
         url = archive_url,
-        stripPrefix = "",  # pub.dev packages typically have no prefix
+        output = archive_name,
     )
+    extract_result = repository_ctx.execute(["tar", "-xzf", archive_name])
+    if extract_result.return_code != 0 and not repository_ctx.path("pubspec.yaml").exists:
+        fail("Failed to extract {} for package '{}' (code {}):\n{}".format(
+            archive_url,
+            package_name,
+            extract_result.return_code,
+            extract_result.stderr,
+        ))
+    repository_ctx.delete(archive_name)
 
     generate_package_build(
         repository_ctx,

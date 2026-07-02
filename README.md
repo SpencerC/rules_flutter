@@ -110,6 +110,14 @@ structure a Flutter+Bazel project. Key takeaways:
   `:<name>.build_runner_watch`, and `:<name>.build_runner_serve`.
 - Setting `build_runner_modes` narrows both the emitted helper targets and the
   action-backed `build_runner build` behavior.
+- `build_runner_modes = ["build"]` runs `build_runner build` **inside the
+  Bazel action**, fully offline: the entrypoint is resolved from the prepared
+  package config (no implicit `pub get`), a `pubspec.lock` is synthesized from
+  `pub_deps.json` for the package graph, and `--delete-conflicting-outputs` is
+  applied by default. Generated sources (e.g. `*.g.dart`, `assets.gen.dart`)
+  therefore never need to be checked in — see `e2e/smoke/codegen_app` for a
+  working example combining `copy_with_extension_gen` and
+  `flutter_gen_runner`.
 
 These helper targets are normal executables, so they compose directly with
 `rules_multirun`:
