@@ -948,6 +948,153 @@ branch (Starlark cannot merge two selects).""",
     doc = "Internal rule for flutter_app platform targets.",
 )
 
+def _render_dev_server_script(pubspec_rel, flutter_bin, device, dart_defines, run_args):
+    """Render the `bazel run` dev-server script (source-workspace execution)."""
+
+    dart_define_args = " ".join([
+        _shell_quote("--dart-define={}={}".format(key, dart_defines[key]))
+        for key in sorted(dart_defines.keys())
+    ])
+    run_args_quoted = " ".join([_shell_quote(arg) for arg in run_args])
+
+    return """#!/bin/bash
+set -euo pipefail
+
+resolve_runfile() {{
+    local rel="$1"
+    local candidate
+    for root in "${{RUNFILES_DIR:-}}" "$PWD" "$PWD.runfiles"; do
+        if [ -z "$root" ]; then
+            continue
+        fi
+        candidate="$root/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    if [ -e "$rel" ]; then
+        echo "$rel"
+        return 0
+    fi
+    return 1
+}}
+
+WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
+    exit 1
+fi
+
+PUBSPEC_REL="{pubspec_rel}"
+SOURCE_PACKAGE_DIR="$WORKSPACE_DIR"
+if [ -n "$PUBSPEC_REL" ]; then
+    SOURCE_PACKAGE_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
+fi
+
+if [ ! -f "$SOURCE_PACKAGE_DIR/pubspec.yaml" ]; then
+    echo "✗ pubspec.yaml source missing: $SOURCE_PACKAGE_DIR/pubspec.yaml" >&2
+    exit 1
+fi
+
+FLUTTER_BIN="$(resolve_runfile "{flutter_bin}")"
+if [ -z "$FLUTTER_BIN" ] || [ ! -x "$FLUTTER_BIN" ]; then
+    echo "✗ Unable to locate Flutter binary in runfiles: {flutter_bin}" >&2
+    exit 1
+fi
+
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export FLUTTER_ALREADY_LOCKED=true
+export PUB_ENVIRONMENT="flutter_tool:bazel_run"
+
+cd "$SOURCE_PACKAGE_DIR"
+
+DART_DEFINE_ARGS=({dart_define_args})
+RUN_ARGS=({run_args})
+CMD=("$FLUTTER_BIN" "--suppress-analytics" "--no-version-check" "run" "-d" {device})
+if [ ${{#DART_DEFINE_ARGS[@]}} -gt 0 ]; then
+    CMD+=("${{DART_DEFINE_ARGS[@]}}")
+fi
+if [ ${{#RUN_ARGS[@]}} -gt 0 ]; then
+    CMD+=("${{RUN_ARGS[@]}}")
+fi
+if [ $# -gt 0 ]; then
+    CMD+=("$@")
+fi
+
+echo "Running in workspace directory: $SOURCE_PACKAGE_DIR"
+echo "Executing: ${{CMD[*]}}"
+exec "${{CMD[@]}}"
+""".format(
+        pubspec_rel = pubspec_rel,
+        flutter_bin = flutter_bin,
+        device = _shell_quote(device),
+        dart_define_args = dart_define_args,
+        run_args = run_args_quoted,
+    )
+
+def _flutter_dev_server_impl(ctx):
+    """Implementation for the {name}.dev run helper."""
+
+    library_info, _ = _single_embedded_library(ctx, "flutter_app dev server")
+
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    flutter_bin_file = flutter_toolchain.flutterinfo.tool_files[0]
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_dev_runner.sh")
+    ctx.actions.write(
+        output = runner,
+        content = _render_dev_server_script(
+            library_info.pubspec.short_path,
+            flutter_bin_file.short_path,
+            ctx.attr.device,
+            ctx.attr.dart_defines,
+            ctx.attr.run_args,
+        ),
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([runner]),
+            runfiles = ctx.runfiles(
+                files = [runner, library_info.pubspec] +
+                        flutter_toolchain.flutterinfo.tool_files +
+                        flutter_toolchain.flutterinfo.sdk_files,
+            ),
+        ),
+    ]
+
+_flutter_dev_server_rule = rule(
+    implementation = _flutter_dev_server_impl,
+    attrs = {
+        "embed": attr.label_list(
+            providers = [FlutterLibraryInfo],
+            doc = "flutter_library whose source package the dev server runs in.",
+        ),
+        "device": attr.string(
+            default = "web-server",
+            doc = "Device id passed to flutter run -d.",
+        ),
+        "dart_defines": attr.string_dict(
+            default = {},
+            doc = "Compile-time --dart-define pairs (configurable via select()).",
+        ),
+        "run_args": attr.string_list(
+            default = [],
+            doc = "Extra args forwarded to flutter run (e.g. --web-port=8080).",
+        ),
+    },
+    executable = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = """Runs `flutter run` in the SOURCE workspace with the hermetic SDK.
+
+Unlike build actions this is a development helper: it uses the checked-out
+sources (with hot reload) and the developer's package resolution, not the
+prepared Bazel workspace.""",
+)
+
 def _to_label_list(value):
     if value == None:
         return []
@@ -1003,6 +1150,8 @@ def flutter_app(
         build_args = None,
         mode = None,
         env = None,
+        create_dev_target = True,
+        dev_run_args = None,
         web = None,
         apk = None,
         ios = None,
@@ -1033,6 +1182,10 @@ def flutter_app(
       build_args: Extra flutter build arguments shared by all platforms.
       mode: Build mode (release, profile, debug) shared by all platforms.
       env: Extra action environment variables shared by all platforms.
+      create_dev_target: Whether to emit a runnable `{name}.dev` helper (when
+        `web` is configured) that runs `flutter run -d web-server` in the
+        source workspace with the hermetic SDK and the web dart_defines.
+      dev_run_args: Extra args forwarded to flutter run by the dev helper.
       web: Files or dict spec for the {name}.web target.
       apk: Files or dict spec for the {name}.apk target.
       ios: Files or dict spec for the {name}.ios target.
@@ -1096,6 +1249,23 @@ def flutter_app(
 
         _flutter_app_rule(**rule_args)
         generated.append(target_name)
+
+        if platform == "web" and create_dev_target:
+            dev_args = {
+                "name": "{}.dev".format(name),
+                "embed": embed,
+            }
+            if merged_dart_defines != None:
+                dev_args["dart_defines"] = merged_dart_defines
+            if dev_run_args != None:
+                dev_args["run_args"] = dev_run_args
+            if visibility != None:
+                dev_args["visibility"] = visibility
+            if tags != None:
+                dev_args["tags"] = tags
+            if testonly:
+                dev_args["testonly"] = True
+            _flutter_dev_server_rule(**dev_args)
 
     if not generated:
         fail(

@@ -340,6 +340,20 @@ snapshot:
 bazel run //:app_lib.update
 ```
 
+### Development server
+
+Apps with a `web` platform also emit a `{name}.dev` helper that runs
+`flutter run -d web-server` in your **source** workspace using the hermetic
+SDK — hot reload included, no host Flutter install required. It inherits the
+web platform's `dart_defines`, so per-environment config flows through:
+
+```bash
+bazel run //:my_app.dev --//:env=dev -- --web-port=8080
+```
+
+Opt out with `create_dev_target = False`; pass fixed args via
+`dev_run_args = [...]`.
+
 ## Development workflows
 
 - **Run all tests:** `bazel test //...`

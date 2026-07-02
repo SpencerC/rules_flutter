@@ -199,7 +199,7 @@ Defines a dart_library target and optional .update helper.
 load("@rules_flutter//flutter:defs.bzl", "flutter_app")
 
 flutter_app(*, <a href="#flutter_app-name">name</a>, <a href="#flutter_app-embed">embed</a>, <a href="#flutter_app-srcs">srcs</a>, <a href="#flutter_app-visibility">visibility</a>, <a href="#flutter_app-tags">tags</a>, <a href="#flutter_app-testonly">testonly</a>, <a href="#flutter_app-dart_defines">dart_defines</a>, <a href="#flutter_app-build_args">build_args</a>, <a href="#flutter_app-mode">mode</a>, <a href="#flutter_app-env">env</a>,
-            <a href="#flutter_app-web">web</a>, <a href="#flutter_app-apk">apk</a>, <a href="#flutter_app-ios">ios</a>, <a href="#flutter_app-macos">macos</a>, <a href="#flutter_app-linux">linux</a>, <a href="#flutter_app-windows">windows</a>)
+            <a href="#flutter_app-create_dev_target">create_dev_target</a>, <a href="#flutter_app-dev_run_args">dev_run_args</a>, <a href="#flutter_app-web">web</a>, <a href="#flutter_app-apk">apk</a>, <a href="#flutter_app-ios">ios</a>, <a href="#flutter_app-macos">macos</a>, <a href="#flutter_app-linux">linux</a>, <a href="#flutter_app-windows">windows</a>)
 </pre>
 
 Macro that defines flutter_app platform targets.
@@ -230,6 +230,8 @@ with platform keys winning, `mode` overrides).
 | <a id="flutter_app-build_args"></a>build_args |  Extra flutter build arguments shared by all platforms.   |  `None` |
 | <a id="flutter_app-mode"></a>mode |  Build mode (release, profile, debug) shared by all platforms.   |  `None` |
 | <a id="flutter_app-env"></a>env |  Extra action environment variables shared by all platforms.   |  `None` |
+| <a id="flutter_app-create_dev_target"></a>create_dev_target |  Whether to emit a runnable `{name}.dev` helper (when `web` is configured) that runs `flutter run -d web-server` in the source workspace with the hermetic SDK and the web dart_defines.   |  `True` |
+| <a id="flutter_app-dev_run_args"></a>dev_run_args |  Extra args forwarded to flutter run by the dev helper.   |  `None` |
 | <a id="flutter_app-web"></a>web |  Files or dict spec for the {name}.web target.   |  `None` |
 | <a id="flutter_app-apk"></a>apk |  Files or dict spec for the {name}.apk target.   |  `None` |
 | <a id="flutter_app-ios"></a>ios |  Files or dict spec for the {name}.ios target.   |  `None` |

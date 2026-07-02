@@ -74,7 +74,10 @@ flutter_app(
 
 build_test(
     name = "app_build_test",
-    targets = [":app.web"],
+    targets = [
+        ":app.dev",
+        ":app.web",
+    ],
 )
 
 sh_test(
