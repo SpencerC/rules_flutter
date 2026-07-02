@@ -143,6 +143,28 @@ Run with:
 bazel run //:app_dev
 ```
 
+### Mounting generated sources (protos) into a package
+
+Generated Dart — most commonly `dart_proto_library` output — can be mounted at
+an explicit directory inside the package workspace with `generated_srcs`, so
+imports like `package:my_app/generated/<proto import path>.pb.dart` resolve
+during codegen, builds, and tests without checking generated files in:
+
+```starlark
+flutter_library(
+    name = "app_lib",
+    srcs = glob(["lib/**"], exclude = ["lib/generated/**"]),
+    generated_srcs = {
+        "//protos/api/v1:api_v1_proto_dart": "lib/generated",
+    },
+    pubspec = "pubspec.yaml",
+    deps = ["@pub_protobuf//:protobuf", ...],
+)
+```
+
+`dart_proto_library` targets mount each file at its proto-import-relative path
+under the destination directory; other targets mount flat by basename.
+
 ## Protobuf generation
 
 `dart_proto_library` wraps the Dart protoc plugin so you can pair protobuf

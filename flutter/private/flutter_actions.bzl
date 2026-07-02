@@ -4,7 +4,7 @@ def shell_quote(arg):
     """Quote a string for safe interpolation into a bash script."""
     return "'" + arg.replace("'", "'\"'\"'") + "'"
 
-def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files):
+def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = []):
     """Create a working directory structure for Flutter commands.
 
     Args:
@@ -13,6 +13,9 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
         dart_files: List of .dart source files
         other_files: List of other source files declared in srcs
         data_files: List of additional data files that must be available in the workspace
+        extra_entries: List of (rel_path, file) tuples mounted at explicit
+            workspace-relative paths (e.g. generated proto sources). These take
+            precedence over the derived layout for the same file.
 
     Returns:
         Tuple of (working_dir, input_files)
@@ -74,6 +77,9 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
 
     add_entry(pubspec_file, "pubspec.yaml")
 
+    for rel_path, f in extra_entries:
+        add_entry(f, rel_path)
+
     for f in dart_files + other_files + data_files:
         add_entry(f)
 
@@ -119,7 +125,7 @@ done < "$MANIFEST_FILE"
     # Collect unique input files for the action
     input_files = []
     seen_inputs = {}
-    for f in [pubspec_file] + dart_files + other_files + data_files:
+    for f in [pubspec_file] + [entry[1] for entry in extra_entries] + dart_files + other_files + data_files:
         if f == None:
             continue
         if f.path in seen_inputs:

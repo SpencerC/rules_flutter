@@ -80,7 +80,7 @@ Information about a Dart library
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "DartProtoLibraryInfo")
 
-DartProtoLibraryInfo(<a href="#DartProtoLibraryInfo-sources">sources</a>)
+DartProtoLibraryInfo(<a href="#DartProtoLibraryInfo-sources">sources</a>, <a href="#DartProtoLibraryInfo-source_roots">source_roots</a>)
 </pre>
 
 Generated Dart sources produced from .proto files.
@@ -90,6 +90,7 @@ Generated Dart sources produced from .proto files.
 | Name  | Description |
 | :------------- | :------------- |
 | <a id="DartProtoLibraryInfo-sources"></a>sources |  Depset of generated Dart source files (.pb.dart, .pbgrpc.dart).    |
+| <a id="DartProtoLibraryInfo-source_roots"></a>source_roots |  List of structs (file, rel_path) where rel_path is the generated file's path relative to the proto source root (i.e. mirroring the proto import path, e.g. 'api/v1/service.pb.dart'). Used to mount generated sources at a chosen directory inside a Flutter package workspace.    |
 
 
 <a id="FlutterLibraryInfo"></a>

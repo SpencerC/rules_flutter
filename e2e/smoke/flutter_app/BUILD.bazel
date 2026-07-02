@@ -7,6 +7,11 @@ flutter_library(
     name = "lib",
     srcs = ["lib/main.dart"],
     data = glob(["l10n/**"]),
+    generated_srcs = {
+        # Mounted at lib/generated/<proto import path>.pb.dart, so main.dart
+        # imports package:hello_world/generated/protos/api/v1/service.pb.dart.
+        "//protos/api/v1:services_api_v1_proto_dart": "lib/generated",
+    },
     generator_commands = ["intl_utils:generate"],
     pubspec = "pubspec.yaml",
     deps = [
@@ -16,6 +21,7 @@ flutter_library(
         "@pub_fixnum//:fixnum",
         "@pub_flutter_lints//:flutter_lints",
         "@pub_intl_utils//:intl_utils",
+        "@pub_protobuf//:protobuf",
         "@pub_vector_math//:vector_math",
     ],
 )

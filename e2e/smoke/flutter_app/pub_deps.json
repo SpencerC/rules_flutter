@@ -10,6 +10,7 @@
         "flutter",
         "flutter_localizations",
         "fixnum",
+        "protobuf",
         "vector_math",
         "flutter_test",
         "flutter_lints",
@@ -449,6 +450,13 @@
       "kind": "transitive",
       "source": "hosted",
       "dependencies": ["clock", "collection"]
+    },
+    {
+      "name": "protobuf",
+      "version": "3.1.0",
+      "kind": "direct",
+      "source": "hosted",
+      "dependencies": ["collection", "fixnum", "meta"]
     },
     {
       "name": "fixnum",

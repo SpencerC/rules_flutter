@@ -42,6 +42,10 @@ DartProtoLibraryInfo = provider(
     doc = "Generated Dart sources produced from .proto files.",
     fields = {
         "sources": "Depset of generated Dart source files (.pb.dart, .pbgrpc.dart).",
+        "source_roots": """List of structs (file, rel_path) where rel_path is the
+generated file's path relative to the proto source root (i.e. mirroring the
+proto import path, e.g. 'api/v1/service.pb.dart'). Used to mount generated
+sources at a chosen directory inside a Flutter package workspace.""",
     },
 )
 
@@ -497,6 +501,21 @@ def _compute_relative_to_package(ctx, file):
 
     return file.basename
 
+def _generated_srcs_entries(generated_srcs):
+    """Expand a generated_srcs dict into explicit (rel_path, file) mounts."""
+    entries = []
+    for target, dest_dir in generated_srcs.items():
+        dest = dest_dir.strip("/")
+        if not dest:
+            fail("generated_srcs destination for {} must be a non-empty package-relative directory".format(target.label))
+        if DartProtoLibraryInfo in target:
+            for entry in target[DartProtoLibraryInfo].source_roots:
+                entries.append((dest + "/" + entry.rel_path, entry.file))
+        else:
+            for f in target[DefaultInfo].files.to_list():
+                entries.append((dest + "/" + f.basename, f))
+    return entries
+
 def _flutter_library_impl(ctx):
     """Implementation for flutter_library rule."""
 
@@ -520,6 +539,7 @@ def _flutter_library_impl(ctx):
         dart_files,
         other_files,
         list(ctx.files.data),
+        extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
     )
 
     # Collect pub_cache directories from all transitive dependencies
@@ -597,6 +617,15 @@ _flutter_library_rule = rule(
         "data": attr.label_list(
             allow_files = True,
             doc = "Additional files (assets, l10n data, etc.) needed for code generation or embedding.",
+        ),
+        "generated_srcs": attr.label_keyed_string_dict(
+            allow_files = True,
+            default = {},
+            doc = """Targets whose outputs are mounted at an explicit package-relative
+directory inside the Flutter workspace, e.g.
+`{"//protos/api/v1:api_dart_proto": "lib/generated/protos"}`. dart_proto_library
+targets mount each generated file at its proto-import-relative path under the
+destination; other targets mount flat by basename.""",
         ),
         "generator_commands": attr.string_list(
             doc = "List of one-shot generator commands to run via `dart run` (e.g., ['intl_utils:generate']).",
@@ -1418,6 +1447,16 @@ def _compute_repo_relative_path(ctx, artifact, repo_name):
     components.extend(["external", repo_name, "lib"])
     return "/".join(components).replace("+", "%2B")
 
+def _proto_import_path(src, proto_info):
+    """Return src's path relative to the proto source root (its import path)."""
+    root = proto_info.proto_source_root
+    path = src.path
+    if root and root != ".":
+        prefix = root + "/"
+        if path.startswith(prefix):
+            return path[len(prefix):]
+    return path
+
 def _dart_proto_library_impl(ctx):
     """Implementation for dart_proto_library rule."""
 
@@ -1525,17 +1564,37 @@ exec "$DART_BIN" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
         option_components.append("grpc")
 
     all_outputs = []
+    source_roots = []
 
     for dep in ctx.attr.deps:
         proto_info = dep[ProtoInfo]
         proto_common.check_collocated(ctx.label, proto_info, proto_lang_toolchain_info)
 
-        generated_files = proto_common.declare_generated_files(ctx.actions, proto_info, ".pb.dart")
+        pb_files = proto_common.declare_generated_files(ctx.actions, proto_info, ".pb.dart")
+        pbgrpc_files = []
         if ctx.attr.grpc:
-            generated_files += proto_common.declare_generated_files(ctx.actions, proto_info, ".pbgrpc.dart")
+            pbgrpc_files = proto_common.declare_generated_files(ctx.actions, proto_info, ".pbgrpc.dart")
 
+        generated_files = pb_files + pbgrpc_files
         if not generated_files:
             continue
+
+        # declare_generated_files produces one file per direct source, in
+        # order; pair them up to record proto-import-relative paths.
+        direct_sources = proto_info.direct_sources
+        if len(pb_files) != len(direct_sources):
+            fail("dart_proto_library: generated file count ({}) does not match proto source count ({}) for {}".format(
+                len(pb_files),
+                len(direct_sources),
+                dep.label,
+            ))
+        for idx in range(len(direct_sources)):
+            rel_base = _proto_import_path(direct_sources[idx], proto_info)
+            if rel_base.endswith(".proto"):
+                rel_base = rel_base[:-len(".proto")]
+            source_roots.append(struct(file = pb_files[idx], rel_path = rel_base + ".pb.dart"))
+            if pbgrpc_files:
+                source_roots.append(struct(file = pbgrpc_files[idx], rel_path = rel_base + ".pbgrpc.dart"))
 
         all_outputs.extend(generated_files)
 
@@ -1560,7 +1619,10 @@ exec "$DART_BIN" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
 
     return [
         DefaultInfo(files = depset(all_outputs)),
-        DartProtoLibraryInfo(sources = depset(all_outputs)),
+        DartProtoLibraryInfo(
+            sources = depset(all_outputs),
+            source_roots = source_roots,
+        ),
     ]
 
 dart_proto_library = rule(
@@ -1634,6 +1696,9 @@ def _dart_library_impl(ctx):
     pub_cache_dir = None
     dart_tool_dir = None
 
+    if ctx.attr.generated_srcs and not pubspec_file:
+        fail("dart_library 'generated_srcs' requires the 'pubspec' attribute to be set")
+
     if pubspec_file:
         pub_deps_input = ctx.file.pub_deps
         if not pub_deps_input:
@@ -1646,6 +1711,7 @@ def _dart_library_impl(ctx):
             direct_srcs,
             [],
             list(ctx.files.data),
+            extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
         )
 
         # Prepare dependency cache and package metadata from declared pub_deps.json.
@@ -1741,6 +1807,14 @@ _dart_library_rule = rule(
         "pub_deps": attr.label(
             allow_single_file = True,
             doc = "Checked-in pub_deps.json generated from this package's pubspec.yaml.",
+        ),
+        "generated_srcs": attr.label_keyed_string_dict(
+            allow_files = True,
+            default = {},
+            doc = """Targets whose outputs are mounted at an explicit package-relative
+directory inside the package workspace (requires 'pubspec'). dart_proto_library
+targets mount each generated file at its proto-import-relative path under the
+destination; other targets mount flat by basename.""",
         ),
         "generator_commands": attr.string_list(
             doc = "List of one-shot generator commands to run via `dart run` (e.g., ['intl_utils:generate']).",
