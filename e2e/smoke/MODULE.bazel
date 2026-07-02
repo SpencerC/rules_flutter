@@ -15,7 +15,12 @@ local_path_override(
 )
 
 flutter = use_extension("@rules_flutter//flutter:extensions.bzl", "flutter")
-flutter.toolchain(flutter_version = "3.24.0")
+flutter.toolchain(
+    flutter_version = "3.24.0",
+    # Verified at fetch time: sentinel artifacts must exist in the SDK cache
+    # (stable archives ship them; `flutter precache` runs only if missing).
+    precache = ["web"],
+)
 use_repo(
     flutter,
     "flutter_sdk",

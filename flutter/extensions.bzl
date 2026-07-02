@@ -21,10 +21,17 @@ Base name for generated repositories, allowing more than one flutter toolchain t
 Overriding the default is only permitted in the root module.
 """, default = _DEFAULT_NAME),
     "flutter_version": attr.string(doc = "Explicit version of flutter.", mandatory = True),
+    "precache": attr.string_list(doc = """\
+Artifact groups (web, android, ios, macos, linux, windows) that must be present
+in the SDK cache after fetch. Stable archives already ship these; when one is
+missing, `flutter precache` runs at repository fetch time. Unioned across
+registrations of the same toolchain name.
+""", default = []),
 })
 
 def _toolchain_extension(module_ctx):
     registrations = {}
+    precache_groups = {}
     for mod in module_ctx.modules:
         for toolchain in mod.tags.toolchain:
             if toolchain.name != _DEFAULT_NAME and not mod.is_root:
@@ -34,7 +41,10 @@ def _toolchain_extension(module_ctx):
                 """)
             if toolchain.name not in registrations.keys():
                 registrations[toolchain.name] = []
+                precache_groups[toolchain.name] = {}
             registrations[toolchain.name].append(toolchain.flutter_version)
+            for group in toolchain.precache:
+                precache_groups[toolchain.name][group] = True
     for name, versions in registrations.items():
         # Deduplicate versions to avoid noise when the same version is registered multiple times
         unique_versions = {v: True for v in versions}.keys()
@@ -50,6 +60,7 @@ def _toolchain_extension(module_ctx):
         flutter_register_toolchains(
             name = name,
             flutter_version = selected,
+            precache = sorted(precache_groups[name].keys()),
             register = False,
         )
 

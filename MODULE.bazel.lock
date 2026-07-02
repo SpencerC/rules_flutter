@@ -213,7 +213,7 @@
   "moduleExtensions": {
     "//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "qOHEQ2aYrfvXui4T9LrZMObQfJ7KYLukVGg58VanIGk=",
+        "bzlTransitiveDigest": "fA9haj11SRanGyejGrTKPcZtkF8Z3iVmzegKu+3CBGY=",
         "usagesDigest": "MPZC/xzGVbRvfxHYU74cPXZyyx32ojSPxKT0ZE+0WUE=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -223,21 +223,24 @@
             "repoRuleId": "@@//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "macos",
-              "flutter_version": "3.24.0"
+              "flutter_version": "3.24.0",
+              "precache": []
             }
           },
           "flutter_linux": {
             "repoRuleId": "@@//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "linux",
-              "flutter_version": "3.24.0"
+              "flutter_version": "3.24.0",
+              "precache": []
             }
           },
           "flutter_windows": {
             "repoRuleId": "@@//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "windows",
-              "flutter_version": "3.24.0"
+              "flutter_version": "3.24.0",
+              "precache": []
             }
           },
           "flutter_toolchains": {

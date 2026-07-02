@@ -5,6 +5,7 @@ Add a basic smoke-test target below.
 load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 gazelle_binary(
     name = "gazelle_bin",
@@ -68,11 +69,18 @@ build_test(
     ],
 )
 
+sh_test(
+    name = "sdk_cache_sealed_test",
+    srcs = ["sdk_cache_sealed_test.sh"],
+    data = ["@flutter_sdk//:flutter_bin"],
+)
+
 test_suite(
     name = "integration_tests",
     tests = [
         ":gazelle_generation_test",
         ":pub_tooling_dependency_build_test",
+        ":sdk_cache_sealed_test",
         ":single_pub_dependency_build_test",
         ":smoke_test",
         "//dart_package:dart_package_test",

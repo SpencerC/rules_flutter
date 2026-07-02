@@ -108,6 +108,7 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 export FLUTTER_SUPPRESS_ANALYTICS=true
+export FLUTTER_ALREADY_LOCKED=true
 export CI=true
 export PUB_ENVIRONMENT="flutter_tool:bazel_update"
 
@@ -152,7 +153,7 @@ fi
 
 cd "$PACKAGE_DIR"
 
-if ! "$FLUTTER_BIN" --suppress-analytics pub deps --json > "$TMP_DIR/pub_deps.raw.json"; then
+if ! "$FLUTTER_BIN" --suppress-analytics --no-version-check pub deps --json > "$TMP_DIR/pub_deps.raw.json"; then
     echo "✗ flutter pub deps --json failed for $SOURCE_PACKAGE_DIR" >&2
     exit 1
 fi
@@ -1297,9 +1298,12 @@ FLUTTER_BIN_DIR="$(dirname "$FLUTTER_BIN_ABS")"
 FLUTTER_ROOT="$(cd "$FLUTTER_BIN_DIR/.." && pwd)"
 
 export FLUTTER_SUPPRESS_ANALYTICS=true
+export FLUTTER_ALREADY_LOCKED=true
 export CI=true
 export PUB_ENVIRONMENT="flutter_tool:bazel"
 export PUB_CACHE="$RUNTIME_PUB_CACHE"
+export HOME="${{TEST_TMPDIR}}/flutter_home"
+mkdir -p "$HOME"
 export ANDROID_HOME=""
 export ANDROID_SDK_ROOT=""
 export FLUTTER_ROOT
@@ -1309,7 +1313,7 @@ export PATH="$FLUTTER_BIN_DIR:$PATH"
 # This ensures package imports resolve correctly in the test environment
 echo "Regenerating package_config.json for test runtime..."
 pushd "$RUNTIME_WORKSPACE" >/dev/null
-if "$FLUTTER_BIN_ABS" --suppress-analytics pub get --offline > /dev/null 2>&1; then
+if "$FLUTTER_BIN_ABS" --suppress-analytics --no-version-check pub get --offline > /dev/null 2>&1; then
     echo "✓ Package config regenerated successfully (offline)" | tee -a "$TEST_LOG"
 else
     echo "✗ flutter pub get --offline failed in test runtime" | tee -a "$TEST_LOG"
@@ -1318,7 +1322,7 @@ else
 fi
 popd >/dev/null
 
-CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "test")
+CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test")
 IFS=$'\n'
 for pattern in $'{test_patterns}'; do
     if [ -n "$pattern" ]; then

@@ -38,6 +38,34 @@ The Flutter extension resolves a platform-appropriate SDK and registers
 toolchains so every action can locate Flutter binaries without relying on host
 installs.
 
+#### SDK hermeticity guarantees
+
+The SDK repository is immutable after fetch:
+
+- The release archive is downloaded with integrity verification, and the
+  launcher's engine-version refresh is patched at fetch time so `flutter`
+  invocations never write into the repository.
+- `bin/cache` is sealed read-only; any residual write attempt fails the build
+  loudly instead of silently mutating shared state.
+- Build actions run with `FLUTTER_ALREADY_LOCKED`, `--no-version-check`, and a
+  scratch `HOME`, so no lockfiles, stamps, or analytics/config writes escape
+  the sandbox.
+
+Stable release archives already ship the engine artifacts for web, Android,
+and the host desktop platform (plus iOS on macOS). If you rely on artifacts a
+particular archive does not include, declare them and they will be verified —
+or fetched via `flutter precache` — at repository fetch time:
+
+```starlark
+flutter.toolchain(
+    flutter_version = "3.38.4",
+    precache = ["web", "android", "ios"],
+)
+```
+
+Do not run `flutter precache` or `flutter config` against the Bazel-provided
+SDK from scripts: it is unnecessary and the sealed cache will reject it.
+
 #### Managing pub.dev dependencies
 
 `rules_flutter` ships a `pub` module extension that scans every `pub_deps.json`

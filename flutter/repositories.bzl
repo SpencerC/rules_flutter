@@ -12,7 +12,135 @@ _DOC = "Fetch external tools needed for flutter toolchain"
 _ATTRS = {
     "flutter_version": attr.string(mandatory = True, values = TOOL_VERSIONS.keys()),
     "platform": attr.string(mandatory = True, values = PLATFORMS.keys()),
+    "precache": attr.string_list(
+        default = [],
+        doc = """Artifact groups that must exist in the SDK cache after fetch
+(any of: web, android, ios, macos, linux, windows). Stable release archives
+already ship all of these except cross-OS desktop artifacts, so this normally
+verifies sentinel paths without running anything. When a sentinel is missing
+and the repository platform matches the host, `flutter precache` runs at fetch
+time (network is available to repository rules).""",
+    ),
 }
+
+# Sentinel paths (relative to flutter/bin/cache) proving an artifact group is
+# already present in the extracted archive.
+_PRECACHE_SENTINELS = {
+    "android": "artifacts/engine/android-arm64-release",
+    "ios": "artifacts/engine/ios-release",
+    "linux": "artifacts/engine/linux-x64-release",
+    "macos": "artifacts/engine/darwin-x64-release",
+    "web": "flutter_web_sdk",
+    "windows": "artifacts/engine/windows-x64-release",
+}
+
+# The tail of bin/internal/update_engine_version.sh that unconditionally
+# rewrites engine.stamp/engine.realm on every launcher invocation. Replaced at
+# fetch time so `flutter` never writes into the Bazel external repository.
+_ENGINE_VERSION_WRITE_ORIGINAL = """# Write the engine version out so downstream tools know what to look for.
+echo $ENGINE_VERSION >"$FLUTTER_ROOT/bin/cache/engine.stamp"
+
+# The realm on CI is passed in.
+if [ -n "${FLUTTER_REALM}" ]; then
+  echo $FLUTTER_REALM >"$FLUTTER_ROOT/bin/cache/engine.realm"
+else
+  echo "" >"$FLUTTER_ROOT/bin/cache/engine.realm"
+fi"""
+
+_ENGINE_VERSION_WRITE_PATCHED = """# Write the engine version out so downstream tools know what to look for.
+# Patched by rules_flutter: skip writes when the content is already correct so
+# launcher invocations never mutate the Bazel external repository.
+if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.stamp" 2>/dev/null)" != "$ENGINE_VERSION" ]; then
+  echo $ENGINE_VERSION >"$FLUTTER_ROOT/bin/cache/engine.stamp"
+fi
+
+# The realm on CI is passed in.
+FLUTTER_REALM="${FLUTTER_REALM:-}"
+if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.realm" 2>/dev/null)" != "$FLUTTER_REALM" ]; then
+  echo $FLUTTER_REALM >"$FLUTTER_ROOT/bin/cache/engine.realm"
+fi"""
+
+def _patch_engine_version_script(repository_ctx):
+    """Make the launcher's engine-version refresh write-free when unchanged."""
+    script_path = "flutter/bin/internal/update_engine_version.sh"
+    if not repository_ctx.path(script_path).exists:
+        return
+    content = repository_ctx.read(script_path)
+    if _ENGINE_VERSION_WRITE_ORIGINAL not in content:
+        # Layout changed upstream; fail loudly rather than silently shipping a
+        # mutating launcher. Update the patch alongside new Flutter versions.
+        fail("rules_flutter: unable to patch {} for Flutter {}: unexpected script content. ".format(
+            script_path,
+            repository_ctx.attr.flutter_version,
+        ) + "Update _ENGINE_VERSION_WRITE_ORIGINAL in flutter/repositories.bzl.")
+    repository_ctx.file(
+        script_path,
+        content.replace(_ENGINE_VERSION_WRITE_ORIGINAL, _ENGINE_VERSION_WRITE_PATCHED),
+        executable = True,
+        legacy_utf8 = False,
+    )
+
+def _host_matches_platform(repository_ctx, platform):
+    os_name = repository_ctx.os.name.lower()
+    if platform == "macos":
+        return os_name.startswith("mac") or os_name.startswith("darwin")
+    return os_name.startswith(platform)
+
+def _ensure_precached_artifacts(repository_ctx):
+    """Verify requested artifact groups exist; precache them if fetchable."""
+    missing = [
+        group
+        for group in repository_ctx.attr.precache
+        if not repository_ctx.path("flutter/bin/cache/" + _PRECACHE_SENTINELS[group]).exists
+    ]
+    if not missing:
+        return
+
+    if not _host_matches_platform(repository_ctx, repository_ctx.attr.platform):
+        # buildifier: disable=print
+        print("rules_flutter: cannot run 'flutter precache --{}' for the {} SDK on this host; ".format(
+            " --".join(missing),
+            repository_ctx.attr.platform,
+        ) + "builds needing those artifacts will fail. (Stable archives normally ship them.)")
+        return
+
+    # buildifier: disable=print
+    print("rules_flutter: archive for Flutter {} is missing {} artifacts; running 'flutter precache' at fetch time. ".format(
+        repository_ctx.attr.flutter_version,
+        ", ".join(missing),
+    ) + "Note: precached artifacts are engine-revision-pinned but not integrity-checked.")
+
+    result = repository_ctx.execute(
+        [
+            "flutter/bin/flutter",
+            "--no-version-check",
+            "precache",
+            "--force",
+        ] + ["--" + group for group in missing],
+        environment = {
+            "CI": "true",
+            "FLUTTER_SUPPRESS_ANALYTICS": "true",
+            "PUB_ENVIRONMENT": "flutter_tool:bazel_fetch",
+        },
+        timeout = 1800,
+    )
+    if result.return_code != 0:
+        fail("rules_flutter: flutter precache failed (code {}):\nstdout: {}\nstderr: {}".format(
+            result.return_code,
+            result.stdout,
+            result.stderr,
+        ))
+
+def _seal_sdk_cache(repository_ctx):
+    """Make bin/cache read-only so any residual write attempt fails loudly.
+
+    Build actions and run helpers set FLUTTER_ALREADY_LOCKED and
+    --no-version-check, and the launcher is patched above, so nothing should
+    write here after fetch time.
+    """
+    if repository_ctx.os.name.lower().startswith("windows"):
+        return
+    repository_ctx.execute(["chmod", "-R", "a-w", "flutter/bin/cache"])
 
 def _flutter_repo_impl(repository_ctx):
     # Flutter SDK download URLs from Google Cloud Storage
@@ -29,6 +157,15 @@ def _flutter_repo_impl(repository_ctx):
         url = url,
         integrity = TOOL_VERSIONS[repository_ctx.attr.flutter_version][repository_ctx.attr.platform],
     )
+
+    _patch_engine_version_script(repository_ctx)
+    _ensure_precached_artifacts(repository_ctx)
+
+    # Drop transient download staging shipped in (or created by) the archive.
+    downloads = repository_ctx.path("flutter/bin/cache/downloads")
+    if downloads.exists:
+        repository_ctx.delete(downloads)
+
     package_labels = _generate_flutter_packages(repository_ctx)
 
     package_group = ""
@@ -94,6 +231,10 @@ flutter_toolchain(
     )
 
     repository_ctx.file("BUILD.bazel", build_content)
+
+    # Last step: package BUILD files (written into bin/cache/pkg above) exist
+    # by now, so the cache can be sealed.
+    _seal_sdk_cache(repository_ctx)
 
 def _generate_flutter_packages(repository_ctx):
     """Generate BUILD files for packages bundled within the Flutter SDK."""

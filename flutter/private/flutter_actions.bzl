@@ -879,10 +879,14 @@ echo "Flutter binary verified at: $FLUTTER_BIN_ABS"
 
 FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN_ABS")/.." && pwd -P)"
 
-# Configure Flutter for sandbox environment
+# Configure Flutter for sandbox environment. The SDK repository is sealed
+# read-only at fetch time; FLUTTER_ALREADY_LOCKED skips the bin/cache lockfile
+# and the scratch HOME keeps config/analytics writes out of the repository.
 export FLUTTER_SUPPRESS_ANALYTICS=true
+export FLUTTER_ALREADY_LOCKED=true
 export CI=true
 export PUB_ENVIRONMENT="flutter_tool:bazel"
+export HOME="$(mktemp -d)"
 {android_env_exports}
 export FLUTTER_ROOT
 export PATH="$FLUTTER_ROOT/bin:$PATH"
@@ -1077,7 +1081,7 @@ echo ""
 
 echo "Running: $FLUTTER_BIN_ABS {build_command}"
 
-if "$FLUTTER_BIN_ABS" --suppress-analytics {build_command}; then
+if "$FLUTTER_BIN_ABS" --suppress-analytics --no-version-check {build_command}; then
     echo "✓ flutter {build_command} completed successfully"
 
     # Copy build artifacts to absolute path
