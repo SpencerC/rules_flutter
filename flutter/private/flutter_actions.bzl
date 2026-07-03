@@ -189,6 +189,33 @@ config["generator"] = "rules_flutter"
 config["packages"] = packages
 with open(config_path, "w", encoding="utf-8") as fh:
     json.dump(config, fh, indent=2)
+    fh.write("\\n")
+
+# Newer flutter_tools also require .dart_tool/package_graph.json (normally
+# written by `pub get`).
+graph_packages = []
+root_name = None
+for entry in data.get("packages", []):
+    name = entry.get("name")
+    if not name:
+        continue
+    if entry.get("source") == "root":
+        root_name = name
+    node = dict()
+    node["name"] = name
+    node["version"] = entry.get("version") or "0.0.0"
+    node["dependencies"] = [dep for dep in entry.get("dependencies", []) if isinstance(dep, str)]
+    if entry.get("source") == "root":
+        node["devDependencies"] = []
+    graph_packages.append(node)
+
+graph = dict()
+graph["configVersion"] = 1
+graph["roots"] = [root_name] if root_name else []
+graph["packages"] = graph_packages
+graph_path = os.path.join(config_dir, "package_graph.json")
+with open(graph_path, "w", encoding="utf-8") as fh:
+    json.dump(graph, fh, indent=2)
     fh.write("\\n")"""
 
 def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = []):

@@ -316,13 +316,20 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
     data_entries = ['"{}"'.format(name) for name in metadata_files]
     if pub_cache_files_target:
         data_entries.append('":{}"'.format(pub_cache_files_target))
-    if data_entries:
-        lines.append("    data = [{}],".format(", ".join(data_entries)))
 
     # Hosted pub packages publish themselves into the assembled cache; SDK
     # packages (include_hosted_deps=False) are resolved from FLUTTER_ROOT.
+    # The published copy must carry the full package payload — packages ship
+    # fonts, assets, and other non-Dart files the bundler reads (e.g.
+    # golden_toolkit's Roboto font).
+    payload_target = None
     if include_hosted_deps:
+        payload_target = "_package_payload"
+        data_entries.append('":{}"'.format(payload_target))
         lines.append("    pub_package = True,")
+
+    if data_entries:
+        lines.append("    data = [{}],".format(", ".join(data_entries)))
 
     lines.append(_DEF_VISIBILITY)
     lines.append(")")
@@ -333,6 +340,26 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
             "filegroup(",
             '    name = "{}",'.format(pub_cache_files_target),
             '    srcs = glob([".pub_cache/**"]),',
+            ")",
+        ])
+
+    if payload_target:
+        lines.extend([
+            "",
+            "filegroup(",
+            '    name = "{}",'.format(payload_target),
+            "    srcs = glob(",
+            '        ["**"],',
+            "        exclude = [",
+            '            ".pub_cache/**",',
+            '            "BUILD",',
+            '            "BUILD.bazel",',
+            '            "PUB_PACKAGE_INFO",',
+            '            "REPO.bazel",',
+            '            "pub_deps.json",',
+            "        ],",
+            "        allow_empty = True,",
+            "    ),",
             ")",
         ])
 

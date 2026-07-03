@@ -830,9 +830,10 @@ def _flutter_app_impl(ctx):
         for f in ctx.files.srcs
     ]
 
+    # Trailing newline matters: `while read` drops a final unterminated line.
     ctx.actions.write(
         output = manifest,
-        content = "\n".join(overlay_entries),
+        content = "\n".join(overlay_entries) + "\n" if overlay_entries else "",
     )
 
     copy_script = """#!/bin/bash
