@@ -55,9 +55,55 @@ build_command_test(
     target_under_test = ":fixture_default_app.web",
 )
 
+# The android_sdk labels below are analysis-only stand-ins: the tests inspect
+# the action script without executing it, and _tree_root_path only needs a
+# resolvable external file to derive a root from.
+flutter_app(
+    name = "fixture_android_test_app",
+    apk = {
+        "srcs": [],
+        "mode": "debug",
+        "android_test": True,
+        "android_sdk": "@bazel_skylib//:LICENSE",
+    },
+    embed = [":fixture_lib"],
+    tags = ["manual"],
+)
+
+flutter_app(
+    name = "fixture_android_app",
+    apk = {
+        "srcs": [],
+        "android_sdk": "@bazel_skylib//:LICENSE",
+    },
+    embed = [":fixture_lib"],
+    tags = ["manual"],
+)
+
+build_command_test(
+    name = "android_test_apk_test",
+    expected_substrings = [
+        "'build' 'apk' '--no-pub' '--debug'",
+        "app:assembleAndroidTest",
+        "androidTest",
+    ],
+    target_under_test = ":fixture_android_test_app.apk",
+)
+
+build_command_test(
+    name = "android_default_apk_test",
+    absent_substrings = ["assembleAndroidTest"],
+    expected_substrings = [
+        "'build' 'apk' '--no-pub' '--release'",
+    ],
+    target_under_test = ":fixture_android_app.apk",
+)
+
 test_suite(
     name = "analysis_tests",
     tests = [
+        ":android_default_apk_test",
+        ":android_test_apk_test",
         ":build_command_customization_test",
         ":build_command_defaults_test",
     ],

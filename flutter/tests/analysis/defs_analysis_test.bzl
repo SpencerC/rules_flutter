@@ -2,10 +2,12 @@
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 
+_BUILD_MNEMONICS = ["FlutterBuild", "FlutterBuildAndroid", "FlutterBuildIos"]
+
 def _flutter_build_script(env):
-    """Return the FlutterBuild action's shell script for the target under test."""
+    """Return the flutter build action's shell script for the target under test."""
     for action in analysistest.target_actions(env):
-        if action.mnemonic != "FlutterBuild":
+        if action.mnemonic not in _BUILD_MNEMONICS:
             continue
         return " ".join(action.argv)
     return None

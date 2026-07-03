@@ -226,8 +226,10 @@ Macro that defines flutter_app platform targets.
 Each platform attribute (`web`, `apk`, `ios`, `macos`, `linux`, `windows`) accepts
 either labels for files that should be overlaid into the Flutter workspace when
 building for that platform, or a dict spec with any of the keys `srcs`,
-`dart_defines`, `build_args`, `mode`, and `env` to customize that platform's
-build. A target is emitted only when the corresponding attribute is provided.
+`dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, `android_ndk`,
+`android_test`, `build_name`, and `build_number` to customize that
+platform's build. A target is emitted only when the corresponding attribute
+is provided.
 
 Common `dart_defines`/`build_args`/`mode`/`env` apply to every platform;
 per-platform values merge over them (`build_args` concatenates, dicts merge

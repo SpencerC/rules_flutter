@@ -982,6 +982,7 @@ fi
         build_args = build_args,
         env = ctx.attr.env,
         android = android,
+        android_test = ctx.attr.android_test,
     )
 
     runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
@@ -1049,6 +1050,13 @@ branch (Starlark cannot merge two selects).""",
             doc = """Android SDK directory for apk/appbundle targets, typically
 rules_android's `@androidsdk//:sdk_path` (which wraps the host installation
 discovered via ANDROID_HOME).""",
+        ),
+        "android_test": attr.bool(
+            default = False,
+            doc = """For apk targets: after the Flutter build, additionally run
+Gradle's app:assembleAndroidTest and copy the instrumentation APK into
+androidTest/ under the build artifacts — the two-APK layout Firebase Test
+Lab's instrumentation testing expects.""",
         ),
         "build_name": attr.string(
             doc = "Overrides the pubspec version name (--build-name).",
@@ -1228,7 +1236,7 @@ def _to_label_list(value):
         return value
     return [value]
 
-_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk", "build_name", "build_number"]
+_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk", "android_test", "build_name", "build_number"]
 
 def _normalize_platform_spec(platform, value):
     """Normalize a flutter_app platform argument to a dict spec.
@@ -1292,8 +1300,10 @@ def flutter_app(
     Each platform attribute (`web`, `apk`, `ios`, `macos`, `linux`, `windows`) accepts
     either labels for files that should be overlaid into the Flutter workspace when
     building for that platform, or a dict spec with any of the keys `srcs`,
-    `dart_defines`, `build_args`, `mode`, and `env` to customize that platform's
-    build. A target is emitted only when the corresponding attribute is provided.
+    `dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, `android_ndk`,
+    `android_test`, `build_name`, and `build_number` to customize that
+    platform's build. A target is emitted only when the corresponding attribute
+    is provided.
 
     Common `dart_defines`/`build_args`/`mode`/`env` apply to every platform;
     per-platform values merge over them (`build_args` concatenates, dicts merge
@@ -1383,7 +1393,7 @@ def flutter_app(
         if platform_android_ndk != None:
             rule_args["android_ndk"] = platform_android_ndk
 
-        for passthrough in ["build_name", "build_number"]:
+        for passthrough in ["android_test", "build_name", "build_number"]:
             if spec.get(passthrough) != None:
                 rule_args[passthrough] = spec[passthrough]
 

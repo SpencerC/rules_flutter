@@ -1016,7 +1016,8 @@ def flutter_build_action(
         dart_defines = {},
         build_args = [],
         env = {},
-        android = None):
+        android = None,
+        android_test = False):
     """Execute flutter build command for the specified target.
 
     Args:
@@ -1034,6 +1035,10 @@ def flutter_build_action(
             targets — SDK/NDK trees from rules_android / rules_android_ndk and
             a JAVA_HOME from Bazel's java runtime toolchain. The action is
             tagged requires-network for Gradle's distribution/Maven downloads
+        android_test: For apk targets, additionally run Gradle's
+            app:assembleAndroidTest after the Flutter build and copy the
+            instrumentation APK into androidTest/ under the build artifacts
+            (the Firebase Test Lab instrumentation flow)
 
     Returns:
         Tuple of (build_output, build_artifacts_dir)
@@ -1083,6 +1088,9 @@ def flutter_build_action(
     }
 
     config = target_configs.get(target, target_configs["web"])
+
+    if android_test and target != "apk":
+        fail("flutter_app '{}': android_test is only supported on apk targets (got '{}').".format(ctx.label, target))
 
     command_args = list(config["args"])
     command_args.append("--" + mode)
@@ -1155,6 +1163,26 @@ if [ -n "${RULES_FLUTTER_CP_HOME:-}" ]; then
     export CP_HOME_DIR="$RULES_FLUTTER_CP_HOME"
     mkdir -p "$CP_HOME_DIR"
 fi
+"""
+
+    android_test_step = ""
+    if android_test:
+        # Runs in the mutable workspace after a successful flutter build, so
+        # local.properties, the Gradle env, and plugin tooling already exist.
+        android_test_step = """
+    echo "Building androidTest instrumentation APK..."
+    chmod +x android/gradlew 2>/dev/null || true
+    if ! (cd android && ./gradlew app:assembleAndroidTest); then
+        echo "✗ FATAL ERROR: gradlew app:assembleAndroidTest failed" >&2
+        exit 1
+    fi
+    if [ ! -d build/app/outputs/apk/androidTest ]; then
+        echo "✗ FATAL ERROR: androidTest outputs not found at build/app/outputs/apk/androidTest" >&2
+        exit 1
+    fi
+    mkdir -p "$BUILD_ARTIFACTS_ABS/androidTest"
+    cp -r build/app/outputs/apk/androidTest/. "$BUILD_ARTIFACTS_ABS/androidTest/"
+    echo "✓ androidTest instrumentation APK copied"
 """
 
     # iOS keeps the caller's HOME (when the build passes it through, e.g.
@@ -1360,7 +1388,7 @@ if "$FLUTTER_BIN_ABS" --suppress-analytics --no-version-check {build_command}; t
         echo "This indicates a serious issue with Flutter build execution"
         exit 1
     fi
-    
+{android_test_step}
     echo "✓ Flutter build completed successfully"
 else
     echo "✗ FATAL ERROR: flutter {build_command} failed"
@@ -1385,6 +1413,7 @@ SCRIPT_COMPLETED=1
         home_export = home_export,
         ios_env = ios_env,
         mobile_pub_get = mobile_pub_get,
+        android_test_step = android_test_step,
         package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
 
