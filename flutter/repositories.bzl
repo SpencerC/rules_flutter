@@ -142,6 +142,21 @@ def _seal_sdk_cache(repository_ctx):
         return
     repository_ctx.execute(["chmod", "-R", "a-w", "flutter/bin/cache"])
 
+    # Keep owner-write on the iOS/macOS engine frameworks: `flutter build ios`
+    # copies them into the app's build directory with permissions preserved,
+    # then codesigns the copy in place — a read-only source makes that copy
+    # unsignable. The tool never writes these files in place, so the sealing
+    # guarantee is unaffected.
+    result = repository_ctx.execute([
+        "sh",
+        "-c",
+        "find flutter/bin/cache/artifacts/engine -maxdepth 1 " +
+        "\\( -name 'ios*' -o -name 'darwin*' \\) " +
+        "-exec chmod -R u+w {} + 2>/dev/null || true",
+    ])
+    if result.return_code != 0:
+        fail("rules_flutter: unsealing engine frameworks failed: " + result.stderr)
+
 def _flutter_repo_impl(repository_ctx):
     # Flutter SDK download URLs from Google Cloud Storage
     platform = repository_ctx.attr.platform
