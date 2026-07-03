@@ -92,15 +92,25 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_o
     run_env = {
         "PUB_CACHE": str(repository_ctx.path(pub_cache_rel)),
         "PUB_ENVIRONMENT": "rules_flutter:repository",
+
+        # The toolchain SDK's bin/cache is sealed read-only; both launchers
+        # would otherwise try to take the startup lockfile there.
+        "FLUTTER_ALREADY_LOCKED": "true",
+        "FLUTTER_SUPPRESS_ANALYTICS": "true",
     }
+
+    # Let `dart pub` resolve `sdk: flutter` dependencies against the toolchain
+    # SDK. Derived from the sdk_dart launcher (a symlink into the platform SDK
+    # repository), so it also holds for packages that resolve with plain dart.
+    sdk_dart = getattr(repository_ctx.attr, "sdk_dart", None)
+    if sdk_dart != None:
+        dart_path = repository_ctx.path(sdk_dart)
+        if dart_path.exists:
+            run_env["FLUTTER_ROOT"] = str(dart_path.realpath.dirname.dirname)
+
     if tool == "flutter":
-        run_env["FLUTTER_SUPPRESS_ANALYTICS"] = "true"
         run_env["FLUTTER_UPDATE_DISABLED"] = "true"
         run_env["CI"] = "true"
-
-        # The toolchain SDK's bin/cache is sealed read-only; skip the
-        # startup lockfile the tool would otherwise try to take there.
-        run_env["FLUTTER_ALREADY_LOCKED"] = "true"
 
     repository_ctx.report_progress(
         "Resolving pub dependencies for {}".format(package_name),
@@ -241,16 +251,22 @@ def _find_pub_command(repository_ctx):
     # fetch-time resolution hermetic: without them, machines lacking a host
     # Flutter (e.g. CI workers) silently fell back to pubspec parsing and the
     # repository was left without its vendored .pub_cache.
-    sdk_flutter = getattr(repository_ctx.attr, "sdk_flutter", None)
-    if sdk_flutter != None:
-        path = repository_ctx.path(sdk_flutter)
-        if path.exists:
-            return _pub_command_prefix(str(path), "flutter"), "flutter"
+    #
+    # dart comes first deliberately: `dart pub` resolves `sdk: flutter`
+    # dependencies through FLUTTER_ROOT (exported by _ensure_pub_deps) without
+    # the flutter tool's artifact-cache refresh — which on non-macOS hosts
+    # unconditionally rewrites the ios-usb artifact stamps and therefore can
+    # never run against the sealed SDK cache.
     sdk_dart = getattr(repository_ctx.attr, "sdk_dart", None)
     if sdk_dart != None:
         path = repository_ctx.path(sdk_dart)
         if path.exists:
             return _pub_command_prefix(str(path), "dart"), "dart"
+    sdk_flutter = getattr(repository_ctx.attr, "sdk_flutter", None)
+    if sdk_flutter != None:
+        path = repository_ctx.path(sdk_flutter)
+        if path.exists:
+            return _pub_command_prefix(str(path), "flutter"), "flutter"
 
     host_dart = repository_ctx.which("dart.exe" if os_name.startswith("windows") else "dart")
     if host_dart:
