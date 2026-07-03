@@ -131,6 +131,58 @@ def _ensure_precached_artifacts(repository_ctx):
             result.stderr,
         ))
 
+# Host OS each artifact group's precache can run on (None = any host).
+_PRECACHE_GROUP_HOSTS = {
+    "android": None,
+    "ios": "macos",
+    "linux": "linux",
+    "macos": "macos",
+    "web": None,
+    "windows": "windows",
+}
+
+def _warm_first_run_stamps(repository_ctx):
+    """Write the tool's first-run artifact stamps before the cache is sealed.
+
+    Release archives do not ship every universal artifact stamp on all
+    platforms (the Linux archive lacks e.g. libimobiledevice.stamp), so the
+    first tool invocation after fetch would try to write into the sealed
+    cache and fail. Every `flutter precache` run refreshes the universal
+    artifacts regardless of group flags; run one at fetch time scoped to the
+    host-supported requested groups so all stamps exist before sealing.
+    """
+    if not _host_matches_platform(repository_ctx, repository_ctx.attr.platform):
+        return
+
+    enabled = [
+        group
+        for group in repository_ctx.attr.precache
+        if _PRECACHE_GROUP_HOSTS.get(group) == None or
+           _host_matches_platform(repository_ctx, _PRECACHE_GROUP_HOSTS[group])
+    ]
+    args = ["flutter/bin/flutter", "--no-version-check", "precache"]
+    for group in _PRECACHE_GROUP_HOSTS:
+        if group in enabled:
+            args.append("--" + group)
+        else:
+            args.append("--no-" + group)
+
+    result = repository_ctx.execute(
+        args,
+        environment = {
+            "CI": "true",
+            "FLUTTER_SUPPRESS_ANALYTICS": "true",
+            "PUB_ENVIRONMENT": "flutter_tool:bazel_fetch",
+        },
+        timeout = 1800,
+    )
+    if result.return_code != 0:
+        fail("rules_flutter: fetch-time flutter precache warm-up failed (code {}):\nstdout: {}\nstderr: {}".format(
+            result.return_code,
+            result.stdout,
+            result.stderr,
+        ))
+
 def _seal_sdk_cache(repository_ctx):
     """Make bin/cache read-only so any residual write attempt fails loudly.
 
@@ -175,6 +227,7 @@ def _flutter_repo_impl(repository_ctx):
 
     _patch_engine_version_script(repository_ctx)
     _ensure_precached_artifacts(repository_ctx)
+    _warm_first_run_stamps(repository_ctx)
 
     # Drop transient download staging shipped in (or created by) the archive.
     downloads = repository_ctx.path("flutter/bin/cache/downloads")
