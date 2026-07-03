@@ -10,7 +10,6 @@ names (the latest version will be picked for each name) and can register them as
 effectively overriding the default named toolchain due to toolchain resolution precedence.
 """
 
-load("//flutter/private:android_sdk_repo.bzl", "android_sdk_repository")
 load("//flutter/private:pub_repository.bzl", "pub_dev_repository")
 load(":repositories.bzl", "flutter_register_toolchains")
 
@@ -28,25 +27,6 @@ in the SDK cache after fetch. Stable archives already ship these; when one is
 missing, `flutter precache` runs at repository fetch time. Unioned across
 registrations of the same toolchain name.
 """, default = []),
-})
-
-android_sdk_tag = tag_class(attrs = {
-    "name": attr.string(
-        default = "flutter_android_sdk",
-        doc = "Repository name for the provisioned Android SDK.",
-    ),
-    "api_level": attr.string(
-        default = "36",
-        doc = "Android platform API level (platforms;android-<n>).",
-    ),
-    "build_tools_version": attr.string(
-        default = "35.0.0",
-        doc = "build-tools version to install.",
-    ),
-    "ndk_version": attr.string(
-        default = "",
-        doc = "Optional NDK version to install.",
-    ),
 })
 
 def _toolchain_extension(module_ctx):
@@ -84,27 +64,9 @@ def _toolchain_extension(module_ctx):
             register = False,
         )
 
-    # Android SDK repositories: the root module wins per repository name.
-    android_sdks = {}
-    for mod in module_ctx.modules:
-        for sdk in mod.tags.android_sdk:
-            if sdk.name in android_sdks and not mod.is_root:
-                continue
-            android_sdks[sdk.name] = sdk
-    for name, sdk in android_sdks.items():
-        android_sdk_repository(
-            name = name,
-            api_level = sdk.api_level,
-            build_tools_version = sdk.build_tools_version,
-            ndk_version = sdk.ndk_version,
-        )
-
 flutter = module_extension(
     implementation = _toolchain_extension,
-    tag_classes = {
-        "android_sdk": android_sdk_tag,
-        "toolchain": flutter_toolchain,
-    },
+    tag_classes = {"toolchain": flutter_toolchain},
 )
 
 # Pub.dev package management extension

@@ -807,6 +807,67 @@ def _create_flutter_run_script(ctx, build_artifacts):
     script_lines.append("")
     return "\n".join(script_lines)
 
+def _tree_root_path(files, attr_name, label):
+    """Return the directory path a filegroup of SDK/NDK files is rooted at.
+
+    Handles both a single directory artifact (e.g. @androidsdk//:sdk_path,
+    whose srcs are ["."]) and plain file lists from an external repository.
+    """
+    if not files:
+        fail("flutter_app '{}': attribute '{}' resolved to no files. ".format(label, attr_name) +
+             "For rules_android/rules_android_ndk repositories this usually means " +
+             "ANDROID_HOME/ANDROID_NDK_HOME was not set when the repository was fetched.")
+    first = files[0]
+    if len(files) == 1 and first.is_directory:
+        return first.path
+    parts = first.path.split("/")
+    if parts[0] == "external" and len(parts) >= 2:
+        return "external/" + parts[1]
+    fail("flutter_app '{}': unable to derive a root directory for '{}' from {}".format(
+        label,
+        attr_name,
+        first.path,
+    ))
+
+def _android_environment(ctx):
+    """Assemble the Android build environment for apk/appbundle targets.
+
+    The SDK/NDK come from ecosystem rulesets (rules_android's @androidsdk and
+    rules_android_ndk's @androidndk wrap a host installation); JAVA_HOME comes
+    from Bazel's java runtime toolchain (hermetic remote JDK).
+    """
+    if ctx.attr.target not in ["apk", "appbundle"]:
+        return None
+
+    if not ctx.attr.android_sdk:
+        fail("flutter_app '{}' target '{}' requires the android_sdk attribute ".format(ctx.label, ctx.attr.target) +
+             "(e.g. android_sdk = \"@androidsdk//:sdk_path\" from rules_android).")
+
+    sdk_files = ctx.attr.android_sdk[DefaultInfo].files.to_list()
+    sdk_path = _tree_root_path(sdk_files, "android_sdk", ctx.label)
+
+    # The SDK/NDK trees wrap host installations via symlinks the sandbox
+    # cannot stage; the Android action runs unsandboxed (it is declared
+    # non-hermetic regardless), so they are path references, not inputs.
+    ndk_path = None
+    transitive = []
+    if ctx.attr.android_ndk:
+        ndk_files = ctx.attr.android_ndk[DefaultInfo].files.to_list()
+        ndk_path = _tree_root_path(ndk_files, "android_ndk", ctx.label)
+
+    java_toolchain = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"]
+    if java_toolchain == None:
+        fail("flutter_app '{}': no java runtime toolchain resolved; Gradle needs a JDK.".format(ctx.label))
+    java_runtime = java_toolchain.java_runtime
+    transitive.append(java_runtime.files)
+
+    return struct(
+        sdk_path = sdk_path,
+        ndk_path = ndk_path,
+        java_home = java_runtime.java_home,
+        files = depset(transitive = transitive),
+    )
+
 def _flutter_app_impl(ctx):
     """Implementation for flutter_app targets."""
 
@@ -888,10 +949,7 @@ fi
         progress_message = "Preparing Flutter workspace for %s" % ctx.label.name,
     )
 
-    android_sdk = None
-    android_toolchain = ctx.toolchains["//flutter:android_sdk_toolchain_type"]
-    if android_toolchain != None:
-        android_sdk = android_toolchain.androidsdkinfo
+    android = _android_environment(ctx)
 
     build_output, build_artifacts = flutter_build_action(
         ctx,
@@ -904,7 +962,7 @@ fi
         dart_defines = ctx.attr.dart_defines,
         build_args = ctx.attr.build_args,
         env = ctx.attr.env,
-        android_sdk = android_sdk,
+        android = android,
     )
 
     runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
@@ -967,11 +1025,23 @@ branch (Starlark cannot merge two selects).""",
             default = {},
             doc = "Extra environment variables exported in the build action before invoking flutter.",
         ),
+        "android_sdk": attr.label(
+            allow_files = True,
+            doc = """Android SDK directory for apk/appbundle targets, typically
+rules_android's `@androidsdk//:sdk_path` (which wraps the host installation
+discovered via ANDROID_HOME).""",
+        ),
+        "android_ndk": attr.label(
+            allow_files = True,
+            doc = """Optional Android NDK directory, typically from
+rules_android_ndk's `@androidndk` (wrapping ANDROID_NDK_HOME); written to
+local.properties as ndk.dir.""",
+        ),
     },
     executable = True,
     toolchains = [
         "//flutter:toolchain_type",
-        config_common.toolchain_type("//flutter:android_sdk_toolchain_type", mandatory = False),
+        config_common.toolchain_type("@bazel_tools//tools/jdk:runtime_toolchain_type", mandatory = False),
     ],
     doc = "Internal rule for flutter_app platform targets.",
 )
@@ -1130,7 +1200,7 @@ def _to_label_list(value):
         return value
     return [value]
 
-_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env"]
+_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk"]
 
 def _normalize_platform_spec(platform, value):
     """Normalize a flutter_app platform argument to a dict spec.
@@ -1178,6 +1248,8 @@ def flutter_app(
         build_args = None,
         mode = None,
         env = None,
+        android_sdk = None,
+        android_ndk = None,
         create_dev_target = True,
         dev_run_args = None,
         web = None,
@@ -1211,6 +1283,10 @@ def flutter_app(
       build_args: Extra flutter build arguments shared by all platforms.
       mode: Build mode (release, profile, debug) shared by all platforms.
       env: Extra action environment variables shared by all platforms.
+      android_sdk: Android SDK directory for apk/appbundle targets (e.g.
+        rules_android's `@androidsdk//:sdk_path`).
+      android_ndk: Optional Android NDK directory (e.g. from
+        rules_android_ndk's `@androidndk`).
       create_dev_target: Whether to emit a runnable `{name}.dev` helper (when
         `web` is configured) that runs `flutter run -d web-server` in the
         source workspace with the hermetic SDK and the web dart_defines.
@@ -1271,6 +1347,13 @@ def flutter_app(
         platform_mode = spec.get("mode", mode)
         if platform_mode != None:
             rule_args["mode"] = platform_mode
+
+        platform_android_sdk = spec.get("android_sdk", android_sdk)
+        if platform_android_sdk != None:
+            rule_args["android_sdk"] = platform_android_sdk
+        platform_android_ndk = spec.get("android_ndk", android_ndk)
+        if platform_android_ndk != None:
+            rule_args["android_ndk"] = platform_android_ndk
 
         if visibility != None:
             rule_args["visibility"] = visibility

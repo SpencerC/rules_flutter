@@ -68,29 +68,49 @@ SDK from scripts: it is unnecessary and the sealed cache will reject it.
 
 #### Android builds
 
-`{name}.apk` and `{name}.appbundle` targets require an Android SDK toolchain,
-which rules_flutter provisions hermetically (pinned command-line tools plus a
-bundled Temurin JDK, integrity-checked; requested packages installed by
-sdkmanager at fetch time):
+`{name}.apk` and `{name}.appbundle` targets consume the Android SDK through
+the standard ecosystem rulesets — rules_android's `@androidsdk` repository
+(wrapping the host installation discovered via `ANDROID_HOME`) and, for
+native code toolchains, rules_android_ndk's `@androidndk` (via
+`ANDROID_NDK_HOME`). `JAVA_HOME` comes from Bazel's hermetic java runtime
+toolchain.
 
 ```starlark
-flutter.android_sdk(
-    api_level = "36",
-    build_tools_version = "35.0.0",
-    ndk_version = "28.2.13676358",  # optional; large download
+# MODULE.bazel
+bazel_dep(name = "rules_android", version = "0.6.6")
+bazel_dep(name = "rules_android_ndk", version = "0.1.5")
+
+android_sdk_repo = use_extension("@rules_android//rules/android_sdk_repository:rule.bzl", "android_sdk_repository_extension")
+use_repo(android_sdk_repo, "androidsdk")
+
+# BUILD.bazel
+flutter_app(
+    name = "my_app",
+    embed = [":app_lib"],
+    apk = {
+        "srcs": glob(["android/**"]),
+        "android_sdk": "@androidsdk//:sdk_path",
+    },
 )
-use_repo(flutter, "flutter_android_sdk", ...)
-register_toolchains("@flutter_android_sdk//:toolchain")
 ```
 
-Android build actions are **declared non-hermetic**: Gradle downloads its
-distribution and Maven dependencies inside the action
-(`requires-network`, `no-remote-exec`). Opt into a persistent Gradle cache so
-warm builds skip the downloads:
+Pass the discovery env vars through to repository fetches in `.bazelrc`:
+
+```
+common --repo_env=ANDROID_HOME
+common --repo_env=ANDROID_NDK_HOME
+```
+
+Android build actions are **declared non-hermetic** (`requires-network`,
+`no-sandbox`, `no-remote-exec`): they use the host SDK/NDK behind the
+rules_android wrappers (AGP requires the real SDK directory, e.g. for
+SDK-embedded `ndk/<version>` lookups), Gradle downloads its distribution and
+Maven dependencies, and flutter's plugin tooling is regenerated with an
+offline `pub get` against the prepared cache. Opt into a persistent Gradle
+cache so warm builds skip the downloads:
 
 ```
 build --action_env=RULES_FLUTTER_GRADLE_USER_HOME=/path/to/gradle-cache
-build --sandbox_writable_path=/path/to/gradle-cache
 ```
 
 #### Managing pub.dev dependencies
