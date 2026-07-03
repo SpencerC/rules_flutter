@@ -154,6 +154,28 @@ def _warm_first_run_stamps(repository_ctx):
     if not _host_matches_platform(repository_ctx, repository_ctx.attr.platform):
         return
 
+    # The ios-usb artifacts are declared universal, but their downloads are
+    # skipped on non-macOS hosts — so the tool's up-to-date probe (artifact
+    # directory + expected executables) can never pass there, and EVERY
+    # invocation rewrites their stamps. Materialize the directories and probe
+    # files before the warm-up: precache then records matching stamps, the
+    # up-to-date check passes forever after, and the sealed cache stays
+    # untouched. (On macOS the real artifacts exist; nothing to do.)
+    if not _host_matches_platform(repository_ctx, "macos"):
+        ios_usb_probe_files = {
+            "ios-deploy": [],
+            "libimobiledevice": ["idevicescreenshot", "idevicesyslog"],
+            "libimobiledeviceglue": [],
+            "libplist": [],
+            "libusbmuxd": ["iproxy"],
+            "openssl": [],
+        }
+        for artifact, executables in ios_usb_probe_files.items():
+            artifact_dir = "flutter/bin/cache/artifacts/" + artifact
+            repository_ctx.file(artifact_dir + "/.rules_flutter_placeholder", "")
+            for executable in executables:
+                repository_ctx.file(artifact_dir + "/" + executable, "", executable = True)
+
     enabled = [
         group
         for group in repository_ctx.attr.precache
