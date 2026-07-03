@@ -1,6 +1,7 @@
 """Public API for Flutter build rules"""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@protobuf//bazel/common:proto_common.bzl", "proto_common")
 load("@protobuf//bazel/common:proto_info.bzl", "ProtoInfo")
 load(
@@ -107,8 +108,16 @@ if [ -z "$FLUTTER_BIN" ] || [ ! -x "$FLUTTER_BIN" ]; then
 fi
 
 TMP_DIR="$(mktemp -d)"
+# bash 3.2 (macOS /bin/bash) runs the EXIT trap with $?=0 after a `set -u`
+# expansion error; the sentinel keeps such aborts from reporting success.
+SCRIPT_COMPLETED=0
 cleanup() {{
-    rm -rf "$TMP_DIR"
+    rc=$?
+    rm -rf "$TMP_DIR" || true
+    if [ "$SCRIPT_COMPLETED" != 1 ] && [ "$rc" = 0 ]; then
+        rc=1
+    fi
+    exit "$rc"
 }}
 trap cleanup EXIT
 
@@ -202,12 +211,14 @@ PY
 DEST_FILE="$SOURCE_PACKAGE_DIR/pub_deps.json"
 if [ -f "$DEST_FILE" ] && cmp -s "$TMP_DIR/pub_deps.json" "$DEST_FILE"; then
     echo "✓ pub_deps.json already up to date at $DEST_FILE"
+    SCRIPT_COMPLETED=1
     exit 0
 fi
 
 cp "$TMP_DIR/pub_deps.json" "$DEST_FILE"
 chmod 0644 "$DEST_FILE" 2>/dev/null || true
 echo "✓ Updated $DEST_FILE"
+SCRIPT_COMPLETED=1
 """.format(
         pubspec_rel = pubspec_rel,
         flutter_bin = flutter_bin,
@@ -951,6 +962,14 @@ fi
 
     android = _android_environment(ctx)
 
+    build_args = list(ctx.attr.build_args)
+    if ctx.attr.build_name:
+        build_args.append("--build-name=" + ctx.attr.build_name)
+    if ctx.attr.build_number:
+        build_number = ctx.attr.build_number[BuildSettingInfo].value
+        if build_number:
+            build_args.append("--build-number=" + build_number)
+
     build_output, build_artifacts = flutter_build_action(
         ctx,
         flutter_toolchain,
@@ -960,7 +979,7 @@ fi
         library_info.dart_tool,
         mode = ctx.attr.mode,
         dart_defines = ctx.attr.dart_defines,
-        build_args = ctx.attr.build_args,
+        build_args = build_args,
         env = ctx.attr.env,
         android = android,
     )
@@ -1030,6 +1049,15 @@ branch (Starlark cannot merge two selects).""",
             doc = """Android SDK directory for apk/appbundle targets, typically
 rules_android's `@androidsdk//:sdk_path` (which wraps the host installation
 discovered via ANDROID_HOME).""",
+        ),
+        "build_name": attr.string(
+            doc = "Overrides the pubspec version name (--build-name).",
+        ),
+        "build_number": attr.label(
+            providers = [BuildSettingInfo],
+            doc = """string_flag whose value (when non-empty) is passed as
+--build-number, letting release wrappers inject e.g. the next Play Store
+version code via --//app:android_build_number=N.""",
         ),
         "android_ndk": attr.label(
             allow_files = True,
@@ -1200,7 +1228,7 @@ def _to_label_list(value):
         return value
     return [value]
 
-_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk"]
+_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk", "build_name", "build_number"]
 
 def _normalize_platform_spec(platform, value):
     """Normalize a flutter_app platform argument to a dict spec.
@@ -1354,6 +1382,10 @@ def flutter_app(
         platform_android_ndk = spec.get("android_ndk", android_ndk)
         if platform_android_ndk != None:
             rule_args["android_ndk"] = platform_android_ndk
+
+        for passthrough in ["build_name", "build_number"]:
+            if spec.get(passthrough) != None:
+                rule_args[passthrough] = spec[passthrough]
 
         if visibility != None:
             rule_args["visibility"] = visibility

@@ -1127,6 +1127,46 @@ if ! "$FLUTTER_BIN_ABS" --suppress-analytics --no-version-check pub get --offlin
 fi
 """
 
+    ios_env = ""
+    if target == "ios":
+        # Host Xcode and CocoaPods are declared prerequisites (standard Bazel
+        # practice for Apple builds); flutter drives `pod install` itself.
+        ios_env = """
+if ! command -v xcodebuild >/dev/null 2>&1; then
+    echo "✗ FATAL ERROR: xcodebuild not found; iOS builds require a host Xcode installation." >&2
+    exit 1
+fi
+# --incompatible_strict_action_env gives actions a minimal PATH; probe the
+# common CocoaPods install locations before giving up.
+if ! command -v pod >/dev/null 2>&1; then
+    for CANDIDATE in /opt/homebrew/bin /usr/local/bin "${HOME:-/var/empty}/.gem/bin" /usr/local/lib/ruby/gems/*/bin; do
+        if [ -x "$CANDIDATE/pod" ]; then
+            export PATH="$CANDIDATE:$PATH"
+            break
+        fi
+    done
+fi
+if ! command -v pod >/dev/null 2>&1; then
+    echo "✗ FATAL ERROR: CocoaPods (pod) not found on PATH; install the version pinned in Podfile.lock." >&2
+    exit 1
+fi
+export LANG="${LANG:-en_US.UTF-8}"
+if [ -n "${RULES_FLUTTER_CP_HOME:-}" ]; then
+    export CP_HOME_DIR="$RULES_FLUTTER_CP_HOME"
+    mkdir -p "$CP_HOME_DIR"
+fi
+"""
+
+    # iOS keeps the caller's HOME (when the build passes it through, e.g.
+    # --action_env=HOME) so CocoaPods spec/pod caches persist across builds;
+    # under --incompatible_strict_action_env HOME is absent, so fall back to a
+    # scratch dir rather than aborting. Everything else always gets a scratch
+    # HOME to keep config/analytics writes out of shared state.
+    if target == "ios":
+        home_export = 'export HOME="${HOME:-$(mktemp -d)}"'
+    else:
+        home_export = 'export HOME="$(mktemp -d)"'
+
     android_gradle_env = ""
     if target in ANDROID_TARGETS:
         if android == None:
@@ -1220,7 +1260,7 @@ export FLUTTER_SUPPRESS_ANALYTICS=true
 export FLUTTER_ALREADY_LOCKED=true
 export CI=true
 export PUB_ENVIRONMENT="flutter_tool:bazel"
-export HOME="$(mktemp -d)"
+{home_export}
 {android_env_exports}
 export FLUTTER_ROOT
 export PATH="$FLUTTER_ROOT/bin:$PATH"
@@ -1232,8 +1272,17 @@ SOURCE_WORKSPACE_ABS="$ORIGINAL_PWD/$WORKSPACE_DIR"
 BUILD_TMP_PARENT="$ORIGINAL_PWD/$(dirname "$BUILD_ARTIFACTS")"
 mkdir -p "$BUILD_TMP_PARENT"
 BUILD_WORKSPACE_TMP="$(mktemp -d "$BUILD_TMP_PARENT/rules_flutter_build.XXXXXX")"
+# bash 3.2 (macOS /bin/bash) runs the EXIT trap with $?=0 after a `set -u`
+# expansion error, which would let a failed build report success to Bazel.
+# The sentinel forces any abort before the final line to exit nonzero.
+SCRIPT_COMPLETED=0
 cleanup() {{
-    rm -rf "$BUILD_WORKSPACE_TMP"
+    rc=$?
+    rm -rf "$BUILD_WORKSPACE_TMP" || true
+    if [ "$SCRIPT_COMPLETED" != 1 ] && [ "$rc" = 0 ]; then
+        rc=1
+    fi
+    exit "$rc"
 }}
 trap cleanup EXIT
 
@@ -1254,6 +1303,7 @@ if [ -d "$DART_TOOL_DIR_ABS" ]; then
     chmod -R u+rwX .dart_tool
 fi
 {android_gradle_env}
+{ios_env}
 
 # Run flutter build
 echo "=== Flutter Build {target} ==="
@@ -1316,6 +1366,7 @@ else
     echo "Ensure the offline pub cache contains all required dependencies"
     exit 1
 fi
+SCRIPT_COMPLETED=1
 """.format(
         workspace_dir = working_dir.path,
         pub_cache_dir = pub_cache_dir.path,
@@ -1329,6 +1380,8 @@ fi
         env_exports = env_exports,
         android_env_exports = android_env_exports,
         android_gradle_env = android_gradle_env,
+        home_export = home_export,
+        ios_env = ios_env,
         mobile_pub_get = mobile_pub_get,
         package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
@@ -1357,6 +1410,17 @@ fi
         }
         use_default_shell_env = True
         mnemonic = "FlutterBuildAndroid"
+    elif target == "ios":
+        # Host Xcode + CocoaPods; pod install fetches specs and binary pods
+        # over the network.
+        execution_requirements = {
+            "no-remote-exec": "1",
+            "no-sandbox": "1",
+            "requires-darwin": "1",
+            "requires-network": "1",
+        }
+        use_default_shell_env = True
+        mnemonic = "FlutterBuildIos"
 
     # Execute build
     ctx.actions.run_shell(
