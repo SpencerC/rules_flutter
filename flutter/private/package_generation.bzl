@@ -98,6 +98,10 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_o
         run_env["FLUTTER_UPDATE_DISABLED"] = "true"
         run_env["CI"] = "true"
 
+        # The toolchain SDK's bin/cache is sealed read-only; skip the
+        # startup lockfile the tool would otherwise try to take there.
+        run_env["FLUTTER_ALREADY_LOCKED"] = "true"
+
     repository_ctx.report_progress(
         "Resolving pub dependencies for {}".format(package_name),
     )
@@ -226,27 +230,46 @@ def _find_pub_command(repository_ctx):
     for candidate in flutter_candidates:
         path = repository_ctx.path(candidate)
         if path.exists:
-            return _pub_command_prefix(str(path)), "flutter"
+            return _pub_command_prefix(str(path), "flutter"), "flutter"
 
     for candidate in dart_candidates:
         path = repository_ctx.path(candidate)
         if path.exists:
-            return _pub_command_prefix(str(path)), "dart"
+            return _pub_command_prefix(str(path), "dart"), "dart"
+
+    # Toolchain SDK launchers passed by pub_dev_repository. These keep the
+    # fetch-time resolution hermetic: without them, machines lacking a host
+    # Flutter (e.g. CI workers) silently fell back to pubspec parsing and the
+    # repository was left without its vendored .pub_cache.
+    sdk_flutter = getattr(repository_ctx.attr, "sdk_flutter", None)
+    if sdk_flutter != None:
+        path = repository_ctx.path(sdk_flutter)
+        if path.exists:
+            return _pub_command_prefix(str(path), "flutter"), "flutter"
+    sdk_dart = getattr(repository_ctx.attr, "sdk_dart", None)
+    if sdk_dart != None:
+        path = repository_ctx.path(sdk_dart)
+        if path.exists:
+            return _pub_command_prefix(str(path), "dart"), "dart"
 
     host_dart = repository_ctx.which("dart.exe" if os_name.startswith("windows") else "dart")
     if host_dart:
-        return _pub_command_prefix(str(host_dart)), "dart"
+        return _pub_command_prefix(str(host_dart), "dart"), "dart"
 
     host_flutter = repository_ctx.which("flutter.bat" if os_name.startswith("windows") else "flutter")
     if host_flutter:
-        return _pub_command_prefix(str(host_flutter)), "flutter"
+        return _pub_command_prefix(str(host_flutter), "flutter"), "flutter"
 
     return None, None
 
-def _pub_command_prefix(executable):
+def _pub_command_prefix(executable, tool):
     if executable.endswith(".bat") or executable.endswith(".cmd"):
-        return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
-    return [executable, "pub"]
+        prefix = ["cmd.exe", "/c", "\"{}\"".format(executable)]
+    else:
+        prefix = [executable]
+    if tool == "flutter":
+        prefix.append("--no-version-check")
+    return prefix + ["pub"]
 
 def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True, include_pub_cache_data = False, hosted_deps = None):
     """Generate a BUILD.bazel for the given package directory.

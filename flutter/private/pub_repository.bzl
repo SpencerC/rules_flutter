@@ -26,6 +26,18 @@ _ATTRS = {
         default = "@flutter_sdk",
         doc = "Repository label providing Flutter SDK packages (e.g. @flutter_sdk)",
     ),
+    # Fetch-time pub resolution must not depend on a host Flutter/Dart install:
+    # these point the repository rule at the toolchain SDK's launchers, keeping
+    # the resolved dependency closure (and the vendored .pub_cache the
+    # protoc-gen-dart wrapper executes from) identical on every machine.
+    "sdk_flutter": attr.label(
+        default = "@flutter_sdk//:bin/flutter",
+        doc = "Flutter launcher from the toolchain SDK used for fetch-time pub resolution.",
+    ),
+    "sdk_dart": attr.label(
+        default = "@flutter_sdk//:bin/dart",
+        doc = "Dart launcher from the toolchain SDK, used when the Flutter launcher is unavailable.",
+    ),
     "hosted_deps": attr.string_list(
         default = [],
         doc = """Hosted package names to emit as target deps. Provided by the pub
