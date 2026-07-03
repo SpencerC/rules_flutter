@@ -21,6 +21,41 @@ _DEF_LOAD_STMT = 'load("@rules_flutter//flutter:defs.bzl", "dart_library", "flut
 
 _DEF_VISIBILITY = '    visibility = ["//visibility:public"],'
 
+def _sanitize_published_pubspec(repository_ctx, pubspec_rel):
+    """Drop sections of a published pubspec that break standalone resolution.
+
+    - `resolution: workspace` markers only make sense inside the source
+      monorepo and make `pub deps` refuse to resolve the package.
+    - `dev_dependencies`/`dependency_overrides` of a published library are
+      irrelevant to consumers and sometimes reference unpublished packages
+      (e.g. analyzer 9.0.0's heap_snapshot), failing the solve outright.
+    """
+    content = repository_ctx.read(pubspec_rel)
+    dropped_sections = ("dev_dependencies:", "dependency_overrides:")
+
+    needs_rewrite = False
+    output_lines = []
+    skipping = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if skipping:
+            # Section ends at the next non-comment line without indentation.
+            if line and not line.startswith((" ", "\t")) and not stripped.startswith("#"):
+                skipping = False
+            else:
+                continue
+        if line.startswith("resolution:"):
+            needs_rewrite = True
+            continue
+        if line.startswith(dropped_sections):
+            needs_rewrite = True
+            skipping = True
+            continue
+        output_lines.append(line)
+
+    if needs_rewrite:
+        repository_ctx.file(pubspec_rel, "\n".join(output_lines) + "\n")
+
 def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_on_failure = False):
     """Ensure pub_deps.json exists by running pub deps --json when necessary."""
 
@@ -37,17 +72,7 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_o
     if not pubspec_path.exists:
         return False
 
-    # Some packages publish with a leftover `resolution: workspace` marker
-    # (pub workspaces). It only makes sense inside the source monorepo and
-    # causes `pub deps` to refuse to resolve the package standalone.
-    pubspec_content = repository_ctx.read(pubspec_rel)
-    if pubspec_content.lstrip().startswith("resolution:") or "\nresolution:" in pubspec_content:
-        stripped_lines = [
-            line
-            for line in pubspec_content.splitlines()
-            if not line.startswith("resolution:")
-        ]
-        repository_ctx.file(pubspec_rel, "\n".join(stripped_lines) + "\n")
+    _sanitize_published_pubspec(repository_ctx, pubspec_rel)
 
     pub_deps_path = repository_ctx.path(pub_deps_rel)
     if pub_deps_path.exists:
@@ -223,7 +248,7 @@ def _pub_command_prefix(executable):
         return ["cmd.exe", "/c", "\"{}\"".format(executable), "pub"]
     return [executable, "pub"]
 
-def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True, include_pub_cache_data = False):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True, include_pub_cache_data = False, hosted_deps = None):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
@@ -240,6 +265,9 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         include_pub_cache_data: When true and the package contains a local
             `.pub_cache`, expose it as data so package preparation can publish
             those vendored artifacts transitively.
+        hosted_deps: Optional explicit list of hosted package names to emit as
+            deps (already cycle-broken by the pub module extension). When None,
+            hosted deps are derived from the package's own pub_deps.json.
     """
 
     _ensure_pub_deps(
@@ -256,6 +284,7 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         package_dir,
         sdk_repo,
         include_hosted_deps = include_hosted_deps,
+        hosted_deps = hosted_deps,
     )
     pub_cache_files_target = None
     if include_pub_cache_data and _package_pub_cache_exists(repository_ctx, package_dir):
@@ -290,7 +319,9 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
     if data_entries:
         lines.append("    data = [{}],".format(", ".join(data_entries)))
 
-    if rule_kind == "dart_library":
+    # Hosted pub packages publish themselves into the assembled cache; SDK
+    # packages (include_hosted_deps=False) are resolved from FLUTTER_ROOT.
+    if include_hosted_deps:
         lines.append("    pub_package = True,")
 
     lines.append(_DEF_VISIBILITY)
@@ -453,7 +484,7 @@ def _collect_metadata_files(repository_ctx, package_dir):
             found.append(name)
     return found
 
-def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_deps = True):
+def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_deps = True, hosted_deps = None):
     """Return Bazel labels for direct dependencies sourced from pub or the SDK.
 
     Args:
@@ -462,6 +493,8 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
         sdk_repo: Repository label to use for Flutter SDK provided packages.
         include_hosted_deps: Whether hosted pub.dev dependencies should be
             emitted as external repos (True) or skipped (False).
+        hosted_deps: Optional explicit hosted package names (cycle-broken by
+            the pub extension); overrides self-derived hosted deps.
     """
 
     deps_rel = "pub_deps.json" if package_dir in (".", "") else package_dir + "/pub_deps.json"
@@ -476,6 +509,10 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
         fallback_packages = None
 
     deps = []
+    if include_hosted_deps and hosted_deps != None:
+        for pkg in hosted_deps:
+            deps.append("@{}//:{}".format(_sanitize_repo_name(pkg), pkg))
+
     if packages:
         for pkg, info in packages.items():
             dep_kind = info.get("dependency", "") or ""
@@ -484,7 +521,7 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
 
             source = info.get("source")
             if source == "hosted":
-                if not include_hosted_deps:
+                if not include_hosted_deps or hosted_deps != None:
                     continue
                 repo_name = _sanitize_repo_name(pkg)
                 deps.append("@{}//:{}".format(repo_name, pkg))
@@ -497,7 +534,7 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
             pkg = entry["name"]
             source = entry["source"]
             if source == "hosted":
-                if not include_hosted_deps:
+                if not include_hosted_deps or hosted_deps != None:
                     continue
                 repo_name = _sanitize_repo_name(pkg)
                 deps.append("@{}//:{}".format(repo_name, pkg))

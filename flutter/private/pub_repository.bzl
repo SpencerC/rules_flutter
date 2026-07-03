@@ -23,7 +23,18 @@ _ATTRS = {
         doc = "Base URL for pub.dev API",
     ),
     "sdk_repo": attr.string(
+        default = "@flutter_sdk",
         doc = "Repository label providing Flutter SDK packages (e.g. @flutter_sdk)",
+    ),
+    "hosted_deps": attr.string_list(
+        default = [],
+        doc = """Hosted package names to emit as target deps. Provided by the pub
+module extension with dependency cycles already broken; only honored when
+hosted_deps_explicit is set.""",
+    ),
+    "hosted_deps_explicit": attr.bool(
+        default = False,
+        doc = "Whether hosted_deps was computed by the extension (vs self-derived).",
     ),
 }
 
@@ -93,6 +104,7 @@ def _pub_dev_repository_impl(repository_ctx):
         repository_ctx,
         package_name,
         sdk_repo = repository_ctx.attr.sdk_repo,
+        hosted_deps = repository_ctx.attr.hosted_deps if repository_ctx.attr.hosted_deps_explicit else None,
     )
 
     # Create a simple marker file for debugging

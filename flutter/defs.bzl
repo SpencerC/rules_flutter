@@ -577,6 +577,7 @@ def _flutter_library_impl(ctx):
         build_runner_common_args = ctx.attr.build_runner_common_args,
         build_runner_build_args = ctx.attr.build_runner_build_args,
         run_build_runner_build = "build" in ctx.attr.build_runner_modes,
+        is_pub_package = ctx.attr.pub_package,
     )
 
     output_files = [
@@ -672,6 +673,10 @@ destination; other targets mount flat by basename.""",
         "build_runner_create_run_targets": attr.bool(
             doc = "Whether to emit executable build_runner helper targets for enabled modes.",
             default = True,
+        ),
+        "pub_package": attr.bool(
+            doc = "True if this target represents a hosted pub.dev package (enables cache publishing).",
+            default = False,
         ),
     },
     toolchains = ["//flutter:toolchain_type"],
@@ -1858,19 +1863,17 @@ def _dart_proto_aspect_impl(target, ctx):
     flutter_bin = flutter_toolchain.flutterinfo.target_tool_path
     flutter_bin_dir = paths.dirname(flutter_bin)
     dart_bin = paths.normalize(paths.join(flutter_bin_dir, "cache", "dart-sdk", "bin", "dart"))
+    flutter_root = paths.dirname(flutter_bin_dir)
 
     tree = ctx.actions.declare_directory(ctx.label.name + ".dart_pb")
     wrapper_script = ctx.actions.declare_file(ctx.label.name + ".dart_pb_protoc_gen_dart.sh")
 
+    # The plugin executes out of its own pub repository, whose fetch vendors
+    # the exact dependency closure its pub_deps.json pinned into .pub_cache —
+    # independent of whatever versions the consuming app resolves. The package
+    # config is generated at runtime from that metadata.
     plugin_repo = ctx.attr._dart_plugin_files.label.workspace_name
-    protobuf_repo = ctx.attr._protobuf_pkg.label.workspace_name
-    fixnum_repo = ctx.attr._fixnum_pkg.label.workspace_name
-    path_repo = ctx.attr._path_pkg.label.workspace_name
-    meta_repo = ctx.attr._meta_pkg.label.workspace_name
 
-    # The plugin's package config is generated at runtime so each package's
-    # languageVersion is derived from its own pubspec (a hardcoded value breaks
-    # whenever the pinned protoc_plugin generation moves across Dart releases).
     wrapper_content = """#!/bin/bash
 set -euo pipefail
 
@@ -1882,57 +1885,30 @@ if [ ! -x "$DART_BIN" ]; then
 fi
 
 PYTHON_BIN="$(command -v python3 || command -v python)"
-PKG_CONFIG="$(mktemp -d)/package_config.json"
 
-PKG_CONFIG="$PKG_CONFIG" PKG_ROOTS="protoc_plugin=$PWD/external/{plugin_repo} protobuf=$PWD/external/{protobuf_repo} fixnum=$PWD/external/{fixnum_repo} path=$PWD/external/{path_repo} meta=$PWD/external/{meta_repo}" "$PYTHON_BIN" <<'PYEOF'
-import json
-import os
+PLUGIN_ROOT="$PWD/external/{plugin_repo}"
+ENTRYPOINT="$PLUGIN_ROOT/bin/protoc_plugin.dart"
+if [ ! -f "$ENTRYPOINT" ]; then
+    echo "✗ protoc_plugin entrypoint not found at $ENTRYPOINT" >&2
+    exit 1
+fi
 
-def language_version(root):
-    pubspec = os.path.join(root, "pubspec.yaml")
-    version = "3.0"
-    if not os.path.exists(pubspec):
-        return version
-    capture = False
-    with open(pubspec, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.strip()
-            if stripped.startswith("environment:"):
-                capture = True
-                continue
-            if capture and stripped.startswith("sdk:"):
-                spec = stripped.split(":", 1)[1].strip().strip("'").strip('"')
-                spec = spec.replace(">=", " ").replace("^", " ").split()
-                if spec:
-                    parts = spec[0].split(".")
-                    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-                        version = parts[0] + "." + parts[1]
-                break
-    return version
+export PUB_DEPS_PATH="$PLUGIN_ROOT/pub_deps.json"
+export PUB_CACHE_ABS="$PLUGIN_ROOT/.pub_cache"
+export WORKSPACE_ABS="$PLUGIN_ROOT"
+export PACKAGE_CONFIG_PATH="$(mktemp -d)/package_config.json"
+export FLUTTER_ROOT="$PWD/{flutter_root}"
 
-packages = []
-for item in os.environ["PKG_ROOTS"].split():
-    name, root = item.split("=", 1)
-    packages.append({{
-        "name": name,
-        "rootUri": "file://" + root,
-        "packageUri": "lib/",
-        "languageVersion": language_version(root),
-    }})
-
-with open(os.environ["PKG_CONFIG"], "w", encoding="utf-8") as fh:
-    json.dump({{"configVersion": 2, "packages": packages}}, fh, indent=2)
+"$PYTHON_BIN" <<'PYEOF'
+{package_config_py}
 PYEOF
 
-export DART_PACKAGE_CONFIG="$PKG_CONFIG"
-exec "$DART_BIN" --packages="$PKG_CONFIG" external/{plugin_repo}/bin/protoc_plugin.dart "$@"
+exec "$DART_BIN" --packages="$PACKAGE_CONFIG_PATH" "$ENTRYPOINT" "$@"
 """.format(
         dart = dart_bin,
         plugin_repo = plugin_repo,
-        protobuf_repo = protobuf_repo,
-        fixnum_repo = fixnum_repo,
-        path_repo = path_repo,
-        meta_repo = meta_repo,
+        flutter_root = flutter_root,
+        package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
 
     ctx.actions.write(
@@ -1945,10 +1921,6 @@ exec "$DART_BIN" --packages="$PKG_CONFIG" external/{plugin_repo}/bin/protoc_plug
     additional_inputs = depset(
         transitive = [
             ctx.attr._dart_plugin_files[DefaultInfo].files,
-            ctx.attr._protobuf_pkg[DefaultInfo].files,
-            ctx.attr._fixnum_pkg[DefaultInfo].files,
-            ctx.attr._path_pkg[DefaultInfo].files,
-            ctx.attr._meta_pkg[DefaultInfo].files,
             tool_inputs,
         ],
     )
@@ -1999,18 +1971,6 @@ _dart_proto_aspect = aspect(
         ),
         "_dart_plugin_files": attr.label(
             default = Label("@pub_protoc_plugin//:protoc_plugin_files"),
-        ),
-        "_protobuf_pkg": attr.label(
-            default = Label("@pub_protobuf//:protobuf_files"),
-        ),
-        "_fixnum_pkg": attr.label(
-            default = Label("@pub_fixnum//:fixnum_files"),
-        ),
-        "_path_pkg": attr.label(
-            default = Label("@pub_path//:path_files"),
-        ),
-        "_meta_pkg": attr.label(
-            default = Label("@pub_meta//:meta_files"),
         ),
     },
     required_providers = [ProtoInfo],

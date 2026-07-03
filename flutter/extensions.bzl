@@ -153,7 +153,7 @@ def _sanitize_repo_name(package):
     return "pub_" + "".join(sanitized)
 
 def _parse_pub_deps_json(content):
-    """Return mapping of package -> (version, url) from pub_deps.json payload."""
+    """Return mapping of package -> metadata from pub_deps.json payload."""
 
     data = json.decode(content)
     packages = {}
@@ -170,9 +170,56 @@ def _parse_pub_deps_json(content):
             packages[name] = {
                 "version": version,
                 "url": url or "https://pub.dev",
+                "dependencies": [dep for dep in entry.get("dependencies", []) if type(dep) == "string"],
             }
 
     return packages
+
+def _prune_dependency_cycles(edges):
+    """Return edges with back edges removed via iterative DFS.
+
+    The pub universe contains genuine dependency cycles (e.g. dio <->
+    dio_web_adapter) that Bazel target graphs cannot express. Dropping the
+    back edge keeps cache propagation intact for any consumer that reaches
+    the cycle through its conventional entry point.
+    """
+    UNVISITED = 0
+    ON_STACK = 1
+    DONE = 2
+
+    state = {name: UNVISITED for name in edges.keys()}
+    pruned = {name: [] for name in edges.keys()}
+
+    for root in sorted(edges.keys()):
+        if state[root] != UNVISITED:
+            continue
+
+        # Each stack frame is [node, next_child_index].
+        stack = [[root, 0]]
+        state[root] = ON_STACK
+        for _ in range(1000000):  # bounded loop: Starlark has no while
+            if not stack:
+                break
+            frame = stack[-1]
+            node, idx = frame[0], frame[1]
+            children = edges[node]
+            if idx >= len(children):
+                state[node] = DONE
+                stack.pop()
+                continue
+            frame[1] = idx + 1
+            child = children[idx]
+            if child not in state:
+                continue
+            if state[child] == ON_STACK:
+                # Back edge: dropping it breaks the cycle.
+                continue
+            pruned[node].append(child)
+            if state[child] == UNVISITED:
+                state[child] = ON_STACK
+                stack.append([child, 0])
+
+    return pruned
 
 def _extract_description_url(description):
     if type(description) == "string":
@@ -242,6 +289,7 @@ def _pub_extension(module_ctx):
     """Extension implementation for pub.dev packages."""
     repos = {}
     scanned_roots = {}
+    dep_edges = {}
 
     for mod in module_ctx.modules:
         if not mod.is_root:
@@ -265,6 +313,10 @@ def _pub_extension(module_ctx):
                     info.get("version"),
                     origin,
                 )
+                merged = {dep: True for dep in dep_edges.get(package, [])}
+                for dep in info.get("dependencies", []):
+                    merged[dep] = True
+                dep_edges[package] = sorted(merged.keys())
 
     for mod in module_ctx.modules:
         for pkg in mod.tags.package:
@@ -278,13 +330,32 @@ def _pub_extension(module_ctx):
                 from_root = mod.is_root,
             )
 
+    # Restrict recorded edges to hosted packages that actually have repos and
+    # break dependency cycles so the generated target graph is a DAG.
+    known_packages = {meta["package"]: True for meta in repos.values()}
+    hosted_edges = {
+        package: [dep for dep in deps if dep in known_packages]
+        for package, deps in dep_edges.items()
+    }
+    pruned_edges = _prune_dependency_cycles(hosted_edges)
+
     for repo_name in sorted(repos.keys()):
         meta = repos[repo_name]
-        pub_dev_repository(
-            name = repo_name,
-            package = meta["package"],
-            version = meta["version"],
-        )
+        package = meta["package"]
+        if package in pruned_edges:
+            pub_dev_repository(
+                name = repo_name,
+                package = package,
+                version = meta["version"],
+                hosted_deps = pruned_edges[package],
+                hosted_deps_explicit = True,
+            )
+        else:
+            pub_dev_repository(
+                name = repo_name,
+                package = package,
+                version = meta["version"],
+            )
 
 pub = module_extension(
     implementation = _pub_extension,
