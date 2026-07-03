@@ -1,5 +1,7 @@
 """Flutter command execution actions for Bazel rules."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
+
 def shell_quote(arg):
     """Quote a string for safe interpolation into a bash script."""
     return "'" + arg.replace("'", "'\"'\"'") + "'"
@@ -999,6 +1001,8 @@ echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
 
     return prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir
 
+ANDROID_TARGETS = ["apk", "appbundle"]
+
 def flutter_build_action(
         ctx,
         flutter_toolchain,
@@ -1009,20 +1013,24 @@ def flutter_build_action(
         mode = "release",
         dart_defines = {},
         build_args = [],
-        env = {}):
+        env = {},
+        android_sdk = None):
     """Execute flutter build command for the specified target.
 
     Args:
         ctx: The rule context
         flutter_toolchain: The Flutter toolchain
         working_dir: Flutter project working directory
-        target: Build target (web, apk, ios, etc.)
+        target: Build target (web, apk, appbundle, ios, etc.)
         pub_cache_dir: Assembled pub cache directory used for offline resolution
         dart_tool_dir: Prepared .dart_tool directory containing package_config metadata
         mode: Flutter build mode (release, profile, or debug)
         dart_defines: Dict of compile-time --dart-define key/value pairs
         build_args: Extra args appended verbatim to the flutter build command
         env: Extra environment variables exported before invoking flutter
+        android_sdk: AndroidSdkInfo for apk/appbundle targets (Bazel-provisioned
+            SDK + JDK); the action is tagged requires-network for Gradle's
+            distribution/Maven downloads
 
     Returns:
         Tuple of (build_output, build_artifacts_dir)
@@ -1048,6 +1056,10 @@ def flutter_build_action(
         "apk": {
             "args": ["build", "apk", "--no-pub"],
             "output_dir": "build/app/outputs/flutter-apk",
+        },
+        "appbundle": {
+            "args": ["build", "appbundle", "--no-pub"],
+            "output_dir": "build/app/outputs/bundle/{mode}",
         },
         "ios": {
             "args": ["build", "ios", "--no-codesign", "--no-pub"],
@@ -1083,10 +1095,30 @@ def flutter_build_action(
         for key in sorted(env.keys())
     ])
 
-    # TODO(mobile): once an Android SDK toolchain is wired up, export the real
-    # ANDROID_HOME/JAVA_HOME for Android targets instead of skipping the blank.
-    if target in ["apk", "appbundle"]:
-        android_env_exports = ""
+    android_gradle_env = ""
+    if target in ANDROID_TARGETS:
+        if android_sdk == None:
+            fail("flutter_app '{}' target '{}' requires an Android SDK toolchain. ".format(ctx.label, target) +
+                 "Register one via flutter.android_sdk(...) and register_toolchains(\"@flutter_android_sdk//:toolchain\").")
+        sdk_root_dir = paths.dirname(android_sdk.sdk_root_marker.path)
+        java_home_dir = paths.dirname(android_sdk.java_home_marker.path)
+        android_env_exports = "\n".join([
+            "export ANDROID_HOME=\"$ORIGINAL_PWD/{}\"".format(sdk_root_dir),
+            "export ANDROID_SDK_ROOT=\"$ANDROID_HOME\"",
+            "export JAVA_HOME=\"$ORIGINAL_PWD/{}\"".format(java_home_dir),
+        ])
+
+        # Executed after the mutable workspace copy exists. Gradle needs a
+        # writable home; RULES_FLUTTER_GRADLE_USER_HOME (via --action_env plus
+        # --sandbox_writable_path) opts into a persistent cache so warm builds
+        # skip the distribution/Maven downloads.
+        android_gradle_env = """
+export GRADLE_USER_HOME="${RULES_FLUTTER_GRADLE_USER_HOME:-$BUILD_WORKSPACE_TMP/.gradle_home}"
+mkdir -p "$GRADLE_USER_HOME"
+export GRADLE_OPTS="-Dorg.gradle.daemon=false ${GRADLE_OPTS:-}"
+mkdir -p android
+printf 'sdk.dir=%s\\nflutter.sdk=%s\\n' "$ANDROID_HOME" "$FLUTTER_ROOT" > android/local.properties
+"""
     else:
         android_env_exports = "export ANDROID_HOME=\"\"\nexport ANDROID_SDK_ROOT=\"\""
 
@@ -1175,6 +1207,7 @@ if [ -d "$DART_TOOL_DIR_ABS" ]; then
     cp -R "$DART_TOOL_DIR_ABS/." .dart_tool/
     chmod -R u+rwX .dart_tool
 fi
+{android_gradle_env}
 
 # Run flutter build
 echo "=== Flutter Build {target} ==="
@@ -1249,16 +1282,40 @@ fi
         target = target,
         env_exports = env_exports,
         android_env_exports = android_env_exports,
+        android_gradle_env = android_gradle_env,
         package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
 
+    inputs = depset(
+        direct = [working_dir, pub_cache_dir, dart_tool_dir] +
+                 flutter_toolchain.flutterinfo.tool_files +
+                 flutter_toolchain.flutterinfo.sdk_files,
+        transitive = [android_sdk.files] if android_sdk else [],
+    )
+
+    execution_requirements = None
+    use_default_shell_env = False
+    mnemonic = "FlutterBuild"
+    if target in ANDROID_TARGETS:
+        # Gradle downloads its distribution and Maven dependencies; keep the
+        # action off remote executors and let RULES_FLUTTER_GRADLE_USER_HOME
+        # (an --action_env opt-in) reach the script.
+        execution_requirements = {
+            "no-remote-exec": "1",
+            "requires-network": "1",
+        }
+        use_default_shell_env = True
+        mnemonic = "FlutterBuildAndroid"
+
     # Execute build
     ctx.actions.run_shell(
-        inputs = [working_dir, pub_cache_dir, dart_tool_dir] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
+        inputs = inputs,
         outputs = [build_output, build_artifacts],
         command = script_content,
-        mnemonic = "FlutterBuild",
+        mnemonic = mnemonic,
         progress_message = "Running flutter build %s for %s" % (target, ctx.label.name),
+        execution_requirements = execution_requirements,
+        use_default_shell_env = use_default_shell_env,
     )
 
     return build_output, build_artifacts

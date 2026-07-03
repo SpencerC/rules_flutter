@@ -66,6 +66,33 @@ flutter.toolchain(
 Do not run `flutter precache` or `flutter config` against the Bazel-provided
 SDK from scripts: it is unnecessary and the sealed cache will reject it.
 
+#### Android builds
+
+`{name}.apk` and `{name}.appbundle` targets require an Android SDK toolchain,
+which rules_flutter provisions hermetically (pinned command-line tools plus a
+bundled Temurin JDK, integrity-checked; requested packages installed by
+sdkmanager at fetch time):
+
+```starlark
+flutter.android_sdk(
+    api_level = "36",
+    build_tools_version = "35.0.0",
+    ndk_version = "28.2.13676358",  # optional; large download
+)
+use_repo(flutter, "flutter_android_sdk", ...)
+register_toolchains("@flutter_android_sdk//:toolchain")
+```
+
+Android build actions are **declared non-hermetic**: Gradle downloads its
+distribution and Maven dependencies inside the action
+(`requires-network`, `no-remote-exec`). Opt into a persistent Gradle cache so
+warm builds skip the downloads:
+
+```
+build --action_env=RULES_FLUTTER_GRADLE_USER_HOME=/path/to/gradle-cache
+build --sandbox_writable_path=/path/to/gradle-cache
+```
+
 #### Managing pub.dev dependencies
 
 `rules_flutter` ships a `pub` module extension that scans every `pub_deps.json`

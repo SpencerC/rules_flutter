@@ -12,6 +12,13 @@ toolchain_type(
     visibility = ["//visibility:public"],
 )
 
+# Optional toolchain supplying a Bazel-provisioned Android SDK (plus JDK) to
+# flutter_app apk/appbundle targets. Declared via flutter.android_sdk(...).
+toolchain_type(
+    name = "android_sdk_toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
 resolved_toolchain(
     name = "resolved_toolchain",
     # Marked manual so that `bazel test //...` passes

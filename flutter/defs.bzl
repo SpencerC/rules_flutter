@@ -888,6 +888,11 @@ fi
         progress_message = "Preparing Flutter workspace for %s" % ctx.label.name,
     )
 
+    android_sdk = None
+    android_toolchain = ctx.toolchains["//flutter:android_sdk_toolchain_type"]
+    if android_toolchain != None:
+        android_sdk = android_toolchain.androidsdkinfo
+
     build_output, build_artifacts = flutter_build_action(
         ctx,
         flutter_toolchain,
@@ -899,6 +904,7 @@ fi
         dart_defines = ctx.attr.dart_defines,
         build_args = ctx.attr.build_args,
         env = ctx.attr.env,
+        android_sdk = android_sdk,
     )
 
     runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
@@ -939,7 +945,7 @@ _flutter_app_rule = rule(
             doc = "Additional source files to overlay (e.g. web/ directories).",
         ),
         "target": attr.string(
-            values = ["web", "apk", "ios", "macos", "linux", "windows"],
+            values = ["web", "apk", "appbundle", "ios", "macos", "linux", "windows"],
             doc = "Flutter build target platform",
         ),
         "mode": attr.string(
@@ -963,7 +969,10 @@ branch (Starlark cannot merge two selects).""",
         ),
     },
     executable = True,
-    toolchains = ["//flutter:toolchain_type"],
+    toolchains = [
+        "//flutter:toolchain_type",
+        config_common.toolchain_type("//flutter:android_sdk_toolchain_type", mandatory = False),
+    ],
     doc = "Internal rule for flutter_app platform targets.",
 )
 
@@ -1173,6 +1182,7 @@ def flutter_app(
         dev_run_args = None,
         web = None,
         apk = None,
+        appbundle = None,
         ios = None,
         macos = None,
         linux = None,
@@ -1207,6 +1217,8 @@ def flutter_app(
       dev_run_args: Extra args forwarded to flutter run by the dev helper.
       web: Files or dict spec for the {name}.web target.
       apk: Files or dict spec for the {name}.apk target.
+      appbundle: Files or dict spec for the {name}.appbundle target (Android
+        App Bundle; requires an Android SDK toolchain, see flutter.android_sdk).
       ios: Files or dict spec for the {name}.ios target.
       macos: Files or dict spec for the {name}.macos target.
       linux: Files or dict spec for the {name}.linux target.
@@ -1216,6 +1228,7 @@ def flutter_app(
     platform_specs = {
         "web": web,
         "apk": apk,
+        "appbundle": appbundle,
         "ios": ios,
         "macos": macos,
         "linux": linux,
