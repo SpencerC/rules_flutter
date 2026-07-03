@@ -80,6 +80,52 @@ build_test(
     ],
 )
 
+# Mobile examples. These are declared non-hermetic and need host
+# prerequisites — an Android SDK discovered via ANDROID_HOME (see .bazelrc)
+# for apk, and Xcode + CocoaPods on macOS for ios — so they are tagged
+# manual and excluded from CI. Run them locally with e.g.:
+#   ANDROID_HOME=~/Library/Android/sdk bazel build //flutter_app:mobile.apk
+#   bazel build //flutter_app:mobile.ios
+flutter_app(
+    name = "mobile",
+    apk = {
+        "srcs": [":android_files"],
+        "mode": "debug",
+        "android_sdk": "@androidsdk//:sdk_path",
+    },
+    embed = [":lib"],
+    ios = {
+        "srcs": [":ios_files"],
+    },
+    tags = ["manual"],
+)
+
+filegroup(
+    name = "android_files",
+    srcs = glob(
+        ["android/**"],
+        exclude = [
+            "android/**/build/**",
+            "android/.gradle/**",
+            "android/local.properties",
+        ],
+    ),
+)
+
+filegroup(
+    name = "ios_files",
+    srcs = glob(
+        ["ios/**"],
+        exclude = [
+            "ios/Flutter/ephemeral/**",
+            "ios/Flutter/Generated.xcconfig",
+            "ios/Flutter/flutter_export_environment.sh",
+            "ios/Pods/**",
+            "ios/.symlinks/**",
+        ],
+    ),
+)
+
 sh_test(
     name = "web_build_args_test",
     srcs = ["web_build_args_test.sh"],

@@ -1,0 +1,7 @@
+# Host Android SDK discovery for the manual mobile example targets
+# (//flutter_app:mobile.apk). Harmless when ANDROID_HOME is unset: the
+# @androidsdk repo is only fetched when those targets are built.
+common --repo_env=ANDROID_HOME
+
+# iOS builds keep the host HOME so CocoaPods caches persist across builds.
+build --action_env=HOME

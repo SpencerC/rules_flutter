@@ -9,6 +9,16 @@ bazel_dep(name = "rules_multirun", version = "0.13.0")
 
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
 
+# Host Android SDK for the manual mobile example targets in //flutter_app.
+bazel_dep(name = "rules_android", version = "0.6.6", dev_dependency = True)
+
+android_sdk_repo = use_extension(
+    "@rules_android//rules/android_sdk_repository:rule.bzl",
+    "android_sdk_repository_extension",
+    dev_dependency = True,
+)
+use_repo(android_sdk_repo, "androidsdk")
+
 local_path_override(
     module_name = "rules_flutter",
     path = "../..",
