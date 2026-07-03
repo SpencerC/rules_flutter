@@ -1296,10 +1296,12 @@ chmod -R u+rwX "$BUILD_WORKSPACE_TMP"
 # Change to the mutable workspace directory
 cd "$BUILD_WORKSPACE_TMP"
 
-# Copy .dart_tool tree to workspace
+# Copy .dart_tool tree to workspace. Dereference symlinks (-L): sandboxed
+# inputs are symlinks to read-only files, and the regeneration step below
+# must be able to rewrite these copies in place.
 if [ -d "$DART_TOOL_DIR_ABS" ]; then
     mkdir -p .dart_tool
-    cp -R "$DART_TOOL_DIR_ABS/." .dart_tool/
+    cp -RL "$DART_TOOL_DIR_ABS/." .dart_tool/
     chmod -R u+rwX .dart_tool
 fi
 {android_gradle_env}
@@ -1332,7 +1334,7 @@ export PUB_CACHE_ABS="$PUB_CACHE_DIR_ABS"
 export WORKSPACE_ABS="$PWD"
 export PACKAGE_CONFIG_PATH="$PWD/.dart_tool/package_config.json"
 mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
-rm -f "$PACKAGE_CONFIG_PATH"
+rm -f "$PACKAGE_CONFIG_PATH" "$PWD/.dart_tool/package_graph.json"
 "$PYTHON_BIN" <<'PY'
 {package_config_py}
 PY
