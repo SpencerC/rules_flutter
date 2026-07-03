@@ -368,18 +368,19 @@ bazel run //my_app:app.web -- 9000  # serve the built bundle locally
 Each platform attribute accepts either overlay files (a label or list of
 labels, treated as `srcs`) or a dict spec with any of these keys:
 
-| Key            | Meaning                                                                                                  |
-| :------------- | :------------------------------------------------------------------------------------------------------- |
-| `srcs`         | Files overlaid into the build workspace for this platform (e.g. `web/`, `android/`, `ios/` directories). |
-| `dart_defines` | Dict of `--dart-define` key/value pairs, read in Dart via `String.fromEnvironment`.                      |
-| `build_args`   | Extra arguments appended verbatim to `flutter build`.                                                    |
-| `mode`         | Build mode: `release` (default), `profile`, or `debug`.                                                  |
-| `env`          | Extra environment variables exported in the build action.                                                |
-| `android_sdk`  | Android SDK directory for `apk`/`appbundle`, typically rules_android's `@androidsdk//:sdk_path`.         |
-| `android_ndk`  | Optional Android NDK directory.                                                                          |
-| `android_test` | `apk` only: additionally build the instrumentation APK (see [Mobile builds](#mobile-builds)).            |
-| `build_name`   | Overrides the pubspec version name (`--build-name`).                                                     |
-| `build_number` | Label of a `string_flag`; its value (when non-empty) is passed as `--build-number`.                      |
+| Key            | Meaning                                                                                                                                                                    |
+| :------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `srcs`         | Files overlaid into the build workspace for this platform (e.g. `web/`, `android/`, `ios/` directories).                                                                   |
+| `dart_defines` | Dict of `--dart-define` key/value pairs, read in Dart via `String.fromEnvironment`.                                                                                        |
+| `build_args`   | Extra arguments appended verbatim to `flutter build`.                                                                                                                      |
+| `mode`         | Build mode: `release` (default), `profile`, or `debug`.                                                                                                                    |
+| `env`          | Extra environment variables exported in the build action.                                                                                                                  |
+| `android_sdk`  | Android SDK directory for `apk`/`appbundle`, typically rules_android's `@androidsdk//:sdk_path`.                                                                           |
+| `android_ndk`  | Optional Android NDK directory.                                                                                                                                            |
+| `android_test` | `apk` only: additionally build the instrumentation APK (see [Mobile builds](#mobile-builds)).                                                                              |
+| `build_name`   | Overrides the pubspec version name (`--build-name`).                                                                                                                       |
+| `build_number` | Label of a `string_flag`; its value (when non-empty) is passed as `--build-number`.                                                                                        |
+| `tags`         | Extra tags for this platform's target, added to the macro-level `tags` (e.g. `["manual"]` to keep mobile targets out of wildcard builds on machines without the host SDK). |
 
 `dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, and `android_ndk`
 can also be set at the macro level, shared by all platforms. Per-platform

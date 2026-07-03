@@ -1236,7 +1236,7 @@ def _to_label_list(value):
         return value
     return [value]
 
-_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk", "android_test", "build_name", "build_number"]
+_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk", "android_test", "build_name", "build_number", "tags"]
 
 def _normalize_platform_spec(platform, value):
     """Normalize a flutter_app platform argument to a dict spec.
@@ -1301,9 +1301,10 @@ def flutter_app(
     either labels for files that should be overlaid into the Flutter workspace when
     building for that platform, or a dict spec with any of the keys `srcs`,
     `dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, `android_ndk`,
-    `android_test`, `build_name`, and `build_number` to customize that
+    `android_test`, `build_name`, `build_number`, and `tags` to customize that
     platform's build. A target is emitted only when the corresponding attribute
-    is provided.
+    is provided. Spec `tags` extend the macro-level `tags` (e.g. to mark only
+    the mobile platforms `manual`).
 
     Common `dart_defines`/`build_args`/`mode`/`env` apply to every platform;
     per-platform values merge over them (`build_args` concatenates, dicts merge
@@ -1399,8 +1400,13 @@ def flutter_app(
 
         if visibility != None:
             rule_args["visibility"] = visibility
-        if tags != None:
-            rule_args["tags"] = tags
+
+        # Platform spec tags extend the macro-level tags, so e.g. mobile
+        # platforms can be tagged manual (host SDK prerequisites) while web
+        # stays visible to wildcard builds.
+        spec_tags = spec.get("tags")
+        if tags != None or spec_tags != None:
+            rule_args["tags"] = (tags if tags != None else []) + (spec_tags if spec_tags != None else [])
         if testonly:
             rule_args["testonly"] = True
 
