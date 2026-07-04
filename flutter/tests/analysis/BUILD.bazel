@@ -1,5 +1,5 @@
 load("//flutter:defs.bzl", "flutter_app", "flutter_library")
-load(":defs_analysis_test.bzl", "build_command_test")
+load(":defs_analysis_test.bzl", "build_command_test", "embed_guard_test")
 
 # Fixture targets are analysis-only: the analysis tests inspect their action
 # graphs without executing them. Tagged manual so wildcard builds skip them.
@@ -99,6 +99,28 @@ build_command_test(
     target_under_test = ":fixture_android_app.apk",
 )
 
+# Mirrors a generated package repository target: its cache holds only its
+# own payload, so embedding it must be rejected at analysis time.
+flutter_library(
+    name = "fixture_unassembled_lib",
+    srcs = ["lib/main.dart"],
+    assemble_dep_caches = False,
+    pubspec = "pubspec.yaml",
+    tags = ["manual"],
+)
+
+flutter_app(
+    name = "fixture_unassembled_app",
+    embed = [":fixture_unassembled_lib"],
+    tags = ["manual"],
+    web = [],
+)
+
+embed_guard_test(
+    name = "embed_unassembled_cache_test",
+    target_under_test = ":fixture_unassembled_app.web",
+)
+
 test_suite(
     name = "analysis_tests",
     tests = [
@@ -106,5 +128,6 @@ test_suite(
         ":android_test_apk_test",
         ":build_command_customization_test",
         ":build_command_defaults_test",
+        ":embed_unassembled_cache_test",
     ],
 )

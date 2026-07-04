@@ -233,16 +233,21 @@ def _extract_description_url(description):
         )
     return None
 
-def _register_repo(repo_map, repo_name, package, version, origin, from_root = True):
+def _register_repo(repo_map, repo_name, package, version, origin, from_root = True, tagged = False):
     """Merge repository metadata ensuring consistency across lockfiles/tags.
 
     Root-module registrations (pub_deps.json scans and root pub.package tags)
     take precedence: a conflicting non-root tag — e.g. a ruleset pinning a
     default tooling version — is silently ignored when the root already pinned
-    the package.
+    the package. A repository registered through any pub.package tag is marked
+    `tagged` (it keeps its fetch-time vendored .pub_cache so it can be
+    executed from the repository), regardless of which registration's version
+    wins.
     """
     existing = repo_map.get(repo_name)
     if existing:
+        if tagged:
+            existing["tagged"] = True
         if not from_root and existing["from_root"]:
             return
         if from_root and not existing["from_root"]:
@@ -251,6 +256,7 @@ def _register_repo(repo_map, repo_name, package, version, origin, from_root = Tr
                 "version": version,
                 "origins": [origin],
                 "from_root": True,
+                "tagged": existing["tagged"] or tagged,
             }
             return
         if existing["package"] != package:
@@ -283,6 +289,7 @@ def _register_repo(repo_map, repo_name, package, version, origin, from_root = Tr
         "version": version,
         "origins": [origin],
         "from_root": from_root,
+        "tagged": tagged,
     }
 
 def _pub_extension(module_ctx):
@@ -328,6 +335,7 @@ def _pub_extension(module_ctx):
                 pkg.version,
                 origin,
                 from_root = mod.is_root,
+                tagged = True,
             )
 
     # Restrict recorded edges to hosted packages that actually have repos and
@@ -349,12 +357,14 @@ def _pub_extension(module_ctx):
                 version = meta["version"],
                 hosted_deps = pruned_edges[package],
                 hosted_deps_explicit = True,
+                keep_vendored_cache = meta["tagged"],
             )
         else:
             pub_dev_repository(
                 name = repo_name,
                 package = package,
                 version = meta["version"],
+                keep_vendored_cache = meta["tagged"],
             )
 
 pub = module_extension(

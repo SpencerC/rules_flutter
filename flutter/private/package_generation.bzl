@@ -367,6 +367,12 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         data_entries.append('":{}"'.format(payload_target))
         lines.append("    pub_package = True,")
 
+    # Generated package targets contribute only their own payload to the
+    # cache; the top-level consumer assembles the full cache once from the
+    # transitive depset. Merging dep caches at every level duplicates shared
+    # transitive packages O(graph depth) times.
+    lines.append("    assemble_dep_caches = False,")
+
     if data_entries:
         lines.append("    data = [{}],".format(", ".join(data_entries)))
 

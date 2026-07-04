@@ -45,3 +45,16 @@ build_command_test = analysistest.make(
         ),
     },
 )
+
+def _embed_guard_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    asserts.expect_failure(env, "assemble_dep_caches = False")
+    return analysistest.end(env)
+
+# Embedding a library without an assembled dependency cache (as generated
+# package repositories are) must fail at analysis time, not silently produce
+# a runtime package config that drops every hosted dependency.
+embed_guard_test = analysistest.make(
+    _embed_guard_test_impl,
+    expect_failure = True,
+)

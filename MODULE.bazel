@@ -27,6 +27,11 @@ use_repo(
 
 register_toolchains("@flutter_toolchains//:all")
 
+# These tags must stay non-dev: pub.package-registered repositories keep
+# their fetch-time vendored .pub_cache closure, and the dart_proto_library
+# aspect executes protoc-gen-dart from @pub_protoc_plugin against exactly
+# that closure. Making them dev_dependency would delete it in consumer
+# workspaces and break proto generation at execution time.
 pub = use_extension("//flutter:extensions.bzl", "pub")
 pub.package(
     name = "pub_fixnum",

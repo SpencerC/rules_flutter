@@ -24,6 +24,7 @@ FlutterLibraryInfo = provider(
         "dart_sources": "Depset of Dart source files that make up the library.",
         "other_sources": "Depset of non-Dart source files bundled with the library.",
         "transitive_pub_caches": "Depset of pub cache directories from all transitive dependencies",
+        "assembled_cache": "Whether pub_cache contains the full merged dependency closure (assemble_dep_caches). Only such libraries can be embedded.",
     },
 )
 
@@ -37,8 +38,23 @@ DartLibraryInfo = provider(
         "pub_deps": "Dependency report copied from checked-in or repository-generated pub_deps.json (optional)",
         "pub_cache": "The assembled pub cache directory for this library (optional)",
         "transitive_pub_caches": "Depset of pub cache directories from all transitive dependencies",
+        "assembled_cache": "Whether pub_cache contains the full merged dependency closure (assemble_dep_caches). Only such libraries can be embedded.",
     },
 )
+
+def _check_embeddable(ctx, library_target, library_info):
+    """Fail at analysis when embedding a library without an assembled cache.
+
+    Generated package targets set assemble_dep_caches = False, so their
+    pub_cache carries only their own payload; embedding one would silently
+    produce a runtime package config that drops every hosted dependency.
+    """
+    if not getattr(library_info, "assembled_cache", True):
+        fail(
+            "{}: embedded library '{}' sets assemble_dep_caches = False, so its pub cache ".format(ctx.label, library_target.label) +
+            "does not contain its dependency closure. Embed a flutter_library/dart_library " +
+            "that assembles its cache (the default) instead of a generated package target.",
+        )
 
 DartProtoLibraryInfo = provider(
     doc = "Generated Dart sources produced from .proto files.",
@@ -583,7 +599,7 @@ def _flutter_library_impl(ctx):
         working_dir,
         pubspec_file,
         pub_deps_file,
-        transitive_pub_caches,
+        transitive_pub_caches if ctx.attr.assemble_dep_caches else [],
         generator_commands = ctx.attr.generator_commands,
         build_runner_common_args = ctx.attr.build_runner_common_args,
         build_runner_build_args = ctx.attr.build_runner_build_args,
@@ -617,6 +633,7 @@ def _flutter_library_impl(ctx):
                 direct = [pub_cache_dir],
                 transitive = transitive_pub_caches,
             ),
+            assembled_cache = ctx.attr.assemble_dep_caches,
         ),
     ]
 
@@ -688,6 +705,15 @@ destination; other targets mount flat by basename.""",
         "pub_package": attr.bool(
             doc = "True if this target represents a hosted pub.dev package (enables cache publishing).",
             default = False,
+        ),
+        "assemble_dep_caches": attr.bool(
+            doc = """Whether to merge transitive dependency pub caches into this
+library's own cache tree. Generated package repositories set this to False so
+each package contributes only its own hosted payload — the full cache is
+assembled once, by the top-level consumer, from the transitive depset —
+instead of duplicating shared transitive packages at every level of the
+dependency graph.""",
+            default = True,
         ),
     },
     toolchains = ["//flutter:toolchain_type"],
@@ -890,6 +916,7 @@ def _flutter_app_impl(ctx):
 
     library_target = ctx.attr.embed[0]
     library_info = library_target[FlutterLibraryInfo]
+    _check_embeddable(ctx, library_target, library_info)
 
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
 
@@ -1648,6 +1675,7 @@ def _single_embedded_library(ctx, rule_name):
         fail("{} currently supports exactly one entry in embed".format(rule_name))
 
     library_info = ctx.attr.embed[0][FlutterLibraryInfo]
+    _check_embeddable(ctx, ctx.attr.embed[0], library_info)
 
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
     if not flutter_toolchain.flutterinfo.tool_files:
@@ -2227,7 +2255,7 @@ def _dart_library_impl(ctx):
             working_dir,
             pubspec_file,
             pub_deps_input,
-            transitive_pub_caches,
+            transitive_pub_caches if ctx.attr.assemble_dep_caches else [],
             generator_commands = ctx.attr.generator_commands,
             build_runner_common_args = ctx.attr.build_runner_common_args,
             build_runner_build_args = ctx.attr.build_runner_build_args,
@@ -2248,6 +2276,7 @@ def _dart_library_impl(ctx):
             direct = [pub_cache_dir] if pub_cache_dir else [],
             transitive = transitive_pub_caches,
         ),
+        assembled_cache = ctx.attr.assemble_dep_caches,
     )
 
     # Emit a small metadata artifact so build tests can validate analysis output.
@@ -2357,6 +2386,15 @@ destination; other targets mount flat by basename.""",
         "pub_package": attr.bool(
             doc = "True if this target represents a hosted pub.dev package (enables cache publishing).",
             default = False,
+        ),
+        "assemble_dep_caches": attr.bool(
+            doc = """Whether to merge transitive dependency pub caches into this
+library's own cache tree. Generated package repositories set this to False so
+each package contributes only its own hosted payload — the full cache is
+assembled once, by the top-level consumer, from the transitive depset —
+instead of duplicating shared transitive packages at every level of the
+dependency graph.""",
+            default = True,
         ),
     },
     toolchains = ["//flutter:toolchain_type"],

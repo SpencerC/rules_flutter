@@ -48,6 +48,14 @@ hosted_deps_explicit is set.""",
         default = False,
         doc = "Whether hosted_deps was computed by the extension (vs self-derived).",
     ),
+    "keep_vendored_cache": attr.bool(
+        default = True,
+        doc = """Whether to keep the fetch-time vendored .pub_cache closure in the
+repository after dependency resolution. The pub extension keeps it only for
+pub.package-registered repositories, which may be executed directly from the
+repository (e.g. protoc_plugin); for scan-discovered dependency repositories
+the closure is deleted after pub_deps.json is generated.""",
+    ),
 }
 
 def _pub_dev_repository_impl(repository_ctx):
@@ -118,6 +126,19 @@ def _pub_dev_repository_impl(repository_ctx):
         sdk_repo = repository_ctx.attr.sdk_repo,
         hosted_deps = repository_ctx.attr.hosted_deps if repository_ctx.attr.hosted_deps_explicit else None,
     )
+
+    # The vendored .pub_cache exists to serve the fetch-time `pub deps`
+    # resolution above. Repositories registered through pub.package tags keep
+    # it — tools like protoc_plugin execute from the repository with a runtime
+    # package config resolved against this closure — but for ordinary
+    # dependency repositories it is pure residue (~4GB across a large app's
+    # dependency set), so drop it. The resolution's .dart_tool goes with it:
+    # its package_config.json roots would dangle into the deleted closure.
+    if not repository_ctx.attr.keep_vendored_cache:
+        if repository_ctx.path(".pub_cache").exists:
+            repository_ctx.delete(".pub_cache")
+        if repository_ctx.path(".dart_tool").exists:
+            repository_ctx.delete(".dart_tool")
 
     # Create a simple marker file for debugging
     repository_ctx.file(

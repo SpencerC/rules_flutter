@@ -101,7 +101,8 @@ Runs Flutter tests using a prepared flutter_library workspace.
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "DartLibraryInfo")
 
-DartLibraryInfo(<a href="#DartLibraryInfo-srcs">srcs</a>, <a href="#DartLibraryInfo-deps">deps</a>, <a href="#DartLibraryInfo-import_path">import_path</a>, <a href="#DartLibraryInfo-pubspec">pubspec</a>, <a href="#DartLibraryInfo-pub_deps">pub_deps</a>, <a href="#DartLibraryInfo-pub_cache">pub_cache</a>, <a href="#DartLibraryInfo-transitive_pub_caches">transitive_pub_caches</a>)
+DartLibraryInfo(<a href="#DartLibraryInfo-srcs">srcs</a>, <a href="#DartLibraryInfo-deps">deps</a>, <a href="#DartLibraryInfo-import_path">import_path</a>, <a href="#DartLibraryInfo-pubspec">pubspec</a>, <a href="#DartLibraryInfo-pub_deps">pub_deps</a>, <a href="#DartLibraryInfo-pub_cache">pub_cache</a>, <a href="#DartLibraryInfo-transitive_pub_caches">transitive_pub_caches</a>,
+                <a href="#DartLibraryInfo-assembled_cache">assembled_cache</a>)
 </pre>
 
 Information about a Dart library
@@ -117,6 +118,7 @@ Information about a Dart library
 | <a id="DartLibraryInfo-pub_deps"></a>pub_deps |  Dependency report copied from checked-in or repository-generated pub_deps.json (optional)    |
 | <a id="DartLibraryInfo-pub_cache"></a>pub_cache |  The assembled pub cache directory for this library (optional)    |
 | <a id="DartLibraryInfo-transitive_pub_caches"></a>transitive_pub_caches |  Depset of pub cache directories from all transitive dependencies    |
+| <a id="DartLibraryInfo-assembled_cache"></a>assembled_cache |  Whether pub_cache contains the full merged dependency closure (assemble_dep_caches). Only such libraries can be embedded.    |
 
 
 <a id="DartProtoAspectInfo"></a>
@@ -165,7 +167,7 @@ Generated Dart sources produced from .proto files.
 load("@rules_flutter//flutter:defs.bzl", "FlutterLibraryInfo")
 
 FlutterLibraryInfo(<a href="#FlutterLibraryInfo-workspace">workspace</a>, <a href="#FlutterLibraryInfo-pub_get_log">pub_get_log</a>, <a href="#FlutterLibraryInfo-pub_cache">pub_cache</a>, <a href="#FlutterLibraryInfo-pub_deps">pub_deps</a>, <a href="#FlutterLibraryInfo-dart_tool">dart_tool</a>, <a href="#FlutterLibraryInfo-pubspec">pubspec</a>, <a href="#FlutterLibraryInfo-dart_sources">dart_sources</a>,
-                   <a href="#FlutterLibraryInfo-other_sources">other_sources</a>, <a href="#FlutterLibraryInfo-transitive_pub_caches">transitive_pub_caches</a>)
+                   <a href="#FlutterLibraryInfo-other_sources">other_sources</a>, <a href="#FlutterLibraryInfo-transitive_pub_caches">transitive_pub_caches</a>, <a href="#FlutterLibraryInfo-assembled_cache">assembled_cache</a>)
 </pre>
 
 Outputs from flutter_library needed to build or test Flutter targets.
@@ -183,6 +185,7 @@ Outputs from flutter_library needed to build or test Flutter targets.
 | <a id="FlutterLibraryInfo-dart_sources"></a>dart_sources |  Depset of Dart source files that make up the library.    |
 | <a id="FlutterLibraryInfo-other_sources"></a>other_sources |  Depset of non-Dart source files bundled with the library.    |
 | <a id="FlutterLibraryInfo-transitive_pub_caches"></a>transitive_pub_caches |  Depset of pub cache directories from all transitive dependencies    |
+| <a id="FlutterLibraryInfo-assembled_cache"></a>assembled_cache |  Whether pub_cache contains the full merged dependency closure (assemble_dep_caches). Only such libraries can be embedded.    |
 
 
 <a id="dart_library"></a>
