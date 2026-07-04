@@ -1941,6 +1941,12 @@ if [ ! -x "$DART_BIN" ]; then
     exit 1
 fi
 
+# dartdev's analytics initializer writes $HOME/.dart-tool; give it a scratch
+# HOME so a read-only test environment cannot crash the CLI.
+export HOME="${{TEST_TMPDIR:-$(mktemp -d)}}/dart_home"
+mkdir -p "$HOME"
+export CI=true
+
 cd "$RUNFILES_ROOT/${{TEST_WORKSPACE:-_main}}"
 
 FILES=()
