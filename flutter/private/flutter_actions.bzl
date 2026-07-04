@@ -338,11 +338,15 @@ while IFS='|' read -r RELATIVE_PATH SOURCE_PATH; do
     if [ -d "$SOURCE_PATH" ]; then
         # Merge directory sources so several tree artifacts can share a
         # destination (e.g. per-proto_library outputs under lib/generated).
+        # Overlapping trees ship the same transitive files, and earlier
+        # copies land read-only from bazel inputs: later passes must be able
+        # to write into those directories and replace the files (-f).
         mkdir -p "$DEST_PATH"
-        cp -RL "$SOURCE_PATH/." "$DEST_PATH/"
+        find "$DEST_PATH" -type d ! -perm -200 -exec chmod u+w {} + 2>/dev/null || true
+        cp -RLf "$SOURCE_PATH/." "$DEST_PATH/"
     else
         mkdir -p "$(dirname "$DEST_PATH")"
-        cp -RL "$SOURCE_PATH" "$DEST_PATH"
+        cp -RLf "$SOURCE_PATH" "$DEST_PATH"
     fi
 done < "$MANIFEST_FILE"
 """,
@@ -528,10 +532,14 @@ if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
             DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
         fi
         if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
+            # The caches overlap (shared transitive packages) and earlier
+            # copies land read-only from bazel inputs; later copies must be
+            # able to write into those directories and replace files.
+            find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
             if command -v rsync >/dev/null 2>&1; then
                 rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
             else
-                cp -RL "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
+                cp -RLf "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
             fi
         fi
     done
@@ -541,10 +549,11 @@ fi
 
 if [ -d "$WORKSPACE_DIR_ABS/.pub_cache" ]; then
     echo "Merging package-local .pub_cache"
+    find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
     if command -v rsync >/dev/null 2>&1; then
         rsync -a "$WORKSPACE_DIR_ABS/.pub_cache/" "$PUB_CACHE_DIR_ABS/"
     else
-        cp -RL "$WORKSPACE_DIR_ABS/.pub_cache/." "$PUB_CACHE_DIR_ABS/"
+        cp -RLf "$WORKSPACE_DIR_ABS/.pub_cache/." "$PUB_CACHE_DIR_ABS/"
     fi
 fi
 echo ""
