@@ -104,8 +104,8 @@ Prefer adding the version to `versions.bzl` for anything long-lived; the
 `integrity` map is an escape hatch for one-off or bleeding-edge pins.
 
 > **Version selection.** When more than one module registers the same-named
-> toolchain, the **highest** version wins (compared semver-aware). rules_flutter
-> itself registers a default version, so pinning a version _below_ that default
+> toolchain, the **highest** version wins (compared semver-aware). rules*flutter
+> itself registers a default version, so pinning a version \_below* that default
 > via the escape hatch has no effect — the default is selected instead. The
 > `integrity` you supply is bound to its exact version and is never applied to a
 > different version that wins selection.
@@ -745,6 +745,16 @@ bazel run //:gazelle
   to Bazel.
 - [e2e/smoke](e2e/smoke) — the runnable example workspace exercised in CI
   (`cd e2e/smoke && bazel test //:integration_tests`).
+
+## Troubleshooting
+
+Build `--verbose_failures` and `--subcommands` show the exact command a failing
+Flutter action ran; the dependency-preparation action also tees its output to
+`bazel-bin/<pkg>/<target>_pub_prepare.log`. See the
+[Troubleshooting section of docs/hermeticity.md](docs/hermeticity.md#troubleshooting)
+for the common failures (toolchain not registered, unknown version, SDK
+integrity mismatch, stale `pub_deps.json`, sealed-cache write, slow remote
+execution) and how to resolve each.
 
 ## Working on rules_flutter
 

@@ -265,6 +265,58 @@ BuildBuddy's `EstimatedCPU`/`EstimatedMemory`). Locally, the actions declare
 a `resource_set` of several CPUs so Bazel's scheduler does not oversubscribe
 the machine.
 
+## Troubleshooting
+
+### Seeing what an action actually ran
+
+Bazel hides action output on success. To diagnose a failing or suspicious
+Flutter action:
+
+- `--verbose_failures` prints the full failing command line and its stderr.
+- `--subcommands` (or `-s`) prints every command Bazel runs, including the
+  generated action script.
+- `--sandbox_debug` leaves the sandbox tree in place and prints its path so you
+  can inspect the exact inputs the action saw.
+
+The dependency-preparation/codegen action tees its `flutter pub get` and
+generator output to a `<target>_pub_prepare.log` file next to the target's
+other outputs under `bazel-bin/`, so after a build you can read, e.g.,
+`bazel-bin/my_app/lib_pub_prepare.log` to see what pub resolution and code
+generation printed.
+
+### Common failures
+
+- **"no Flutter toolchain is registered"** — no toolchain was resolved. Add the
+  `flutter` extension and `register_toolchains("@flutter_toolchains//:all")`
+  (see the README "Register a Flutter toolchain" section).
+- **"Flutter `<v>` is not in the built-in version table"** — the pinned
+  `flutter_version` is not in `versions.bzl`. Run
+  `bazel run //tools:update_flutter_versions`, or supply an `integrity` map for
+  the version (README "Using a version not in the built-in table").
+- **SDK download integrity mismatch** — the pinned version's recorded hash does
+  not match the fetched archive (a stale table entry, a version that was never
+  published for that platform, or a wrong hand-supplied `integrity`). Confirm
+  the archive exists at the printed URL and regenerate/verify its hash.
+- **A `pub_deps.json` is stale or a hosted package is missing** — after editing
+  a `pubspec.yaml`, run `bazel run //my_app:lib.update` to refresh the pinned
+  dependency report, then `bazel mod tidy` to rescan and update `use_repo`.
+- **A write into `bin/cache` failed the build** — something invoked
+  `flutter precache`/`flutter config` (or otherwise wrote into the SDK). The
+  cache is sealed read-only on purpose; remove that step (see "The guarantee").
+- **An action is dramatically slower on a remote executor** (minutes → tens of
+  minutes) — the heavy Flutter actions default to local execution with remote
+  caching. This is expected; see the "Remote execution" section to opt back in
+  on a well-resourced fleet.
+- **Embedding a generated pub-package target fails at analysis** — targets
+  generated with `assemble_dep_caches = False` carry only their own payload and
+  cannot be embedded; embed a `flutter_library`/`dart_library` that assembles
+  its full cache (the default) instead.
+- **`build_runner` output looks stale with the incremental cache enabled** —
+  the opt-in cache (`RULES_FLUTTER_BUILD_RUNNER_CACHE`) is keyed by label + SDK
+  version + `pub_deps` digest and degrades to a clean rebuild on mismatch, so a
+  stale result is unexpected; clear the cache directory to force a rebuild and
+  file an issue.
+
 ## The guarantee
 
 **No build action and no run helper writes to the external Flutter SDK
