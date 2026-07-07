@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/bazelbuild/bazel-gazelle/config"
@@ -111,7 +112,7 @@ func collectSourceFiles(baseDir string, hasLib bool) []string {
 	}
 
 	// Sort for consistent output
-	sortStrings(srcs)
+	sort.Strings(srcs)
 	return srcs
 }
 
@@ -166,7 +167,7 @@ func generateDeps(depsFile *PubDeps, fc *FlutterConfig, rel string) []string {
 	}
 
 	// Sort for consistent output
-	sortStrings(deps)
+	sort.Strings(deps)
 	return deps
 }
 
@@ -218,19 +219,6 @@ func sdkPackagePath(pkg string) string {
 		return fmt.Sprintf("flutter/bin/cache/pkg/%s", pkg)
 	default:
 		return fmt.Sprintf("flutter/packages/%s", pkg)
-	}
-}
-
-// sortStrings sorts a slice of strings in place
-func sortStrings(s []string) {
-	// Simple bubble sort for small lists
-	n := len(s)
-	for i := 0; i < n-1; i++ {
-		for j := 0; j < n-i-1; j++ {
-			if s[j] > s[j+1] {
-				s[j], s[j+1] = s[j+1], s[j]
-			}
-		}
 	}
 }
 

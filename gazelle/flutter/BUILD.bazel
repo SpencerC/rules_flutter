@@ -24,6 +24,10 @@ go_library(
 
 go_test(
     name = "flutter_test",
-    srcs = ["generate_test.go"],
+    srcs = [
+        "config_test.go",
+        "generate_test.go",
+    ],
     embed = [":flutter"],
+    deps = ["@bazel_gazelle//config"],
 )

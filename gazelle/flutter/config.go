@@ -1,8 +1,6 @@
 package flutter
 
 import (
-	"fmt"
-
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/rule"
 )
@@ -104,10 +102,14 @@ func (fc *FlutterConfig) IsExcluded(dir string) bool {
 	return false
 }
 
+// defaultSDKRepo returns the repository label prefix for Flutter SDK packages.
+//
+// Generated BUILD files reference the SDK by its apparent name, "@flutter_sdk",
+// which every consuming module exposes via use_repo(flutter, "flutter_sdk").
+// Bazel's repository mapping resolves that apparent name to the extension's
+// canonical repo, so BUILD files never need to spell the canonical name — and
+// must not, since it is owned by rules_flutter's extension, not the module
+// being gazelled. Override with the flutter_sdk_repo directive if needed.
 func defaultSDKRepo(c *config.Config) string {
-	repoName := c.RepoName
-	if repoName == "" {
-		return "@flutter_sdk"
-	}
-	return fmt.Sprintf("@%s++flutter+flutter_sdk", repoName)
+	return "@flutter_sdk"
 }
