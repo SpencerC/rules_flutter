@@ -64,6 +64,27 @@ def _allow_remote_exec(ctx):
 def _build_runner_cache(ctx):
     return ctx.attr._build_runner_cache[BuildSettingInfo].value
 
+def _resolve_flutter_toolchain(ctx):
+    """Return (toolchain, flutter_bin File) for the resolved Flutter toolchain.
+
+    Fails with an actionable message when no toolchain is registered (or it
+    carries no tool files), replacing the identical guard that was copied
+    across every rule implementation.
+
+    Args:
+        ctx: the rule context.
+
+    Returns:
+        A tuple of (toolchain info, the flutter launcher File).
+    """
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    if not flutter_toolchain.flutterinfo.tool_files:
+        fail("rules_flutter: no Flutter toolchain is registered (the resolved " +
+             "toolchain has no tool files). Register one via the `flutter` module " +
+             "extension and register_toolchains(\"@flutter_toolchains//:all\"). " +
+             "See the README \"Registering a Flutter toolchain\" section.")
+    return flutter_toolchain, flutter_toolchain.flutterinfo.tool_files[0]
+
 def _test_execution_info(ctx):
     """ExecutionInfo for the flutter test rules (see allow_remote_execution)."""
     if _allow_remote_exec(ctx):
@@ -334,10 +355,7 @@ SCRIPT_COMPLETED=1
 def _pub_deps_update_impl(ctx):
     """Implementation for the generated .update helper."""
 
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    if not flutter_toolchain.flutterinfo.tool_files:
-        fail("No tool files found in Flutter toolchain")
-    flutter_bin = flutter_toolchain.flutterinfo.tool_files[0]
+    flutter_toolchain, flutter_bin = _resolve_flutter_toolchain(ctx)
 
     update_script = ctx.actions.declare_file(ctx.label.name + "_update.sh")
     ctx.actions.write(
@@ -594,10 +612,7 @@ exec "$DART_BIN" format .
 """
 
 def _flutter_format_impl(ctx):
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    if not flutter_toolchain.flutterinfo.tool_files:
-        fail("No tool files found in Flutter toolchain")
-    flutter_bin = flutter_toolchain.flutterinfo.tool_files[0]
+    flutter_toolchain, flutter_bin = _resolve_flutter_toolchain(ctx)
 
     runner = ctx.actions.declare_file(ctx.label.name + "_format.sh")
     ctx.actions.write(
@@ -747,10 +762,7 @@ which mounts the same outputs into its sandbox automatically.""",
 )
 
 def _build_runner_command_impl(ctx):
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    if not flutter_toolchain.flutterinfo.tool_files:
-        fail("No tool files found in Flutter toolchain")
-    flutter_bin = flutter_toolchain.flutterinfo.tool_files[0]
+    flutter_toolchain, flutter_bin = _resolve_flutter_toolchain(ctx)
 
     runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
     ctx.actions.write(
@@ -1647,8 +1659,7 @@ def _flutter_dev_server_impl(ctx):
 
     library_info, _ = _single_embedded_library(ctx, "flutter_app dev server")
 
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    flutter_bin_file = flutter_toolchain.flutterinfo.tool_files[0]
+    flutter_toolchain, flutter_bin_file = _resolve_flutter_toolchain(ctx)
 
     runner = ctx.actions.declare_file(ctx.label.name + "_dev_runner.sh")
     ctx.actions.write(
@@ -2125,11 +2136,9 @@ def _single_embedded_library(ctx, rule_name):
     library_info = ctx.attr.embed[0][FlutterLibraryInfo]
     _check_embeddable(ctx, ctx.attr.embed[0], library_info)
 
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    if not flutter_toolchain.flutterinfo.tool_files:
-        fail("No tool files found in Flutter toolchain")
+    _, flutter_bin = _resolve_flutter_toolchain(ctx)
 
-    return library_info, flutter_toolchain.flutterinfo.tool_files[0].path
+    return library_info, flutter_bin.path
 
 def _prepare_overlay_workspace(ctx, library_info, overlay_files, suffix, mnemonic):
     """Copy the library workspace and overlay extra files into a tree artifact."""
@@ -2382,10 +2391,7 @@ flutter_analyze_test = rule(
 def _dart_format_test_impl(ctx):
     """Implementation for dart_format_test rule."""
 
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    if not flutter_toolchain.flutterinfo.tool_files:
-        fail("No tool files found in Flutter toolchain")
-    flutter_bin_file = flutter_toolchain.flutterinfo.tool_files[0]
+    flutter_toolchain, flutter_bin_file = _resolve_flutter_toolchain(ctx)
 
     if not ctx.files.srcs:
         fail("dart_format_test requires at least one file in srcs")
