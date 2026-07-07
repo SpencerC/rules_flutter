@@ -2648,7 +2648,6 @@ def _dart_library_impl(ctx):
 
     # Get the Flutter toolchain
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
-    flutter_bin = flutter_toolchain.flutterinfo.target_tool_path
 
     # Collect transitive dependencies
     transitive_deps = []
@@ -2676,6 +2675,7 @@ def _dart_library_impl(ctx):
     pub_get_output = None
     pub_cache_dir = None
     dart_tool_dir = None
+    prepared_workspace = None
 
     if ctx.attr.generated_srcs and not pubspec_file:
         fail("dart_library 'generated_srcs' requires the 'pubspec' attribute to be set")
@@ -2703,7 +2703,7 @@ def _dart_library_impl(ctx):
             )
 
             # Prepare dependency cache and package metadata from declared pub_deps.json.
-            _prepared_workspace, pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir = _prepare_library_deps(
+            prepared_workspace, pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir = _prepare_library_deps(
                 ctx,
                 flutter_toolchain,
                 working_dir,
@@ -2728,47 +2728,40 @@ def _dart_library_impl(ctx):
         assembled_cache = ctx.attr.assemble_dep_caches,
     )
 
-    # Emit a small metadata artifact so build tests can validate analysis output.
-    analysis_output = ctx.actions.declare_file(ctx.label.name + "_analysis.txt")
-
-    analysis_info = """=== Dart Library Analysis ===
-Library name: {name}
-Flutter binary: {flutter_bin}
-Source files: {src_count}
-Dependencies: {dep_count}
-Dart files found: {dart_files}
-Has pubspec: {has_pubspec}
-
-✓ Flutter toolchain resolved successfully
-✓ Dart library structure validated
-✓ Dependencies processed
-
-Status: ANALYSIS_ONLY - Dart source metadata emitted
-""".format(
-        name = ctx.label.name,
-        flutter_bin = flutter_bin,
-        src_count = len(direct_srcs),
-        dep_count = len(ctx.attr.deps),
-        dart_files = ", ".join([f.basename for f in direct_srcs]),
-        has_pubspec = "yes" if pubspec_file else "no",
-    )
-
-    ctx.actions.write(
-        output = analysis_output,
-        content = analysis_info,
-    )
-
-    output_files = [analysis_output] + direct_srcs
+    output_files = list(direct_srcs)
     if pubspec_file:
         output_files.append(pubspec_file)
     for produced in [pub_deps, pub_get_output, pub_cache_dir, dart_tool_dir]:
         if produced != None:
             output_files.append(produced)
 
-    return [
+    providers = [
         DefaultInfo(files = depset(output_files)),
         library_info,
     ]
+
+    # When a full workspace was prepared (a dart_library with a pubspec that is
+    # not a bare staged pub package), also expose FlutterLibraryInfo so the
+    # library can be embedded by flutter_app/flutter_test/flutter_analyze_test
+    # exactly like a flutter_library. Bare (no-pubspec) and staged-package
+    # dart_libraries have no prepared workspace and remain non-embeddable.
+    if prepared_workspace != None:
+        dart_files = [f for f in direct_srcs if f.extension == "dart"]
+        other_files = [f for f in direct_srcs if f.extension != "dart"]
+        providers.append(FlutterLibraryInfo(
+            workspace = prepared_workspace,
+            pub_get_log = pub_get_output,
+            pub_cache = pub_cache_dir,
+            pub_deps = pub_deps,
+            dart_tool = dart_tool_dir,
+            pubspec = pubspec_file,
+            dart_sources = depset(dart_files),
+            other_sources = depset(other_files),
+            transitive_pub_caches = library_info.transitive_pub_caches,
+            assembled_cache = ctx.attr.assemble_dep_caches,
+        ))
+
+    return providers
 
 _dart_library_rule = rule(
     implementation = _dart_library_impl,

@@ -1,5 +1,9 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@rules_flutter//flutter:defs.bzl", "dart_library")
+load(
+    "@rules_flutter//flutter:defs.bzl",
+    "dart_library",
+    "flutter_analyze_test",
+)
 
 build_test(
     name = "dart_package_test",
@@ -11,4 +15,13 @@ dart_library(
     srcs = ["lib/math_utils.dart"],
     pubspec = "pubspec.yaml",
     deps = ["@pub_fixnum//:fixnum"],
+)
+
+# A dart_library with a pubspec is embeddable exactly like a flutter_library:
+# it exposes FlutterLibraryInfo (prepared workspace + pub cache), so the analyze
+# rule consumes it and runs `flutter analyze` over the prepared workspace.
+# Exercises the dart_library embed path end to end.
+flutter_analyze_test(
+    name = "lib_analyze",
+    embed = [":lib"],
 )
