@@ -609,6 +609,30 @@ dart_format_test(
 bazel test //my_app:all
 ```
 
+## Write-back helpers
+
+`dart_format_test` fails on unformatted code; to _fix_ it in place, run the
+`{name}.format` helper the `flutter_library`/`dart_library` macros emit
+(`dart format` over the package source directory):
+
+```bash
+bazel run //my_app:lib.format          # format the whole package
+bazel run //my_app:lib.format -- lib   # or specific paths
+```
+
+When a library sets `generated_srcs`, the macros also emit `{name}.sync`,
+which writes those generated sources (e.g. `dart_proto_library` outputs) into
+the source tree so the IDE analyzer resolves them. The hermetic build never
+needs this — it mounts the same outputs into its sandbox automatically — so
+keep the synced directory gitignored:
+
+```bash
+bazel run //my_app:lib.sync            # refresh lib/generated for the IDE
+```
+
+Both helpers are opt-out via `create_format_target = False` /
+`create_sync_target = False` on the macro.
+
 ## Gazelle automation
 
 `rules_flutter` ships Gazelle plugins to keep BUILD files in sync with your

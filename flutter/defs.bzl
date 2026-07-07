@@ -527,6 +527,225 @@ exec "${{CMD[@]}}"
         mode_args = mode_args_quoted,
     )
 
+# Shared prologue for `bazel run` write-back helpers that operate on the
+# source tree (format, goldens, sync). After it runs, the current directory is
+# the package's source directory ($SOURCE_PACKAGE_DIR), and $FLUTTER_BIN,
+# $DART_BIN, and $FLUTTER_ROOT point at the toolchain SDK.
+_SOURCE_WORKSPACE_PROLOGUE = """#!/bin/bash
+set -euo pipefail
+
+resolve_runfile() {{
+    local rel="$1"
+    local candidate
+    for root in "${{RUNFILES_DIR:-}}" "$PWD" "$PWD.runfiles"; do
+        if [ -z "$root" ]; then
+            continue
+        fi
+        candidate="$root/$rel"
+        if [ -e "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    if [ -e "$rel" ]; then
+        echo "$rel"
+        return 0
+    fi
+    return 1
+}}
+
+WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
+    exit 1
+fi
+
+PUBSPEC_REL="{pubspec_rel}"
+SOURCE_PACKAGE_DIR="$WORKSPACE_DIR"
+if [ -n "$PUBSPEC_REL" ]; then
+    SOURCE_PACKAGE_DIR="$WORKSPACE_DIR/$(dirname "$PUBSPEC_REL")"
+fi
+
+FLUTTER_BIN="$(resolve_runfile "{flutter_bin}")"
+if [ -z "$FLUTTER_BIN" ] || [ ! -x "$FLUTTER_BIN" ]; then
+    echo "✗ Unable to locate Flutter binary in runfiles: {flutter_bin}" >&2
+    exit 1
+fi
+FLUTTER_ROOT="$(cd "$(dirname "$FLUTTER_BIN")/.." && pwd)"
+DART_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export FLUTTER_ALREADY_LOCKED=true
+export CI=true
+export PUB_ENVIRONMENT="flutter_tool:bazel_run"
+
+cd "$SOURCE_PACKAGE_DIR"
+"""
+
+def _render_format_script(pubspec_file, flutter_bin):
+    return _SOURCE_WORKSPACE_PROLOGUE.format(
+        pubspec_rel = pubspec_file.short_path,
+        flutter_bin = flutter_bin,
+    ) + """
+if [ $# -gt 0 ]; then
+    exec "$DART_BIN" format "$@"
+fi
+exec "$DART_BIN" format .
+"""
+
+def _flutter_format_impl(ctx):
+    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    if not flutter_toolchain.flutterinfo.tool_files:
+        fail("No tool files found in Flutter toolchain")
+    flutter_bin = flutter_toolchain.flutterinfo.tool_files[0]
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_format.sh")
+    ctx.actions.write(
+        output = runner,
+        content = _render_format_script(ctx.file.pubspec, flutter_bin.short_path),
+        is_executable = True,
+    )
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([runner]),
+            runfiles = ctx.runfiles(
+                files = [runner, ctx.file.pubspec] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
+            ),
+        ),
+    ]
+
+_flutter_format_rule = rule(
+    implementation = _flutter_format_impl,
+    attrs = {
+        "pubspec": attr.label(
+            allow_single_file = True,
+            mandatory = True,
+            doc = "Source pubspec.yaml locating the package directory to format.",
+        ),
+    },
+    executable = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = "Runs `dart format` (write-back) over the package's source directory.",
+)
+
+def _flutter_sync_impl(ctx):
+    # Reuse the mounting semantics of generated_srcs: directory artifacts
+    # (dart_proto_library trees) merge into the dest dir; files copy flat.
+    entries = _generated_srcs_entries(ctx.attr.generated_srcs)
+    trees = []
+    manifest_lines = []
+    dest_dirs = {}
+    for rel, artifact in entries:
+        kind = "dir" if artifact.is_directory else "file"
+        if artifact.is_directory:
+            dest_dirs[rel] = True
+        manifest_lines.append("{}\t{}\t{}".format(kind, artifact.short_path, rel))
+        trees.append(artifact)
+
+    manifest = ctx.actions.declare_file(ctx.label.name + "_sync_manifest.txt")
+    ctx.actions.write(manifest, "\n".join(manifest_lines) + "\n")
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_sync.sh")
+    ctx.actions.write(
+        output = runner,
+        content = """#!/bin/bash
+set -euo pipefail
+
+resolve_runfile() {{
+    local rel="$1"
+    for root in "${{RUNFILES_DIR:-}}" "$PWD" "$PWD.runfiles"; do
+        if [ -n "$root" ] && [ -e "$root/$rel" ]; then
+            echo "$root/$rel"
+            return 0
+        fi
+    done
+    [ -e "$rel" ] && {{ echo "$rel"; return 0; }}
+    return 1
+}}
+
+WORKSPACE_DIR="${{BUILD_WORKSPACE_DIRECTORY:-}}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "✗ BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run' inside a workspace." >&2
+    exit 1
+fi
+
+PACKAGE_DIR="$WORKSPACE_DIR/{package}"
+MANIFEST="$(resolve_runfile "{manifest}")"
+if [ -z "$MANIFEST" ]; then
+    echo "✗ sync manifest not found in runfiles" >&2
+    exit 1
+fi
+
+# Clear each destination directory so removed generated sources don't linger.
+DEST_DIRS=({dest_dirs})
+for D in "${{DEST_DIRS[@]}}"; do
+    rm -rf "$PACKAGE_DIR/$D"
+done
+
+while IFS=$'\t' read -r KIND SRC_REL DEST_REL; do
+    [ -z "$KIND" ] && continue
+    SRC="$(resolve_runfile "$SRC_REL")"
+    if [ -z "$SRC" ]; then
+        echo "✗ generated source not found in runfiles: $SRC_REL" >&2
+        exit 1
+    fi
+    DEST="$PACKAGE_DIR/$DEST_REL"
+    if [ "$KIND" = "dir" ]; then
+        mkdir -p "$DEST"
+        # Trees overlap (shared well-known-type files) and arrive read-only;
+        # make earlier copies writable before merging the next.
+        find "$DEST" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
+        if command -v rsync >/dev/null 2>&1; then
+            rsync -aL "$SRC/" "$DEST/"
+        else
+            cp -RLf "$SRC/." "$DEST/"
+        fi
+    else
+        mkdir -p "$(dirname "$DEST")"
+        cp -Lf "$SRC" "$DEST"
+    fi
+done < "$MANIFEST"
+
+# Generated sources are checked out read-only from bazel-bin; make the
+# synced copies writable so the IDE/analyzer and later syncs can manage them.
+for D in "${{DEST_DIRS[@]}}"; do
+    chmod -R u+w "$PACKAGE_DIR/$D" 2>/dev/null || true
+done
+
+echo "✓ Synced generated sources into $PACKAGE_DIR"
+""".format(
+            package = ctx.label.package,
+            manifest = manifest.short_path,
+            dest_dirs = " ".join([_shell_quote(d) for d in sorted(dest_dirs.keys())]) if dest_dirs else "",
+        ),
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([runner]),
+            runfiles = ctx.runfiles(files = [runner, manifest] + trees),
+        ),
+    ]
+
+_flutter_sync_rule = rule(
+    implementation = _flutter_sync_impl,
+    attrs = {
+        "generated_srcs": attr.label_keyed_string_dict(
+            allow_files = True,
+            mandatory = True,
+            doc = "Same mapping as flutter_library.generated_srcs; written back to the source tree.",
+        ),
+    },
+    executable = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = """Writes generated_srcs (e.g. dart_proto_library outputs) back into the
+source tree so the IDE analyzer sees them. Not needed by the hermetic build,
+which mounts the same outputs into its sandbox automatically.""",
+)
+
 def _build_runner_command_impl(ctx):
     flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
     if not flutter_toolchain.flutterinfo.tool_files:
@@ -612,6 +831,42 @@ def _emit_build_runner_targets(name, kwargs, build_runner_modes):
         if kwargs.get("testonly", False):
             target_args["testonly"] = True
         _build_runner_command_rule(**target_args)
+
+def _forward_common_target_args(target_args, kwargs, visibility = None, tags = None):
+    """Copy visibility/tags/testonly from a macro's kwargs onto a helper target."""
+    if visibility != None:
+        target_args["visibility"] = visibility
+    elif "visibility" in kwargs:
+        target_args["visibility"] = kwargs["visibility"]
+    if tags != None:
+        target_args["tags"] = tags
+    elif "tags" in kwargs:
+        target_args["tags"] = kwargs["tags"]
+    if kwargs.get("testonly", False):
+        target_args["testonly"] = True
+    return target_args
+
+def _emit_format_target(name, kwargs, create):
+    """Emit the `{name}.format` write-back helper when a pubspec is present."""
+    if not create:
+        return
+    if not kwargs.get("pubspec"):
+        return
+    _flutter_format_rule(**_forward_common_target_args(
+        {"name": name + ".format", "pubspec": kwargs["pubspec"]},
+        kwargs,
+    ))
+
+def _emit_sync_target(name, kwargs, create):
+    """Emit the `{name}.sync` IDE write-back helper when generated_srcs is set."""
+    if not create:
+        return
+    if not kwargs.get("generated_srcs"):
+        return
+    _flutter_sync_rule(**_forward_common_target_args(
+        {"name": name + ".sync", "generated_srcs": kwargs["generated_srcs"]},
+        kwargs,
+    ))
 
 def _compute_relative_to_package(ctx, file):
     """Return file path relative to the package directory."""
@@ -842,14 +1097,21 @@ flutter_app and flutter_test via the embed attribute.""",
 def flutter_library(
         name,
         create_update_target = True,
+        create_format_target = True,
+        create_sync_target = True,
         update_visibility = None,
         update_tags = None,
         **kwargs):
-    """Defines a flutter_library target and optional .update helper.
+    """Defines a flutter_library target and optional .update/.format helpers.
 
     Args:
       name: Target name for the flutter_library rule.
       create_update_target: Whether to emit the runnable `.update` helper.
+      create_format_target: Whether to emit the runnable `.format` helper
+        (`dart format` write-back over the package source directory).
+      create_sync_target: Whether to emit the runnable `.sync` helper, which
+        writes generated_srcs (e.g. proto outputs) back into the source tree
+        for the IDE analyzer. Only emitted when generated_srcs is set.
       update_visibility: Optional visibility override for the `.update` target.
       update_tags: Optional tag list override for the `.update` target.
       **kwargs: Forwarded to the underlying flutter_library rule.
@@ -878,6 +1140,8 @@ def flutter_library(
         **kwargs
     )
     _emit_build_runner_targets(name, kwargs, run_target_build_runner_modes)
+    _emit_format_target(name, kwargs, create_format_target)
+    _emit_sync_target(name, kwargs, create_sync_target)
 
     if create_update_target:
         update_args = {
@@ -2531,14 +2795,18 @@ dependency graph.""",
 def dart_library(
         name,
         create_update_target = True,
+        create_format_target = True,
+        create_sync_target = True,
         update_visibility = None,
         update_tags = None,
         **kwargs):
-    """Defines a dart_library target and optional .update helper.
+    """Defines a dart_library target and optional .update/.format helpers.
 
     Args:
       name: Target name for the dart_library rule.
       create_update_target: Whether to emit the runnable `.update` helper (only if pubspec is provided).
+      create_format_target: Whether to emit the runnable `.format` helper (only if pubspec is provided).
+      create_sync_target: Whether to emit the runnable `.sync` helper (only if generated_srcs is set).
       update_visibility: Optional visibility override for the `.update` target.
       update_tags: Optional tag list override for the `.update` target.
       **kwargs: Forwarded to the underlying dart_library rule.
@@ -2569,6 +2837,8 @@ def dart_library(
 
     if "pubspec" in kwargs and kwargs["pubspec"]:
         _emit_build_runner_targets(name, kwargs, run_target_build_runner_modes)
+        _emit_format_target(name, kwargs, create_format_target)
+    _emit_sync_target(name, kwargs, create_sync_target)
 
     # Only create update target if pubspec is provided
     if not create_update_target or "pubspec" not in kwargs or not kwargs["pubspec"]:

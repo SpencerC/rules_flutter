@@ -77,6 +77,9 @@ build_test(
     targets = [
         ":app.dev",
         ":app.web",
+        # Write-back helpers emitted by the flutter_library macro.
+        ":lib.format",
+        ":lib.sync",
     ],
 )
 

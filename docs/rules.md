@@ -195,10 +195,11 @@ Outputs from flutter_library needed to build or test Flutter targets.
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
 
-dart_library(<a href="#dart_library-name">name</a>, <a href="#dart_library-create_update_target">create_update_target</a>, <a href="#dart_library-update_visibility">update_visibility</a>, <a href="#dart_library-update_tags">update_tags</a>, <a href="#dart_library-kwargs">**kwargs</a>)
+dart_library(<a href="#dart_library-name">name</a>, <a href="#dart_library-create_update_target">create_update_target</a>, <a href="#dart_library-create_format_target">create_format_target</a>, <a href="#dart_library-create_sync_target">create_sync_target</a>,
+             <a href="#dart_library-update_visibility">update_visibility</a>, <a href="#dart_library-update_tags">update_tags</a>, <a href="#dart_library-kwargs">**kwargs</a>)
 </pre>
 
-Defines a dart_library target and optional .update helper.
+Defines a dart_library target and optional .update/.format helpers.
 
 **PARAMETERS**
 
@@ -207,6 +208,8 @@ Defines a dart_library target and optional .update helper.
 | :------------- | :------------- | :------------- |
 | <a id="dart_library-name"></a>name |  Target name for the dart_library rule.   |  none |
 | <a id="dart_library-create_update_target"></a>create_update_target |  Whether to emit the runnable `.update` helper (only if pubspec is provided).   |  `True` |
+| <a id="dart_library-create_format_target"></a>create_format_target |  Whether to emit the runnable `.format` helper (only if pubspec is provided).   |  `True` |
+| <a id="dart_library-create_sync_target"></a>create_sync_target |  Whether to emit the runnable `.sync` helper (only if generated_srcs is set).   |  `True` |
 | <a id="dart_library-update_visibility"></a>update_visibility |  Optional visibility override for the `.update` target.   |  `None` |
 | <a id="dart_library-update_tags"></a>update_tags |  Optional tag list override for the `.update` target.   |  `None` |
 | <a id="dart_library-kwargs"></a>kwargs |  Forwarded to the underlying dart_library rule.   |  none |
@@ -275,10 +278,11 @@ with platform keys winning, `mode` overrides).
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "flutter_library")
 
-flutter_library(<a href="#flutter_library-name">name</a>, <a href="#flutter_library-create_update_target">create_update_target</a>, <a href="#flutter_library-update_visibility">update_visibility</a>, <a href="#flutter_library-update_tags">update_tags</a>, <a href="#flutter_library-kwargs">**kwargs</a>)
+flutter_library(<a href="#flutter_library-name">name</a>, <a href="#flutter_library-create_update_target">create_update_target</a>, <a href="#flutter_library-create_format_target">create_format_target</a>, <a href="#flutter_library-create_sync_target">create_sync_target</a>,
+                <a href="#flutter_library-update_visibility">update_visibility</a>, <a href="#flutter_library-update_tags">update_tags</a>, <a href="#flutter_library-kwargs">**kwargs</a>)
 </pre>
 
-Defines a flutter_library target and optional .update helper.
+Defines a flutter_library target and optional .update/.format helpers.
 
 **PARAMETERS**
 
@@ -287,6 +291,8 @@ Defines a flutter_library target and optional .update helper.
 | :------------- | :------------- | :------------- |
 | <a id="flutter_library-name"></a>name |  Target name for the flutter_library rule.   |  none |
 | <a id="flutter_library-create_update_target"></a>create_update_target |  Whether to emit the runnable `.update` helper.   |  `True` |
+| <a id="flutter_library-create_format_target"></a>create_format_target |  Whether to emit the runnable `.format` helper (`dart format` write-back over the package source directory).   |  `True` |
+| <a id="flutter_library-create_sync_target"></a>create_sync_target |  Whether to emit the runnable `.sync` helper, which writes generated_srcs (e.g. proto outputs) back into the source tree for the IDE analyzer. Only emitted when generated_srcs is set.   |  `True` |
 | <a id="flutter_library-update_visibility"></a>update_visibility |  Optional visibility override for the `.update` target.   |  `None` |
 | <a id="flutter_library-update_tags"></a>update_tags |  Optional tag list override for the `.update` target.   |  `None` |
 | <a id="flutter_library-kwargs"></a>kwargs |  Forwarded to the underlying flutter_library rule.   |  none |

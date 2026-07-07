@@ -255,7 +255,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "mSWn9d8H7EaKAWOHB4xdMAt8t2x64If3m7LjJnZvDEA=",
+        "bzlTransitiveDigest": "O3HA4frWDGGFVQLI4CBVAujR6ey/8AUDKejS906iPeM=",
         "usagesDigest": "28OnpcYnSmzay/V6WMwTNE0upCyG0V5VmLKmR7xi70Y=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -309,7 +309,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "mSWn9d8H7EaKAWOHB4xdMAt8t2x64If3m7LjJnZvDEA=",
+        "bzlTransitiveDigest": "O3HA4frWDGGFVQLI4CBVAujR6ey/8AUDKejS906iPeM=",
         "usagesDigest": "8P2FYQtelPagBVJ+QGRG7oizLHy3cwyOJtcLU4HfBrk=",
         "recordedFileInputs": {
           "@@//codegen_app/pub_deps.json": "1f360270a671c0b00fd37abb03989d09840cd98b55272670abebcdf6bf11a087",
@@ -329,7 +329,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_analyzer": {
@@ -353,7 +354,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_archive": {
@@ -366,7 +368,8 @@
                 "posix"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_args": {
@@ -376,7 +379,8 @@
               "version": "2.7.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_async": {
@@ -389,7 +393,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_boolean_selector": {
@@ -402,7 +407,8 @@
                 "string_scanner"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_build": {
@@ -422,7 +428,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_build_config": {
@@ -438,7 +445,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_build_daemon": {
@@ -461,7 +469,8 @@
                 "web_socket_channel"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_build_resolvers": {
@@ -486,7 +495,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_build_runner": {
@@ -531,7 +541,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_build_runner_core": {
@@ -560,7 +571,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_built_collection": {
@@ -570,7 +582,8 @@
               "version": "5.1.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_built_value": {
@@ -585,7 +598,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_characters": {
@@ -595,7 +609,8 @@
               "version": "1.3.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_checked_yaml": {
@@ -609,7 +624,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_clock": {
@@ -619,7 +635,8 @@
               "version": "1.1.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_code_builder": {
@@ -635,7 +652,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_collection": {
@@ -645,7 +663,8 @@
               "version": "1.18.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_color": {
@@ -655,7 +674,8 @@
               "version": "3.0.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_convert": {
@@ -667,7 +687,8 @@
                 "typed_data"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_copy_with_extension": {
@@ -679,7 +700,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_copy_with_extension_gen": {
@@ -695,7 +717,8 @@
                 "source_gen"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_crypto": {
@@ -707,7 +730,8 @@
                 "typed_data"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_cupertino_icons": {
@@ -717,7 +741,8 @@
               "version": "1.0.6",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_dart_style": {
@@ -735,7 +760,8 @@
                 "source_span"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_dartx": {
@@ -752,7 +778,8 @@
                 "time"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_fake_async": {
@@ -765,7 +792,8 @@
                 "collection"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_ffi": {
@@ -775,7 +803,8 @@
               "version": "2.1.3",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_file": {
@@ -788,7 +817,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_fixnum": {
@@ -798,7 +828,8 @@
               "version": "1.1.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": true
+              "keep_vendored_cache": true,
+              "resolve_deps": true
             }
           },
           "pub_flutter_gen_core": {
@@ -825,7 +856,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_flutter_gen_runner": {
@@ -843,7 +875,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_flutter_lints": {
@@ -855,7 +888,8 @@
                 "lints"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_frontend_server_client": {
@@ -868,7 +902,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_glob": {
@@ -884,7 +919,8 @@
                 "string_scanner"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_graphs": {
@@ -896,7 +932,8 @@
                 "collection"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_hashcodes": {
@@ -906,7 +943,8 @@
               "version": "2.0.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_http": {
@@ -921,7 +959,8 @@
                 "web"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_http_multi_server": {
@@ -933,7 +972,8 @@
                 "async"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_http_parser": {
@@ -948,7 +988,8 @@
                 "typed_data"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_image_size_getter": {
@@ -962,7 +1003,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_intl": {
@@ -976,7 +1018,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_intl_utils": {
@@ -996,7 +1039,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_io": {
@@ -1010,7 +1054,8 @@
                 "string_scanner"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_js": {
@@ -1020,7 +1065,8 @@
               "version": "0.7.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_json_annotation": {
@@ -1032,7 +1078,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_leak_tracker": {
@@ -1048,7 +1095,8 @@
                 "vm_service"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_leak_tracker_flutter_testing": {
@@ -1063,7 +1111,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_leak_tracker_testing": {
@@ -1077,7 +1126,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_lints": {
@@ -1087,7 +1137,8 @@
               "version": "2.1.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_logging": {
@@ -1097,7 +1148,8 @@
               "version": "1.3.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_macros": {
@@ -1107,7 +1159,8 @@
               "version": "0.1.2-main.4",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_matcher": {
@@ -1123,7 +1176,8 @@
                 "test_api"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_material_color_utilities": {
@@ -1135,7 +1189,8 @@
                 "collection"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_meta": {
@@ -1145,7 +1200,8 @@
               "version": "1.15.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": true
+              "keep_vendored_cache": true,
+              "resolve_deps": true
             }
           },
           "pub_mime": {
@@ -1155,7 +1211,8 @@
               "version": "2.0.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_package_config": {
@@ -1167,7 +1224,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_path": {
@@ -1177,7 +1235,8 @@
               "version": "1.9.0",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": true
+              "keep_vendored_cache": true,
+              "resolve_deps": true
             }
           },
           "pub_path_parsing": {
@@ -1190,7 +1249,8 @@
                 "vector_math"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_petitparser": {
@@ -1202,7 +1262,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_pool": {
@@ -1215,7 +1276,8 @@
                 "stack_trace"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_posix": {
@@ -1229,7 +1291,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_protobuf": {
@@ -1243,7 +1306,8 @@
                 "meta"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": true
+              "keep_vendored_cache": true,
+              "resolve_deps": true
             }
           },
           "pub_protoc_plugin": {
@@ -1251,7 +1315,8 @@
             "attributes": {
               "package": "protoc_plugin",
               "version": "21.1.1",
-              "keep_vendored_cache": true
+              "keep_vendored_cache": true,
+              "resolve_deps": true
             }
           },
           "pub_pub_semver": {
@@ -1263,7 +1328,8 @@
                 "collection"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_pubspec_parse": {
@@ -1279,7 +1345,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_shelf": {
@@ -1296,7 +1363,8 @@
                 "stream_channel"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_shelf_web_socket": {
@@ -1310,7 +1378,8 @@
                 "web_socket_channel"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_source_gen": {
@@ -1329,7 +1398,8 @@
                 "yaml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_source_span": {
@@ -1343,7 +1413,8 @@
                 "term_glyph"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_stack_trace": {
@@ -1355,7 +1426,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_stream_channel": {
@@ -1367,7 +1439,8 @@
                 "async"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_stream_transform": {
@@ -1377,7 +1450,8 @@
               "version": "2.1.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_string_scanner": {
@@ -1389,7 +1463,8 @@
                 "source_span"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_term_glyph": {
@@ -1399,7 +1474,8 @@
               "version": "1.2.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_test_api": {
@@ -1419,7 +1495,8 @@
                 "term_glyph"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_time": {
@@ -1431,7 +1508,8 @@
                 "clock"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_timing": {
@@ -1443,7 +1521,8 @@
                 "json_annotation"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_typed_data": {
@@ -1455,7 +1534,8 @@
                 "collection"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_vector_graphics_codec": {
@@ -1465,7 +1545,8 @@
               "version": "1.1.13",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_vector_graphics_compiler": {
@@ -1482,7 +1563,8 @@
                 "xml"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_vector_math": {
@@ -1492,7 +1574,8 @@
               "version": "2.1.4",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_vm_service": {
@@ -1502,7 +1585,8 @@
               "version": "14.2.4",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_watcher": {
@@ -1515,7 +1599,8 @@
                 "path"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_web": {
@@ -1525,7 +1610,8 @@
               "version": "1.1.1",
               "hosted_deps": [],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_web_socket": {
@@ -1537,7 +1623,8 @@
                 "web"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_web_socket_channel": {
@@ -1553,7 +1640,8 @@
                 "web_socket"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_xml": {
@@ -1567,7 +1655,8 @@
                 "petitparser"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           },
           "pub_yaml": {
@@ -1581,7 +1670,8 @@
                 "string_scanner"
               ],
               "hosted_deps_explicit": true,
-              "keep_vendored_cache": false
+              "keep_vendored_cache": false,
+              "resolve_deps": false
             }
           }
         },
