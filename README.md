@@ -1,5 +1,8 @@
 # Bazel rules for Flutter
 
+[![CI](https://github.com/SpencerC/rules_flutter/actions/workflows/ci.yaml/badge.svg)](https://github.com/SpencerC/rules_flutter/actions/workflows/ci.yaml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
 Build Flutter applications with Bazel. `rules_flutter` supplies hermetic Flutter
 toolchains, module extensions for pub.dev dependencies, protobuf-to-Dart
 generation, `build_runner` integration, Gazelle language support, and packaging

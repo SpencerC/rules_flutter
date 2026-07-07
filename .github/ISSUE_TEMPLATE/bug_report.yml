@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in rules_flutter does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug! Please include enough to reproduce it. For
+        build failures, run with `--verbose_failures` and paste the output.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+      placeholder: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: >
+        A minimal MODULE.bazel / BUILD.bazel and the exact `bazel` command. A
+        link to a small repo or a diff against e2e/smoke is ideal.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Build/test output (with `--verbose_failures`), copied as text.
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: rules-flutter-version
+    attributes:
+      label: rules_flutter version / commit
+      placeholder: e.g. git_override commit abc1234, or bazel_dep version
+    validations:
+      required: true
+  - type: input
+    id: bazel-version
+    attributes:
+      label: Bazel version
+      description: Output of `bazel --version` (rules_flutter requires Bazel 8+).
+      placeholder: e.g. 8.4.2
+    validations:
+      required: true
+  - type: input
+    id: flutter-version
+    attributes:
+      label: Flutter version
+      description: The `flutter_version` registered via the `flutter` extension.
+      placeholder: e.g. 3.38.4
+    validations:
+      required: false
+  - type: dropdown
+    id: os
+    attributes:
+      label: Host OS
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other
+    validations:
+      required: true
