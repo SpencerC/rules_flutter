@@ -118,7 +118,6 @@ TOOL_VERSIONS = {
     "3.35.0": {
         "macos": "sha256-SvigFRl5LFu2RfngALolA37FEYLYIxOsvsRTLl8fi/U=",
         "linux": "sha256-/y2UdNdo/bYcG41rdv1OuYI1wnHmixCr9BvZ+0G8Jz0=",
-        "windows": "sha256-botAO4b1MwlnYv/Prd87Nd+pAiYAvKeiXFvQSsAQpc4=",
     },
     "3.35.1": {
         "macos": "sha256-w5H1M6T+OMDv/996aUDJiIAVOdiggAKevNOx5w5SzR0=",

@@ -246,9 +246,12 @@ for version in "${SUPPORTED_VERSIONS[@]}"; do
             echo "        \"$platform_name\": \"$sri_hash\"," >> flutter/private/versions.bzl
             info "  Found $platform_name: ${sha256_hash:0:16}..."
         else
-            warn "  No hash found for $platform_name"
-            # Use a placeholder for missing hashes
-            echo "        \"$platform_name\": \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\"," >> flutter/private/versions.bzl
+            # No stable release published for this platform+version (e.g. Flutter
+            # 3.35.0 shipped for macOS/Linux but not Windows). Omit the key rather
+            # than emitting a placeholder hash: a phantom hash would 404 or fail
+            # integrity at fetch, whereas an omitted platform yields a clear
+            # "provide integrity" error only if someone selects that platform.
+            warn "  No stable $platform_name archive for $version; omitting key"
         fi
     done
     
