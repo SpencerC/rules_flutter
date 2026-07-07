@@ -4,7 +4,7 @@ module(
     name = "rules_flutter",
     # Stamped by the release workflow; 0.0.0 on main between releases.
     version = "0.0.0",
-    bazel_compatibility = [">=7.1.0"],
+    bazel_compatibility = [">=8.0.0"],
     compatibility_level = 1,
 )
 

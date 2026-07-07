@@ -28,8 +28,7 @@ and a plain Dart package ([`dart_package/`](e2e/smoke/dart_package)).
 
 ## Installation
 
-`rules_flutter` uses bzlmod and requires Bazel 7.1 or newer (the repo is
-tested with Bazel 8). Until a release lands in the Bazel Central Registry,
+`rules_flutter` uses bzlmod and requires Bazel 8 or newer. Until a release lands in the Bazel Central Registry,
 depend on it with a `git_override` in your `MODULE.bazel`:
 
 ```starlark
