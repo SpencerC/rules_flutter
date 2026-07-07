@@ -460,6 +460,113 @@ echo "=== Pub cache assembly complete ==="
 
     return assembled_cache
 
+def flutter_stage_pub_package_action(ctx, payload_files, allow_remote_exec = False):
+    """Stage a hosted pub package's own payload into a single pub cache tree.
+
+    Hosted pub-package targets neither run codegen nor merge dependency caches;
+    their only job is to make their own files available at
+    `hosted/pub.dev/<name>-<version>/` in the offline cache. This one cheap
+    action does exactly that — no Flutter SDK, no workspace seed, no prepared
+    workspace, no dart_tool — collapsing the three near-identical per-package
+    trees of the full prepare path down to one.
+
+    Args:
+        ctx: The rule context.
+        payload_files: The package's own files (the `_package_payload`
+            filegroup: sources + pubspec, minus BUILD/metadata files).
+        allow_remote_exec: Whether //flutter:allow_remote_execution is set.
+
+    Returns:
+        The staged pub cache tree artifact.
+    """
+
+    # Anchor the repo root on the top-level pubspec.yaml so the staged layout
+    # is independent of the external-repo exec path (avoids hardcoding the
+    # bzlmod canonical repo-name mangling).
+    root_prefix = None
+    pubspec_path = None
+    for f in payload_files:
+        p = f.path
+        if p == "pubspec.yaml" or p.endswith("/pubspec.yaml"):
+            candidate = p[:-len("pubspec.yaml")]
+            if root_prefix == None or len(candidate) < len(root_prefix):
+                root_prefix = candidate
+                pubspec_path = p
+    if root_prefix == None:
+        fail("flutter_stage_pub_package_action: no pubspec.yaml in payload for {}".format(ctx.label))
+
+    staged = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
+    manifest = ctx.actions.declare_file(ctx.label.name + "_pub_payload_manifest.txt")
+    ctx.actions.write(
+        manifest,
+        "".join([f.path + "\t" + f.path[len(root_prefix):] + "\n" for f in payload_files]),
+    )
+
+    script_content = """#!/bin/bash
+set -euo pipefail
+
+STAGED="{staged}"
+MANIFEST="{manifest}"
+PUBSPEC="{pubspec_path}"
+
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "✗ FATAL ERROR: python interpreter not found on PATH" >&2
+    exit 1
+fi
+
+INFO="$(PUBSPEC_PATH="$PUBSPEC" "$PYTHON_BIN" <<'PY'
+import os
+name = version = ""
+with open(os.environ["PUBSPEC_PATH"], "r", encoding="utf-8") as fh:
+    for line in fh:
+        s = line.strip()
+        if s.startswith("#"):
+            continue
+        if s.startswith("name:") and not name:
+            name = s.split(":", 1)[1].strip().strip("'").strip('"')
+        elif s.startswith("version:") and not version:
+            version = s.split(":", 1)[1].strip().strip("'").strip('"')
+        elif s.startswith("environment:"):
+            break
+print(name + "|" + version)
+PY
+)"
+NAME="${{INFO%%|*}}"
+VERSION="${{INFO#*|}}"
+if [ -z "$NAME" ] || [ -z "$VERSION" ]; then
+    echo "✗ FATAL ERROR: could not read name/version from $PUBSPEC" >&2
+    exit 1
+fi
+
+DEST="$STAGED/hosted/pub.dev/${{NAME}}-${{VERSION}}"
+rm -rf "$STAGED"
+mkdir -p "$DEST"
+while IFS=$'\t' read -r SRC REL; do
+    [ -z "$SRC" ] && continue
+    REL_DIR="$(dirname "$REL")"
+    if [ "$REL_DIR" != "." ]; then
+        mkdir -p "$DEST/$REL_DIR"
+    fi
+    cp -L "$SRC" "$DEST/$REL"
+done < "$MANIFEST"
+""".format(
+        staged = staged.path,
+        manifest = manifest.path,
+        pubspec_path = pubspec_path,
+    )
+
+    ctx.actions.run_shell(
+        inputs = payload_files + [manifest],
+        outputs = [staged],
+        command = script_content,
+        mnemonic = "FlutterStagePubPackage",
+        progress_message = "Staging pub package %s" % ctx.label.name,
+        execution_requirements = heavy_action_execution_requirements(allow_remote_exec),
+    )
+
+    return staged
+
 def flutter_pub_get_action(
         ctx,
         flutter_toolchain,

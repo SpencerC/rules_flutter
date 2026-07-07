@@ -382,6 +382,10 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         data_entries.append('":{}"'.format(payload_target))
         lines.append("    pub_package = True,")
 
+        # Lets the library rule stage the package directly from its own
+        # payload (one action, one tree) instead of the full prepare path.
+        lines.append('    pub_payload = ":{}",'.format(payload_target))
+
     # Generated package targets contribute only their own payload to the
     # cache; the top-level consumer assembles the full cache once from the
     # transitive depset. Merging dep caches at every level duplicates shared

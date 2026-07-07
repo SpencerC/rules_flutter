@@ -11,6 +11,7 @@ load(
     "flutter_assemble_pub_cache_action",
     "flutter_build_action",
     "flutter_pub_get_action",
+    "flutter_stage_pub_package_action",
 )
 
 FlutterLibraryInfo = provider(
@@ -91,6 +92,27 @@ DartProtoAspectInfo = provider(
         "trees": "Depset of tree artifacts laid out by proto import path.",
     },
 )
+
+def _maybe_stage_pub_package(ctx):
+    """Stage a hosted pub package directly, bypassing the full prepare path.
+
+    Returns the staged pub cache tree when this target is a hosted pub package
+    that only needs its own payload made available (no dependency-cache
+    assembly, no codegen) — collapsing its three near-identical per-package
+    trees to one. Returns None otherwise (the target keeps the full path).
+    """
+    if (ctx.attr.pub_package and
+        not ctx.attr.assemble_dep_caches and
+        not ctx.attr.generator_commands and
+        not ctx.attr.build_runner_modes and
+        not ctx.attr.generated_srcs and
+        ctx.attr.pub_payload):
+        return flutter_stage_pub_package_action(
+            ctx,
+            ctx.files.pub_payload,
+            allow_remote_exec = _allow_remote_exec(ctx),
+        )
+    return None
 
 def _prepare_library_deps(ctx, flutter_toolchain, working_dir, pubspec_file, pub_deps_file, transitive_pub_caches):
     """Assemble the pub cache and prepare the workspace for a library target.
@@ -634,15 +656,6 @@ def _flutter_library_impl(ctx):
     dart_files = [f for f in source_files if f.extension == "dart"]
     other_files = [f for f in source_files if f.extension != "dart"]
 
-    working_dir, _ = create_flutter_working_dir(
-        ctx,
-        pubspec_file,
-        dart_files,
-        other_files,
-        list(ctx.files.data),
-        extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
-    )
-
     # Collect pub_cache directories from all transitive dependencies
     transitive_pub_caches = []
     for dep in ctx.attr.deps:
@@ -652,6 +665,38 @@ def _flutter_library_impl(ctx):
         elif DartLibraryInfo in dep:
             # Collect transitive pub_caches depset from dart_library deps
             transitive_pub_caches.append(dep[DartLibraryInfo].transitive_pub_caches)
+
+    # Hosted pub packages that need only their own payload staged skip the
+    # workspace/codegen path entirely (one cheap action, one output tree).
+    staged_cache = _maybe_stage_pub_package(ctx)
+    if staged_cache != None:
+        return [
+            DefaultInfo(files = depset([staged_cache, pubspec_file])),
+            FlutterLibraryInfo(
+                workspace = None,
+                pub_get_log = None,
+                pub_cache = staged_cache,
+                pub_deps = pub_deps_file,
+                dart_tool = None,
+                pubspec = pubspec_file,
+                dart_sources = depset(dart_files),
+                other_sources = depset(other_files),
+                transitive_pub_caches = depset(
+                    direct = [staged_cache],
+                    transitive = transitive_pub_caches,
+                ),
+                assembled_cache = False,
+            ),
+        ]
+
+    working_dir, _ = create_flutter_working_dir(
+        ctx,
+        pubspec_file,
+        dart_files,
+        other_files,
+        list(ctx.files.data),
+        extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
+    )
 
     prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir = _prepare_library_deps(
         ctx,
@@ -760,6 +805,13 @@ destination; other targets mount flat by basename.""",
         "pub_package": attr.bool(
             doc = "True if this target represents a hosted pub.dev package (enables cache publishing).",
             default = False,
+        ),
+        "pub_payload": attr.label(
+            allow_files = True,
+            doc = """For hosted pub-package targets: the package's own files (the
+`_package_payload` filegroup). When set on a pub_package target with no
+codegen, the package is staged directly into the offline cache by a single
+cheap action instead of the full prepare/codegen path.""",
         ),
         "assemble_dep_caches": attr.bool(
             doc = """Whether to merge transitive dependency pub caches into this
@@ -2294,26 +2346,33 @@ def _dart_library_impl(ctx):
         if not pub_deps_input:
             fail("dart_library with 'pubspec' requires the 'pub_deps' attribute to point at a checked-in pub_deps.json")
 
-        # Create a working directory mirroring the package layout
-        working_dir, _ = create_flutter_working_dir(
-            ctx,
-            pubspec_file,
-            direct_srcs,
-            [],
-            list(ctx.files.data),
-            extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
-        )
+        staged_cache = _maybe_stage_pub_package(ctx)
+        if staged_cache != None:
+            # Hosted pub package: stage its own payload only (one action, one
+            # tree) instead of the full workspace/prepare path.
+            pub_cache_dir = staged_cache
+            pub_deps = pub_deps_input
+        else:
+            # Create a working directory mirroring the package layout
+            working_dir, _ = create_flutter_working_dir(
+                ctx,
+                pubspec_file,
+                direct_srcs,
+                [],
+                list(ctx.files.data),
+                extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
+            )
 
-        # Prepare dependency cache and package metadata from declared pub_deps.json.
-        _prepared_workspace, pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir = _prepare_library_deps(
-            ctx,
-            flutter_toolchain,
-            working_dir,
-            pubspec_file,
-            pub_deps_input,
-            transitive_pub_caches,
-        )
-        pub_deps = pub_deps_file
+            # Prepare dependency cache and package metadata from declared pub_deps.json.
+            _prepared_workspace, pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir = _prepare_library_deps(
+                ctx,
+                flutter_toolchain,
+                working_dir,
+                pubspec_file,
+                pub_deps_input,
+                transitive_pub_caches,
+            )
+            pub_deps = pub_deps_file
 
     # Create the library info provider
     library_info = DartLibraryInfo(
@@ -2363,8 +2422,9 @@ Status: ANALYSIS_ONLY - Dart source metadata emitted
     output_files = [analysis_output] + direct_srcs
     if pubspec_file:
         output_files.append(pubspec_file)
-    if pub_deps:
-        output_files.extend([pub_deps, pub_get_output, pub_cache_dir, dart_tool_dir])
+    for produced in [pub_deps, pub_get_output, pub_cache_dir, dart_tool_dir]:
+        if produced != None:
+            output_files.append(produced)
 
     return [
         DefaultInfo(files = depset(output_files)),
@@ -2437,6 +2497,13 @@ destination; other targets mount flat by basename.""",
         "pub_package": attr.bool(
             doc = "True if this target represents a hosted pub.dev package (enables cache publishing).",
             default = False,
+        ),
+        "pub_payload": attr.label(
+            allow_files = True,
+            doc = """For hosted pub-package targets: the package's own files (the
+`_package_payload` filegroup). When set on a pub_package target with no
+codegen, the package is staged directly into the offline cache by a single
+cheap action instead of the full prepare/codegen path.""",
         ),
         "assemble_dep_caches": attr.bool(
             doc = """Whether to merge transitive dependency pub caches into this
