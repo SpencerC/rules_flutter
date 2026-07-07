@@ -358,6 +358,7 @@ def _pub_extension(module_ctx):
                 hosted_deps = pruned_edges[package],
                 hosted_deps_explicit = True,
                 keep_vendored_cache = meta["tagged"],
+                resolve_deps = meta["tagged"],
             )
         else:
             pub_dev_repository(
@@ -365,6 +366,7 @@ def _pub_extension(module_ctx):
                 package = package,
                 version = meta["version"],
                 keep_vendored_cache = meta["tagged"],
+                resolve_deps = meta["tagged"],
             )
 
 pub = module_extension(

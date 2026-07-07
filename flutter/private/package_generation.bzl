@@ -56,7 +56,7 @@ def _sanitize_published_pubspec(repository_ctx, pubspec_rel):
     if needs_rewrite:
         repository_ctx.file(pubspec_rel, "\n".join(output_lines) + "\n")
 
-def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_on_failure = False):
+def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_on_failure = False, resolve_deps = True):
     """Ensure pub_deps.json exists by running pub deps --json when necessary."""
 
     if package_dir in (".", ""):
@@ -79,6 +79,15 @@ def _ensure_pub_deps(repository_ctx, package_name, package_dir, allow_fallback_o
         content = repository_ctx.read(pub_deps_rel)
         if content.strip():
             return False
+
+    # Scan-discovered dependency repositories don't need a real pub solve:
+    # their hosted deps come from the extension (cycle-broken, root-pinned)
+    # and nothing executes from their vendored closure. Skipping the solve
+    # removes a networked `dart pub deps` — which downloads the package's
+    # whole transitive closure — per repository (~300 for a large app).
+    if not resolve_deps:
+        _write_fallback_pub_deps(repository_ctx, package_name, package_dir, pub_deps_rel)
+        return True
 
     command, tool = _find_pub_command(repository_ctx)
     if not command:
@@ -287,7 +296,7 @@ def _pub_command_prefix(executable, tool):
         prefix.append("--no-version-check")
     return prefix + ["pub"]
 
-def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True, include_pub_cache_data = False, hosted_deps = None):
+def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_repo = "@flutter_sdk", include_hosted_deps = True, include_pub_cache_data = False, hosted_deps = None, resolve_deps = True):
     """Generate a BUILD.bazel for the given package directory.
 
     Args:
@@ -307,6 +316,11 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         hosted_deps: Optional explicit list of hosted package names to emit as
             deps (already cycle-broken by the pub module extension). When None,
             hosted deps are derived from the package's own pub_deps.json.
+        resolve_deps: Whether to run a real `pub deps --json` resolution at
+            fetch time. Scan-discovered dependency repositories pass False
+            and use pubspec-parsed fallback metadata instead; tool
+            repositories registered via pub.package tags keep True because
+            they execute from their vendored closure.
     """
 
     _ensure_pub_deps(
@@ -314,6 +328,7 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         package_name,
         package_dir,
         allow_fallback_on_failure = not include_hosted_deps,
+        resolve_deps = resolve_deps,
     )
     rule_kind = _determine_rule_kind(repository_ctx, package_dir)
     srcs = _collect_lib_sources(repository_ctx, package_dir)
@@ -617,6 +632,21 @@ def _collect_direct_deps(repository_ctx, package_dir, sdk_repo, include_hosted_d
 
     return sorted(deps)
 
+def _parse_flow_map(text):
+    """Parse a single-level YAML flow map like `{sdk: flutter, version: ^1.0}`."""
+    body = text.strip()
+    if body.startswith("{"):
+        body = body[1:]
+    if body.endswith("}"):
+        body = body[:-1]
+    result = {}
+    for part in body.split(","):
+        if ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        result[key.strip().strip("'\"")] = value.strip().strip("'\"")
+    return result
+
 def _parse_pubspec_dependencies(repository_ctx, package_dir):
     """Fallback parser to extract dependencies from pubspec.yaml when pub_deps.json is unavailable."""
 
@@ -691,7 +721,18 @@ def _parse_pubspec_dependencies(repository_ctx, package_dir):
         current_indent = entry_indent
 
         if remainder:
-            deps.append({"name": current_name, "source": "hosted"})
+            if remainder.startswith("{"):
+                # Flow-style dependency map, e.g. `flutter: {sdk: flutter}` or
+                # `pkg: {path: ../pkg}`.
+                flow = _parse_flow_map(remainder)
+                if "path" in flow:
+                    deps.append({"name": current_name, "source": "path", "path": flow.get("path")})
+                elif flow.get("sdk"):
+                    deps.append({"name": current_name, "source": "sdk", "sdk": flow.get("sdk")})
+                else:
+                    deps.append({"name": current_name, "source": "hosted"})
+            else:
+                deps.append({"name": current_name, "source": "hosted"})
             current_name = ""
             current_block = None
         else:

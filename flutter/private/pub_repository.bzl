@@ -56,6 +56,16 @@ pub.package-registered repositories, which may be executed directly from the
 repository (e.g. protoc_plugin); for scan-discovered dependency repositories
 the closure is deleted after pub_deps.json is generated.""",
     ),
+    "resolve_deps": attr.bool(
+        default = True,
+        doc = """Whether to run a real `pub deps --json` resolution at fetch time.
+The pub extension passes False for scan-discovered dependency repositories —
+their hosted deps and version pins already come from the extension, so the
+networked solve (which downloads the package's whole transitive closure) is
+skipped in favor of pubspec-parsed fallback metadata. Tool repositories
+registered via pub.package tags keep True because they execute from their
+vendored closure.""",
+    ),
 }
 
 def _pub_dev_repository_impl(repository_ctx):
@@ -125,6 +135,7 @@ def _pub_dev_repository_impl(repository_ctx):
         package_name,
         sdk_repo = repository_ctx.attr.sdk_repo,
         hosted_deps = repository_ctx.attr.hosted_deps if repository_ctx.attr.hosted_deps_explicit else None,
+        resolve_deps = repository_ctx.attr.resolve_deps,
     )
 
     # The vendored .pub_cache exists to serve the fetch-time `pub deps`
