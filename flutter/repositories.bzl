@@ -10,8 +10,19 @@ load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
 ########
 _DOC = "Fetch external tools needed for flutter toolchain"
 _ATTRS = {
-    "flutter_version": attr.string(mandatory = True, values = TOOL_VERSIONS.keys()),
+    # Not constrained to TOOL_VERSIONS.keys(): unlisted versions are allowed
+    # when the caller supplies `integrity` for the platform (escape hatch). The
+    # version/integrity consistency check lives in _flutter_repo_impl so it can
+    # fail lazily, per-platform, with an actionable message.
+    "flutter_version": attr.string(mandatory = True),
     "platform": attr.string(mandatory = True, values = PLATFORMS.keys()),
+    "integrity": attr.string(
+        default = "",
+        doc = """SRI integrity of the stable release archive for this platform.
+Required only when `flutter_version` is not in the built-in version table
+(the escape hatch surfaced as `flutter.toolchain(integrity = {...})`). When
+empty and the version is known, the built-in integrity is used.""",
+    ),
     "precache": attr.string_list(
         default = [],
         doc = """Artifact groups that must exist in the SDK cache after fetch
@@ -231,6 +242,32 @@ def _seal_sdk_cache(repository_ctx):
     if result.return_code != 0:
         fail("rules_flutter: unsealing engine frameworks failed: " + result.stderr)
 
+def _resolve_integrity(repository_ctx):
+    """Pick the SRI to verify the SDK archive against.
+
+    A caller-supplied `integrity` (the escape hatch for unlisted versions) wins;
+    otherwise the built-in version table is consulted. Fails with an actionable
+    message when the version is unknown and no integrity was provided for this
+    platform — this runs lazily per-platform, so cross-OS repos that are never
+    fetched never trip on it.
+    """
+    platform = repository_ctx.attr.platform
+    version = repository_ctx.attr.flutter_version
+    override = repository_ctx.attr.integrity
+    if override:
+        return override
+    known = TOOL_VERSIONS.get(version)
+    if known and platform in known:
+        return known[platform]
+    fail(("rules_flutter: Flutter {version} is not in the built-in version table and no " +
+          "integrity was provided for platform {platform}. Register it with " +
+          "flutter.toolchain(flutter_version = \"{version}\", integrity = {{\"{platform}\": \"sha256-...\"}}). " +
+          "Compute the SRI from the stable archive URL below, e.g. " +
+          "`curl -sL <url> | openssl dgst -sha256 -binary | openssl base64 -A` prefixed with 'sha256-'.").format(
+        version = version,
+        platform = platform,
+    ))
+
 def _flutter_repo_impl(repository_ctx):
     # Flutter SDK download URLs from Google Cloud Storage
     platform = repository_ctx.attr.platform
@@ -244,7 +281,7 @@ def _flutter_repo_impl(repository_ctx):
     # Download and verify Flutter SDK with integrity checking enabled
     repository_ctx.download_and_extract(
         url = url,
-        integrity = TOOL_VERSIONS[repository_ctx.attr.flutter_version][repository_ctx.attr.platform],
+        integrity = _resolve_integrity(repository_ctx),
     )
 
     _patch_engine_version_script(repository_ctx)
@@ -370,7 +407,7 @@ flutter_repositories = repository_rule(
 )
 
 # Wrapper macro around everything above, this is the primary API
-def flutter_register_toolchains(name, register = True, **kwargs):
+def flutter_register_toolchains(name, register = True, integrity = None, **kwargs):
     """Convenience macro for users which does typical setup.
 
     - create a repository for each built-in platform like "flutter_linux_amd64"
@@ -382,12 +419,18 @@ def flutter_register_toolchains(name, register = True, **kwargs):
         name: base name for all created repos, like "flutter1_14"
         register: whether to call through to native.register_toolchains.
             Set this to False when toolchain registration is handled elsewhere (for example by a module extension).
-        **kwargs: passed to each flutter_repositories call
+        integrity: optional dict mapping platform (macos, linux, windows) to the
+            SRI integrity of that platform's stable Flutter archive. Required for
+            versions outside the built-in table; only the platforms you build on
+            need an entry. See flutter.toolchain(integrity = {...}).
+        **kwargs: passed to each flutter_repositories call (e.g. flutter_version, precache)
     """
+    integrity = integrity or {}
     for platform in PLATFORMS.keys():
         flutter_repositories(
             name = name + "_" + platform,
             platform = platform,
+            integrity = integrity.get(platform, ""),
             **kwargs
         )
         if register:

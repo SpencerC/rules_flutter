@@ -11,6 +11,7 @@ effectively overriding the default named toolchain due to toolchain resolution p
 """
 
 load("//flutter/private:pub_repository.bzl", "pub_dev_repository")
+load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
 load(":repositories.bzl", "flutter_register_toolchains")
 
 _DEFAULT_NAME = "flutter"
@@ -27,11 +28,20 @@ in the SDK cache after fetch. Stable archives already ship these; when one is
 missing, `flutter precache` runs at repository fetch time. Unioned across
 registrations of the same toolchain name.
 """, default = []),
+    "integrity": attr.string_dict(doc = """\
+Escape hatch for Flutter versions not in the built-in version table: a map
+from platform (macos, linux, windows) to the SRI integrity of that platform's
+stable release archive, e.g. {"macos": "sha256-...", "linux": "sha256-..."}.
+Only the platforms you actually build on need an entry (the per-platform SDK
+repositories are fetched lazily). When flutter_version is in the built-in
+table this may be omitted. Merged across registrations of the same name.
+""", default = {}),
 })
 
 def _toolchain_extension(module_ctx):
     registrations = {}
     precache_groups = {}
+    integrity_overrides = {}
     for mod in module_ctx.modules:
         for toolchain in mod.tags.toolchain:
             if toolchain.name != _DEFAULT_NAME and not mod.is_root:
@@ -42,9 +52,12 @@ def _toolchain_extension(module_ctx):
             if toolchain.name not in registrations.keys():
                 registrations[toolchain.name] = []
                 precache_groups[toolchain.name] = {}
+                integrity_overrides[toolchain.name] = {}
             registrations[toolchain.name].append(toolchain.flutter_version)
             for group in toolchain.precache:
                 precache_groups[toolchain.name][group] = True
+            for platform, sri in toolchain.integrity.items():
+                integrity_overrides[toolchain.name][platform] = sri
     for name, versions in registrations.items():
         # Deduplicate versions to avoid noise when the same version is registered multiple times
         unique_versions = {v: True for v in versions}.keys()
@@ -57,10 +70,19 @@ def _toolchain_extension(module_ctx):
         else:
             selected = versions[0]
 
+        overrides = integrity_overrides[name]
+        if selected not in TOOL_VERSIONS and not overrides:
+            fail(("rules_flutter: Flutter {} is not in the built-in version table. " +
+                  "Register it with an integrity map, e.g. " +
+                  "flutter.toolchain(flutter_version = \"{}\", integrity = {{\"macos\": \"sha256-...\", \"linux\": \"sha256-...\"}}). " +
+                  "Compute each SRI from the stable archive at " +
+                  "https://storage.googleapis.com/flutter_infra_release/releases/stable/<platform>/flutter_<platform>_{}-stable.<ext>.").format(selected, selected, selected))
+
         flutter_register_toolchains(
             name = name,
             flutter_version = selected,
             precache = sorted(precache_groups[name].keys()),
+            integrity = overrides,
             register = False,
         )
 

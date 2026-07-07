@@ -70,6 +70,39 @@ use_repo(
 register_toolchains("@flutter_toolchains//:all")
 ```
 
+#### Using a version not in the built-in table
+
+`flutter_version` normally must be one of the versions shipped in
+`flutter/private/versions.bzl` (run `bazel run //tools:update_flutter_versions`
+to add the latest stable releases). To pin a version that is not yet in that
+table — a brand-new stable release, or a specific older build — supply its
+archive integrity per platform:
+
+```starlark
+flutter.toolchain(
+    flutter_version = "3.40.0",
+    integrity = {
+        # SRI of the stable release archive for each platform you build on.
+        "macos": "sha256-...",
+        "linux": "sha256-...",
+        # "windows": "sha256-...",
+    },
+)
+```
+
+Only the platforms you actually build on need an entry — the per-platform SDK
+repositories are fetched lazily, so a missing entry only fails if something
+builds for that platform. Compute each SRI from the stable archive URL, e.g.
+
+```sh
+curl -sL "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.40.0-stable.zip" \
+  | openssl dgst -sha256 -binary | openssl base64 -A
+# prefix the result with "sha256-"
+```
+
+Prefer adding the version to `versions.bzl` for anything long-lived; the
+`integrity` map is an escape hatch for one-off or bleeding-edge pins.
+
 #### SDK hermeticity guarantees
 
 The SDK repository is immutable after fetch:

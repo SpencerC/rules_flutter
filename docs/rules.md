@@ -312,15 +312,16 @@ Wire them into flutter_app, e.g.:
 then build with `--//your/pkg:settings_mode=release
 --//your/pkg:settings_build_number=42`.
 
+
 **PARAMETERS**
 
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="flutter_build_settings-name"></a>name |  <p align="center"> - </p>   |  none |
-| <a id="flutter_build_settings-mode_default"></a>mode_default |  <p align="center"> - </p>   |  `"release"` |
-| <a id="flutter_build_settings-build_number"></a>build_number |  <p align="center"> - </p>   |  `True` |
-| <a id="flutter_build_settings-visibility"></a>visibility |  <p align="center"> - </p>   |  `None` |
+| <a id="flutter_build_settings-name"></a>name |  Prefix for the emitted targets (`{name}_mode`, `{name}_<mode>` config_settings, `{name}_build_number`).   |  none |
+| <a id="flutter_build_settings-mode_default"></a>mode_default |  Default build mode (debug/profile/release) for the mode flag.   |  `"release"` |
+| <a id="flutter_build_settings-build_number"></a>build_number |  Whether to emit the `{name}_build_number` string_flag.   |  `True` |
+| <a id="flutter_build_settings-visibility"></a>visibility |  Optional visibility applied to every emitted target.   |  `None` |
 
 
 <a id="flutter_library"></a>
