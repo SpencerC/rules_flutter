@@ -8,6 +8,7 @@ load(
     "//flutter/private:flutter_actions.bzl",
     "PACKAGE_CONFIG_FROM_PUB_DEPS_PY",
     "create_flutter_working_dir",
+    "flutter_assemble_pub_cache_action",
     "flutter_build_action",
     "flutter_pub_get_action",
 )
@@ -90,6 +91,47 @@ DartProtoAspectInfo = provider(
         "trees": "Depset of tree artifacts laid out by proto import path.",
     },
 )
+
+def _prepare_library_deps(ctx, flutter_toolchain, working_dir, pubspec_file, pub_deps_file, transitive_pub_caches):
+    """Assemble the pub cache and prepare the workspace for a library target.
+
+    When the library assembles a full dependency cache (and is not itself a
+    republished pub package), the multi-tree merge runs in a separate
+    FlutterAssemblePubCache action keyed only on the dependency caches, and the
+    prepare/codegen action consumes it read-only — so a Dart edit re-runs
+    codegen without re-merging hundreds of dependency trees. Pub-package
+    targets and the (unusual) assemble+pub_package combination keep the
+    single-action path.
+    """
+    allow_remote = _allow_remote_exec(ctx)
+    use_preassembled = ctx.attr.assemble_dep_caches and not ctx.attr.pub_package
+
+    preassembled_cache = None
+    dep_caches = []
+    if use_preassembled:
+        preassembled_cache = flutter_assemble_pub_cache_action(
+            ctx,
+            transitive_pub_caches,
+            allow_remote_exec = allow_remote,
+        )
+    elif ctx.attr.assemble_dep_caches:
+        dep_caches = transitive_pub_caches
+
+    return flutter_pub_get_action(
+        ctx,
+        flutter_toolchain,
+        working_dir,
+        pubspec_file,
+        pub_deps_file,
+        dep_caches,
+        generator_commands = ctx.attr.generator_commands,
+        build_runner_common_args = ctx.attr.build_runner_common_args,
+        build_runner_build_args = ctx.attr.build_runner_build_args,
+        run_build_runner_build = "build" in ctx.attr.build_runner_modes,
+        is_pub_package = ctx.attr.pub_package,
+        allow_remote_exec = allow_remote,
+        preassembled_cache = preassembled_cache,
+    )
 
 def _render_pub_deps_generate_script(pubspec_file, flutter_bin):
     """Generate shell script that refreshes pub_deps.json in the source workspace."""
@@ -611,19 +653,13 @@ def _flutter_library_impl(ctx):
             # Collect transitive pub_caches depset from dart_library deps
             transitive_pub_caches.append(dep[DartLibraryInfo].transitive_pub_caches)
 
-    prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir = flutter_pub_get_action(
+    prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir = _prepare_library_deps(
         ctx,
         flutter_toolchain,
         working_dir,
         pubspec_file,
         pub_deps_file,
-        transitive_pub_caches if ctx.attr.assemble_dep_caches else [],
-        generator_commands = ctx.attr.generator_commands,
-        build_runner_common_args = ctx.attr.build_runner_common_args,
-        build_runner_build_args = ctx.attr.build_runner_build_args,
-        run_build_runner_build = "build" in ctx.attr.build_runner_modes,
-        is_pub_package = ctx.attr.pub_package,
-        allow_remote_exec = _allow_remote_exec(ctx),
+        transitive_pub_caches,
     )
 
     output_files = [
@@ -2269,19 +2305,13 @@ def _dart_library_impl(ctx):
         )
 
         # Prepare dependency cache and package metadata from declared pub_deps.json.
-        _prepared_workspace, pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir = flutter_pub_get_action(
+        _prepared_workspace, pub_get_output, pub_cache_dir, pub_deps_file, dart_tool_dir = _prepare_library_deps(
             ctx,
             flutter_toolchain,
             working_dir,
             pubspec_file,
             pub_deps_input,
-            transitive_pub_caches if ctx.attr.assemble_dep_caches else [],
-            generator_commands = ctx.attr.generator_commands,
-            build_runner_common_args = ctx.attr.build_runner_common_args,
-            build_runner_build_args = ctx.attr.build_runner_build_args,
-            run_build_runner_build = "build" in ctx.attr.build_runner_modes,
-            is_pub_package = ctx.attr.pub_package,
-            allow_remote_exec = _allow_remote_exec(ctx),
+            transitive_pub_caches,
         )
         pub_deps = pub_deps_file
 

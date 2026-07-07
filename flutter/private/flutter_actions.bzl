@@ -376,6 +376,90 @@ done < "$MANIFEST_FILE"
 
     return working_dir, input_files
 
+def flutter_assemble_pub_cache_action(
+        ctx,
+        dependency_pub_caches = [],
+        allow_remote_exec = False):
+    """Merge transitive dependency pub caches into a single assembled cache tree.
+
+    This is the offline pub cache the library exposes. It is a pure function of
+    the dependency cache trees — it takes no workspace sources and no Flutter
+    SDK — so editing a Dart source file does not invalidate it, and the
+    (multi-GB) merge of hundreds of overlapping dependency trees runs once and
+    then hits the cache. flutter_pub_get_action consumes the result read-only.
+
+    Args:
+        ctx: The rule context.
+        dependency_pub_caches: Files or depsets with pub cache directories from
+            dependencies.
+        allow_remote_exec: Whether //flutter:allow_remote_execution is set;
+            when False the action carries no-remote-exec (remote caching stays).
+
+    Returns:
+        The assembled pub cache tree artifact.
+    """
+    dep_pub_cache_files = []
+    for item in dependency_pub_caches:
+        if type(item) == "depset":
+            dep_pub_cache_files.extend(item.to_list())
+        else:
+            dep_pub_cache_files.append(item)
+
+    assembled_cache = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
+    dep_pub_cache_args = [dep_cache.path for dep_cache in dep_pub_cache_files]
+
+    script_content = """#!/bin/bash
+set -euo pipefail
+
+ORIGINAL_PWD="$PWD"
+PUB_CACHE_DIR_ABS="$ORIGINAL_PWD/{pub_cache_dir}"
+rm -rf "$PUB_CACHE_DIR_ABS"
+mkdir -p "$PUB_CACHE_DIR_ABS"
+
+echo "=== Assembling pub cache from dependencies ==="
+DEP_CACHES=({dep_caches})
+if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
+    for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
+        if [[ "$DEP_CACHE" != /* ]]; then
+            DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
+        fi
+        if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
+            # The caches overlap (shared transitive packages) and earlier
+            # copies land read-only from bazel inputs; later copies must be
+            # able to write into those directories and replace files.
+            find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
+            else
+                cp -RLf "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
+            fi
+        fi
+    done
+else
+    echo "No dependency caches supplied"
+fi
+
+if [ -z "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
+    echo '{{}}' > "$PUB_CACHE_DIR_ABS/.empty_cache.json"
+fi
+echo "=== Pub cache assembly complete ==="
+""".format(
+        pub_cache_dir = assembled_cache.path,
+        dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
+    )
+
+    ctx.actions.run_shell(
+        inputs = dep_pub_cache_files,
+        outputs = [assembled_cache],
+        command = script_content,
+        mnemonic = "FlutterAssemblePubCache",
+        progress_message = "Assembling pub cache for %s" % ctx.label.name,
+        execution_requirements = heavy_action_execution_requirements(allow_remote_exec),
+        resource_set = heavy_action_resource_set,
+    )
+
+    return assembled_cache
+
 def flutter_pub_get_action(
         ctx,
         flutter_toolchain,
@@ -388,7 +472,8 @@ def flutter_pub_get_action(
         build_runner_build_args = [],
         run_build_runner_build = False,
         is_pub_package = False,
-        allow_remote_exec = False):
+        allow_remote_exec = False,
+        preassembled_cache = None):
     """Prepare Flutter/Dart dependencies from declared pub_deps.json metadata.
 
     Args:
@@ -410,6 +495,13 @@ def flutter_pub_get_action(
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec (remote caching
             stays enabled).
+        preassembled_cache: An assembled pub cache tree (from
+            flutter_assemble_pub_cache_action) to use read-only instead of
+            merging dependency_pub_caches here. When set, this action produces
+            no pub_cache tree of its own and returns the preassembled one — so
+            a Dart edit re-runs codegen without re-merging the dependency
+            caches. Mutually exclusive with a non-empty dependency_pub_caches
+            and with is_pub_package (which republishes into its own cache).
 
     Returns:
         Tuple of (prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir).
@@ -427,8 +519,15 @@ def flutter_pub_get_action(
         else:
             dep_pub_cache_files.append(item)
 
+    if preassembled_cache != None and (dep_pub_cache_files or is_pub_package):
+        fail("flutter_pub_get_action: preassembled_cache is mutually exclusive " +
+             "with dependency_pub_caches and is_pub_package.")
+
     pub_get_output = ctx.actions.declare_file(ctx.label.name + "_pub_prepare.log")
-    pub_cache_dir = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
+    if preassembled_cache != None:
+        pub_cache_dir = preassembled_cache
+    else:
+        pub_cache_dir = ctx.actions.declare_directory(ctx.label.name + "_pub_cache")
     pub_deps = ctx.actions.declare_file(ctx.label.name + "_pub_deps.json")
     dart_tool_dir = ctx.actions.declare_directory(ctx.label.name + "_dart_tool")
     prepared_workspace = ctx.actions.declare_directory(ctx.label.name + "_prepared_flutter_workspace")
@@ -440,6 +539,62 @@ def flutter_pub_get_action(
     generator_args = [shell_quote(cmd) for cmd in generator_commands]
     build_runner_common_args_quoted = [shell_quote(arg) for arg in build_runner_common_args]
     build_runner_build_args_quoted = [shell_quote(arg) for arg in build_runner_build_args]
+
+    # PUB_CACHE handling differs by mode. With a preassembled cache the merge
+    # (and its dependency-cache inputs) has already happened in a separate
+    # action; PUB_CACHE points at it read-only and this action produces no
+    # cache tree. Otherwise the dependency caches (and any package-local
+    # .pub_cache) are merged into this action's own pub_cache output.
+    if preassembled_cache != None:
+        pub_cache_assembly = """echo "=== Using preassembled pub cache (read-only) ==="
+export PUB_CACHE="$PUB_CACHE_DIR_ABS\""""
+        pub_cache_finalize = ""
+    else:
+        pub_cache_assembly = """export PUB_CACHE="$PUB_CACHE_DIR_ABS"
+mkdir -p "$PUB_CACHE_DIR_ABS"
+
+echo "=== Preparing pub cache from dependencies ==="
+DEP_CACHES=({dep_caches})
+if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
+    for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
+        if [[ "$DEP_CACHE" != /* ]]; then
+            DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
+        fi
+        if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
+            # The caches overlap (shared transitive packages) and earlier
+            # copies land read-only from bazel inputs; later copies must be
+            # able to write into those directories and replace files.
+            find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
+            else
+                cp -RLf "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
+            fi
+        fi
+    done
+else
+    echo "No dependency caches supplied"
+fi
+
+if [ -d "$WORKSPACE_DIR_ABS/.pub_cache" ]; then
+    echo "Merging package-local .pub_cache"
+    find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a "$WORKSPACE_DIR_ABS/.pub_cache/" "$PUB_CACHE_DIR_ABS/"
+    else
+        cp -RLf "$WORKSPACE_DIR_ABS/.pub_cache/." "$PUB_CACHE_DIR_ABS/"
+    fi
+fi""".format(
+            dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
+        )
+        pub_cache_finalize = """mkdir -p "{pub_cache_dir}"
+if [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
+    echo "✓ Populated pub_cache directory" >> "$LOG_FILE"
+else
+    echo '{{}}' > "{pub_cache_dir}/.empty_cache.json"
+    echo "⚠ Dependency cache was empty" >> "$LOG_FILE"
+fi
+""".format(pub_cache_dir = pub_cache_dir.path)
 
     script_content = """#!/bin/bash
 set -euo pipefail
@@ -525,41 +680,7 @@ with open(path, "w", encoding="utf-8") as fh:
 PY
 fi
 
-export PUB_CACHE="$PUB_CACHE_DIR_ABS"
-mkdir -p "$PUB_CACHE_DIR_ABS"
-
-echo "=== Preparing pub cache from dependencies ==="
-DEP_CACHES=({dep_caches})
-if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
-    for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
-        if [[ "$DEP_CACHE" != /* ]]; then
-            DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
-        fi
-        if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
-            # The caches overlap (shared transitive packages) and earlier
-            # copies land read-only from bazel inputs; later copies must be
-            # able to write into those directories and replace files.
-            find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
-            if command -v rsync >/dev/null 2>&1; then
-                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
-            else
-                cp -RLf "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
-            fi
-        fi
-    done
-else
-    echo "No dependency caches supplied"
-fi
-
-if [ -d "$WORKSPACE_DIR_ABS/.pub_cache" ]; then
-    echo "Merging package-local .pub_cache"
-    find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
-    if command -v rsync >/dev/null 2>&1; then
-        rsync -a "$WORKSPACE_DIR_ABS/.pub_cache/" "$PUB_CACHE_DIR_ABS/"
-    else
-        cp -RLf "$WORKSPACE_DIR_ABS/.pub_cache/." "$PUB_CACHE_DIR_ABS/"
-    fi
-fi
+{pub_cache_assembly}
 echo ""
 
 export PUBSPEC_PATH="$WORKSPACE_DIR_ABS/pubspec.yaml"
@@ -939,11 +1060,11 @@ echo "=== Dependency preparation complete ==="
         workspace_src = working_dir.path,
         workspace_dir = prepared_workspace.path,
         pub_cache_dir = pub_cache_dir.path,
+        pub_cache_assembly = pub_cache_assembly,
         pub_deps = pub_deps.path,
         pub_deps_input = pub_deps_file.path,
         dart_tool_dir = dart_tool_dir.path,
         flutter_bin = flutter_bin,
-        dep_caches = " ".join(['"{}"'.format(path) for path in dep_pub_cache_args]),
         generator_commands = " ".join(generator_args),
         build_runner_common_args = " ".join(build_runner_common_args_quoted),
         build_runner_build_args = " ".join(build_runner_build_args_quoted),
@@ -952,16 +1073,23 @@ echo "=== Dependency preparation complete ==="
         resolve_entrypoint_py = RESOLVE_ENTRYPOINT_PY,
     )
 
+    prepare_inputs = [working_dir, pubspec_file, pub_deps_file] + dep_pub_cache_files + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files
+    prepare_outputs = [pub_get_output, pub_deps, dart_tool_dir, prepared_workspace]
+    if preassembled_cache != None:
+        # Consumed read-only; produced by flutter_assemble_pub_cache_action.
+        prepare_inputs = prepare_inputs + [preassembled_cache]
+    else:
+        prepare_outputs = prepare_outputs + [pub_cache_dir]
+
     ctx.actions.run_shell(
-        inputs = [working_dir, pubspec_file, pub_deps_file] + dep_pub_cache_files + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
-        outputs = [pub_get_output, pub_deps, pub_cache_dir, dart_tool_dir, prepared_workspace],
+        inputs = prepare_inputs,
+        outputs = prepare_outputs,
         command = script_content + """
 
 cd "$ORIGINAL_PWD"
 
 mkdir -p "$(dirname "{pub_get_output}")"
 mkdir -p "$(dirname "{pub_deps}")"
-mkdir -p "$PUB_CACHE_DIR_ABS"
 mkdir -p "{dart_tool_dir}"
 
 LOG_FILE="{pub_get_output}"
@@ -993,19 +1121,12 @@ else
     echo "⚠ .dart_tool missing, wrote minimal package_config.json" >> "$LOG_FILE"
 fi
 
-mkdir -p "{pub_cache_dir}"
-if [ -n "$(ls -A "$PUB_CACHE_DIR_ABS" 2>/dev/null)" ]; then
-    echo "✓ Populated pub_cache directory" >> "$LOG_FILE"
-else
-    echo '{{}}' > "{pub_cache_dir}/.empty_cache.json"
-    echo "⚠ Dependency cache was empty" >> "$LOG_FILE"
-fi
-
+{pub_cache_finalize}
 echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
 """.format(
             pub_get_output = pub_get_output.path,
             pub_deps = pub_deps.path,
-            pub_cache_dir = pub_cache_dir.path,
+            pub_cache_finalize = pub_cache_finalize,
             dart_tool_dir = dart_tool_dir.path,
             flutter_bin = flutter_bin,
             workspace_dir = prepared_workspace.path,
