@@ -104,11 +104,11 @@ Prefer adding the version to `versions.bzl` for anything long-lived; the
 `integrity` map is an escape hatch for one-off or bleeding-edge pins.
 
 > **Version selection.** When more than one module registers the same-named
-> toolchain, the **highest** version wins (compared semver-aware). rules*flutter
-> itself registers a default version, so pinning a version \_below* that default
-> via the escape hatch has no effect — the default is selected instead. The
-> `integrity` you supply is bound to its exact version and is never applied to a
-> different version that wins selection.
+> toolchain, the highest version wins (compared semver-aware). `rules_flutter`
+> itself registers a default version, so pinning a lower version through the
+> escape hatch has no effect — the default is selected instead. The `integrity`
+> you supply is bound to its exact version and is never applied to a different
+> version that wins selection.
 
 #### SDK hermeticity guarantees
 
