@@ -42,6 +42,24 @@ DartLibraryInfo = provider(
     },
 )
 
+# Hidden attr giving rules access to //flutter:allow_remote_execution; see
+# heavy_action_execution_requirements in flutter_actions.bzl for the posture.
+ALLOW_REMOTE_EXECUTION_ATTR = {
+    "_allow_remote_execution": attr.label(
+        default = Label("//flutter:allow_remote_execution"),
+        providers = [BuildSettingInfo],
+    ),
+}
+
+def _allow_remote_exec(ctx):
+    return ctx.attr._allow_remote_execution[BuildSettingInfo].value
+
+def _test_execution_info(ctx):
+    """ExecutionInfo for the flutter test rules (see allow_remote_execution)."""
+    if _allow_remote_exec(ctx):
+        return []
+    return [testing.ExecutionInfo({"no-remote-exec": "1"})]
+
 def _check_embeddable(ctx, library_target, library_info):
     """Fail at analysis when embedding a library without an assembled cache.
 
@@ -605,6 +623,7 @@ def _flutter_library_impl(ctx):
         build_runner_build_args = ctx.attr.build_runner_build_args,
         run_build_runner_build = "build" in ctx.attr.build_runner_modes,
         is_pub_package = ctx.attr.pub_package,
+        allow_remote_exec = _allow_remote_exec(ctx),
     )
 
     output_files = [
@@ -715,7 +734,7 @@ instead of duplicating shared transitive packages at every level of the
 dependency graph.""",
             default = True,
         ),
-    },
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
     toolchains = ["//flutter:toolchain_type"],
     doc = """Prepares a Flutter library by assembling its dependency cache and metadata.
 
@@ -1010,6 +1029,7 @@ fi
         env = ctx.attr.env,
         android = android,
         android_test = ctx.attr.android_test,
+        allow_remote_exec = _allow_remote_exec(ctx),
     )
 
     runner = ctx.actions.declare_file(ctx.label.name + "_runner.sh")
@@ -1100,7 +1120,7 @@ version code via --//app:android_build_number=N.""",
 rules_android_ndk's `@androidndk` (wrapping ANDROID_NDK_HOME); written to
 local.properties as ndk.dir.""",
         ),
-    },
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
     executable = True,
     toolchains = [
         "//flutter:toolchain_type",
@@ -1813,7 +1833,7 @@ exit "$RESULT"
             files = depset([test_runner]),
             runfiles = _runtime_runfiles(ctx, test_runner, prepared_workspace, library_info),
         ),
-    ]
+    ] + _test_execution_info(ctx)
 
 flutter_test = rule(
     implementation = _flutter_test_impl,
@@ -1830,7 +1850,7 @@ flutter_test = rule(
             default = ["test/"],
             doc = "Test files or directories to run",
         ),
-    },
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,
     toolchains = ["//flutter:toolchain_type"],
     doc = """Runs Flutter tests using a prepared flutter_library workspace.""",
@@ -1900,7 +1920,7 @@ exit "$RESULT"
             files = depset([runner]),
             runfiles = _runtime_runfiles(ctx, runner, prepared_workspace, library_info),
         ),
-    ]
+    ] + _test_execution_info(ctx)
 
 flutter_analyze_test = rule(
     implementation = _flutter_analyze_test_impl,
@@ -1925,7 +1945,7 @@ flutter_analyze_test = rule(
             default = [],
             doc = "Additional arguments forwarded to flutter analyze.",
         ),
-    },
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,
     toolchains = ["//flutter:toolchain_type"],
     doc = "Runs `flutter analyze` hermetically against a prepared flutter_library workspace.",
@@ -2008,7 +2028,7 @@ exec "$DART_BIN" format --output=none --set-exit-if-changed "${{FILES[@]}}"
                         flutter_toolchain.flutterinfo.sdk_files,
             ),
         ),
-    ]
+    ] + _test_execution_info(ctx)
 
 dart_format_test = rule(
     implementation = _dart_format_test_impl,
@@ -2018,7 +2038,7 @@ dart_format_test = rule(
             mandatory = True,
             doc = "Dart sources checked with `dart format --set-exit-if-changed`.",
         ),
-    },
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,
     toolchains = ["//flutter:toolchain_type"],
     doc = "Fails when any of the given Dart sources are not dart-format clean.",
@@ -2261,6 +2281,7 @@ def _dart_library_impl(ctx):
             build_runner_build_args = ctx.attr.build_runner_build_args,
             run_build_runner_build = "build" in ctx.attr.build_runner_modes,
             is_pub_package = ctx.attr.pub_package,
+            allow_remote_exec = _allow_remote_exec(ctx),
         )
         pub_deps = pub_deps_file
 
@@ -2396,7 +2417,7 @@ instead of duplicating shared transitive packages at every level of the
 dependency graph.""",
             default = True,
         ),
-    },
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
     toolchains = ["//flutter:toolchain_type"],
     doc = "Defines a Dart library",
 )

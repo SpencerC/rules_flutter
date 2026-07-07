@@ -387,7 +387,8 @@ def flutter_pub_get_action(
         build_runner_common_args = [],
         build_runner_build_args = [],
         run_build_runner_build = False,
-        is_pub_package = False):
+        is_pub_package = False,
+        allow_remote_exec = False):
     """Prepare Flutter/Dart dependencies from declared pub_deps.json metadata.
 
     Args:
@@ -406,6 +407,9 @@ def flutter_pub_get_action(
         run_build_runner_build: Whether to run `dart run build_runner build`
             in this action.
         is_pub_package: Whether the target represents a hosted pub.dev package.
+        allow_remote_exec: Whether //flutter:allow_remote_execution is set;
+            when False the action carries no-remote-exec (remote caching
+            stays enabled).
 
     Returns:
         Tuple of (prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir).
@@ -1008,11 +1012,37 @@ echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
         ),
         mnemonic = "FlutterPrepareDeps",
         progress_message = "Preparing Flutter dependencies for %s" % ctx.label.name,
+        execution_requirements = heavy_action_execution_requirements(allow_remote_exec),
+        resource_set = heavy_action_resource_set,
     )
 
     return prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir
 
 ANDROID_TARGETS = ["apk", "appbundle"]
+
+def heavy_action_execution_requirements(allow_remote_exec):
+    """Execution requirements for the CPU-heavy hermetic flutter actions.
+
+    The default posture keeps execution local — default-size remote executors
+    are far too small for the flutter tool and build_runner — while remote
+    caching of the results stays enabled. //flutter:allow_remote_execution
+    opts into remote execution for well-resourced RBE fleets.
+    """
+    if allow_remote_exec:
+        return None
+    return {"no-remote-exec": "1"}
+
+def heavy_action_resource_set(os, inputs_size):
+    """Resource estimate so the local scheduler doesn't oversubscribe.
+
+    The prepare/codegen and flutter build actions run multi-process Dart
+    tooling; the Bazel default of one CPU per action badly oversubscribes a
+    machine running several of them.
+    """
+
+    # buildifier: disable=unused-variable
+    _ignore = (os, inputs_size)
+    return {"cpu": 4, "memory": 4096}
 
 def flutter_build_action(
         ctx,
@@ -1026,7 +1056,8 @@ def flutter_build_action(
         build_args = [],
         env = {},
         android = None,
-        android_test = False):
+        android_test = False,
+        allow_remote_exec = False):
     """Execute flutter build command for the specified target.
 
     Args:
@@ -1048,6 +1079,9 @@ def flutter_build_action(
             app:assembleAndroidTest after the Flutter build and copy the
             instrumentation APK into androidTest/ under the build artifacts
             (the Firebase Test Lab instrumentation flow)
+        allow_remote_exec: Whether //flutter:allow_remote_execution is set;
+            when False, web/desktop builds carry no-remote-exec (remote
+            caching stays enabled; Android/iOS have stricter requirements)
 
     Returns:
         Tuple of (build_output, build_artifacts_dir)
@@ -1433,7 +1467,10 @@ SCRIPT_COMPLETED=1
         transitive = [android.files] if android else [],
     )
 
-    execution_requirements = None
+    # Web/desktop builds are hermetic but CPU-heavy; keep them off
+    # default-size remote executors (results still remote-cache) unless the
+    # consumer opts in. Android/iOS below are stricter (host-state-bound).
+    execution_requirements = heavy_action_execution_requirements(allow_remote_exec)
     use_default_shell_env = False
     mnemonic = "FlutterBuild"
     if target in ANDROID_TARGETS:
@@ -1471,6 +1508,7 @@ SCRIPT_COMPLETED=1
         progress_message = "Running flutter build %s for %s" % (target, ctx.label.name),
         execution_requirements = execution_requirements,
         use_default_shell_env = use_default_shell_env,
+        resource_set = heavy_action_resource_set,
     )
 
     return build_output, build_artifacts

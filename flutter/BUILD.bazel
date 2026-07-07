@@ -1,8 +1,22 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("//flutter/private:resolved_toolchain.bzl", "resolved_toolchain")
 
 # For stardoc to reference the files
 exports_files(["defs.bzl"])
+
+# The CPU-heavy hermetic actions (dependency preparation/codegen and
+# web/desktop flutter builds) and the test rules default to no-remote-exec:
+# default-size remote executors are far too small for them (a prepare that
+# takes ~1 minute on an 8-CPU worker has been observed taking 50+ minutes
+# remotely), while remote CACHING of their results stays enabled. Flip this
+# flag to opt into remote execution on a well-resourced RBE fleet:
+#   build --//flutter:allow_remote_execution
+bool_flag(
+    name = "allow_remote_execution",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
 
 # This is the target rule authors should put in their "toolchains"
 # attribute in order to get a runtime for the correct platform.

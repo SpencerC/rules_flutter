@@ -208,6 +208,35 @@ build --action_env=RULES_FLUTTER_CP_HOME=/home/me/.cache/rules_flutter_cocoapods
 The action creates the directory and exports it as `CP_HOME_DIR` before the
 Flutter tool drives `pod install`.
 
+## Remote execution
+
+Hermetic is not the same as remote-executor-friendly. The dependency
+preparation/codegen action and the web/desktop `flutter build` actions run
+multi-process Dart tooling that needs several CPUs and real memory; on
+default-size remote executors they can be dramatically slower than on the
+local machine (a preparation step that takes about a minute on an 8-CPU
+worker has been observed taking 50+ minutes remotely).
+
+The rules therefore default these actions — and the `flutter_test` /
+`flutter_analyze_test` / `dart_format_test` runners — to
+**local execution with remote caching**: they carry `no-remote-exec`, so
+their results still populate and hit your remote cache, but the work happens
+on the machine running Bazel. Android and iOS builds are additionally
+`no-sandbox`/`requires-network` (see the per-target table above) and are not
+affected by this section.
+
+On a well-resourced RBE fleet you can opt back into remote execution:
+
+```
+build --//flutter:allow_remote_execution
+```
+
+Executor sizing is intentionally left to you: pass your vendor's sizing
+through target-level `exec_properties` or platform properties (for example
+BuildBuddy's `EstimatedCPU`/`EstimatedMemory`). Locally, the actions declare
+a `resource_set` of several CPUs so Bazel's scheduler does not oversubscribe
+the machine.
+
 ## The guarantee
 
 **No build action and no run helper writes to the external Flutter SDK

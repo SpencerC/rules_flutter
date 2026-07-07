@@ -1,7 +1,11 @@
+load(":exec_posture_test.bzl", "exec_posture_test_suite")
 load(":versions_test.bzl", "versions_test_suite")
 
 # Unit test for versions
 versions_test_suite(name = "versions_test")
+
+# Unit tests for the execution-posture helpers
+exec_posture_test_suite(name = "exec_posture_test")
 
 # Toolchain-focused smoke tests that still live in the main workspace
 test_suite(
@@ -16,6 +20,7 @@ test_suite(
 test_suite(
     name = "all_tests",
     tests = [
+        ":exec_posture_test",
         ":toolchain_tests",
         ":versions_test",
         "//docs:update_test",
