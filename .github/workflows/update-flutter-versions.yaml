@@ -28,10 +28,14 @@ jobs:
         # Mirrors `bazel run //tools:update_flutter_versions`. The script is
         # self-contained (curl/jq/python3), so we invoke it directly to avoid
         # spinning up Bazel just to write a source file.
+        env:
+          # Via env (not direct ${{ }} interpolation into the shell) to avoid
+          # script injection from the dispatch input; word-split intentionally.
+          VERSIONS: ${{ github.event.inputs.versions }}
         run: |
           chmod +x scripts/update_flutter_versions.sh
           # shellcheck disable=SC2086
-          ./scripts/update_flutter_versions.sh ${{ github.event.inputs.versions }}
+          ./scripts/update_flutter_versions.sh $VERSIONS
 
       - name: Reject placeholder hashes
         # Defense in depth: the script omits platforms with no published

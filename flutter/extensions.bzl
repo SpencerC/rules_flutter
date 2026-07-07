@@ -57,8 +57,16 @@ def _toolchain_extension(module_ctx):
             registrations[toolchain.name].append(toolchain.flutter_version)
             for group in toolchain.precache:
                 precache_groups[toolchain.name][group] = True
-            for platform, sri in toolchain.integrity.items():
-                integrity_overrides[toolchain.name][platform] = sri
+
+            # Integrity is bound to the (name, version) it was declared for, so
+            # a map declared for one version is never applied to a different
+            # version that happens to win selection.
+            if toolchain.integrity:
+                by_version = integrity_overrides[toolchain.name]
+                if toolchain.flutter_version not in by_version:
+                    by_version[toolchain.flutter_version] = {}
+                for platform, sri in toolchain.integrity.items():
+                    by_version[toolchain.flutter_version][platform] = sri
     for name, versions in registrations.items():
         # Deduplicate versions to avoid noise when the same version is registered multiple times
         unique_versions = {v: True for v in versions}.keys()
@@ -72,7 +80,8 @@ def _toolchain_extension(module_ctx):
         else:
             selected = versions[0]
 
-        overrides = integrity_overrides[name]
+        # Only integrity declared for the selected version applies.
+        overrides = integrity_overrides[name].get(selected, {})
         if selected not in TOOL_VERSIONS and not overrides:
             fail(("rules_flutter: Flutter {} is not in the built-in version table. " +
                   "Register it with an integrity map, e.g. " +
