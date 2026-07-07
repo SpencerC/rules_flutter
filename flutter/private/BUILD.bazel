@@ -46,3 +46,9 @@ bzl_library(
     srcs = ["versions.bzl"],
     visibility = ["//flutter:__subpackages__"],
 )
+
+bzl_library(
+    name = "version_select",
+    srcs = ["version_select.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)

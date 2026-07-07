@@ -1,8 +1,12 @@
 load(":exec_posture_test.bzl", "exec_posture_test_suite")
+load(":version_select_test.bzl", "version_select_test_suite")
 load(":versions_test.bzl", "versions_test_suite")
 
 # Unit test for versions
 versions_test_suite(name = "versions_test")
+
+# Unit tests for semver-aware toolchain version selection
+version_select_test_suite(name = "version_select_test")
 
 # Unit tests for the execution-posture helpers
 exec_posture_test_suite(name = "exec_posture_test")
@@ -22,6 +26,7 @@ test_suite(
     tests = [
         ":exec_posture_test",
         ":toolchain_tests",
+        ":version_select_test",
         ":versions_test",
         "//docs:update_test",
         "//flutter/tests/analysis:analysis_tests",

@@ -11,6 +11,7 @@ effectively overriding the default named toolchain due to toolchain resolution p
 """
 
 load("//flutter/private:pub_repository.bzl", "pub_dev_repository")
+load("//flutter/private:version_select.bzl", "highest_version")
 load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
 load(":repositories.bzl", "flutter_register_toolchains")
 
@@ -62,8 +63,9 @@ def _toolchain_extension(module_ctx):
         # Deduplicate versions to avoid noise when the same version is registered multiple times
         unique_versions = {v: True for v in versions}.keys()
         if len(unique_versions) > 1:
-            # TODO: should be semver-aware, using MVS
-            selected = sorted(unique_versions, reverse = True)[0]
+            # Highest requested version wins (MVS: every module gets at least
+            # the version it asked for), compared semver-aware not lexically.
+            selected = highest_version(unique_versions)
 
             # buildifier: disable=print
             print("NOTE: flutter toolchain {} has multiple versions {}, selected {}".format(name, list(unique_versions), selected))
