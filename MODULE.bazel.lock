@@ -15,8 +15,8 @@
     "https://bcr.bazel.build/modules/abseil-cpp/20250512.1/source.json": "d725d73707d01bb46ab3ca59ba408b8e9bd336642ca77a2269d4bfb8bbfd413d",
     "https://bcr.bazel.build/modules/apple_support/1.11.1/MODULE.bazel": "1843d7cd8a58369a444fc6000e7304425fba600ff641592161d9f15b179fb896",
     "https://bcr.bazel.build/modules/apple_support/1.15.1/MODULE.bazel": "a0556fefca0b1bb2de8567b8827518f94db6a6e7e7d632b4c48dc5f865bc7c85",
-    "https://bcr.bazel.build/modules/apple_support/1.21.1/MODULE.bazel": "5809fa3efab15d1f3c3c635af6974044bac8a4919c62238cce06acee8a8c11f1",
-    "https://bcr.bazel.build/modules/apple_support/1.21.1/source.json": "c5228fea88af2d0aa4ef17355c5d3884ce78717f475c3eba55b55bca23a4a560",
+    "https://bcr.bazel.build/modules/apple_support/1.23.1/MODULE.bazel": "53763fed456a968cf919b3240427cf3a9d5481ec5466abc9d5dc51bc70087442",
+    "https://bcr.bazel.build/modules/apple_support/1.23.1/source.json": "d888b44312eb0ad2c21a91d026753f330caa48a25c9b2102fae75eb2b0dcfdd2",
     "https://bcr.bazel.build/modules/aspect_bazel_lib/1.32.1/MODULE.bazel": "e7bcb4f15c228f42e8dbcb9c8a1c9119c5f664aa55af8661378a89ba96a88f38",
     "https://bcr.bazel.build/modules/aspect_bazel_lib/1.32.1/source.json": "d6f6e9833ffee1709a1c95cceda31ec0763d4c8ec30064ac3c19bdb78df085e9",
     "https://bcr.bazel.build/modules/bazel_features/1.1.0/MODULE.bazel": "cfd42ff3b815a5f39554d97182657f8c4b9719568eb7fded2b9135f084bf760b",
@@ -29,7 +29,6 @@
     "https://bcr.bazel.build/modules/bazel_features/1.21.0/MODULE.bazel": "675642261665d8eea09989aa3b8afb5c37627f1be178382c320d1b46afba5e3b",
     "https://bcr.bazel.build/modules/bazel_features/1.23.0/MODULE.bazel": "fd1ac84bc4e97a5a0816b7fd7d4d4f6d837b0047cf4cbd81652d616af3a6591a",
     "https://bcr.bazel.build/modules/bazel_features/1.27.0/MODULE.bazel": "621eeee06c4458a9121d1f104efb80f39d34deff4984e778359c60eaf1a8cb65",
-    "https://bcr.bazel.build/modules/bazel_features/1.28.0/MODULE.bazel": "4b4200e6cbf8fa335b2c3f43e1d6ef3e240319c33d43d60cc0fbd4b87ece299d",
     "https://bcr.bazel.build/modules/bazel_features/1.3.0/MODULE.bazel": "cdcafe83ec318cda34e02948e81d790aab8df7a929cec6f6969f13a489ccecd9",
     "https://bcr.bazel.build/modules/bazel_features/1.30.0/MODULE.bazel": "a14b62d05969a293b80257e72e597c2da7f717e1e69fa8b339703ed6731bec87",
     "https://bcr.bazel.build/modules/bazel_features/1.30.0/source.json": "b07e17f067fe4f69f90b03b36ef1e08fe0d1f3cac254c1241a1818773e3423bc",
@@ -58,7 +57,6 @@
     "https://bcr.bazel.build/modules/gazelle/0.32.0/MODULE.bazel": "b499f58a5d0d3537f3cf5b76d8ada18242f64ec474d8391247438bf04f58c7b8",
     "https://bcr.bazel.build/modules/gazelle/0.33.0/MODULE.bazel": "a13a0f279b462b784fb8dd52a4074526c4a2afe70e114c7d09066097a46b3350",
     "https://bcr.bazel.build/modules/gazelle/0.34.0/MODULE.bazel": "abdd8ce4d70978933209db92e436deb3a8b737859e9354fb5fd11fb5c2004c8a",
-    "https://bcr.bazel.build/modules/gazelle/0.35.0/MODULE.bazel": "bda67986233654255d52d56c2e8d8ce5649fdcf0acd96b1fdd04af4d7e038c36",
     "https://bcr.bazel.build/modules/gazelle/0.36.0/MODULE.bazel": "e375d5d6e9a6ca59b0cb38b0540bc9a05b6aa926d322f2de268ad267a2ee74c0",
     "https://bcr.bazel.build/modules/gazelle/0.36.0/source.json": "0823f097b127e0201ae55d85647c94095edfe27db0431a7ae880dcab08dfaa04",
     "https://bcr.bazel.build/modules/google_benchmark/1.8.2/MODULE.bazel": "a70cf1bba851000ba93b58ae2f6d76490a9feb74192e57ab8e8ff13c34ec50cb",
@@ -107,8 +105,7 @@
     "https://bcr.bazel.build/modules/rules_android/0.1.1/MODULE.bazel": "48809ab0091b07ad0182defb787c4c5328bd3a278938415c00a7b69b50c4d3a8",
     "https://bcr.bazel.build/modules/rules_android/0.1.1/source.json": "e6986b41626ee10bdc864937ffb6d6bf275bb5b9c65120e6137d56e6331f089e",
     "https://bcr.bazel.build/modules/rules_apple/3.16.0/MODULE.bazel": "0d1caf0b8375942ce98ea944be754a18874041e4e0459401d925577624d3a54a",
-    "https://bcr.bazel.build/modules/rules_apple/4.2.0/MODULE.bazel": "e2e4362a8a5cbe24e9952aaea1f7f731d3677db83957056f57acfd5f2103c00f",
-    "https://bcr.bazel.build/modules/rules_apple/4.2.0/source.json": "a435c16fbd1af03b66559a3e894ff6d19a53e1503db13b7c1ab6074112f55970",
+    "https://bcr.bazel.build/modules/rules_apple/3.16.0/source.json": "d8b5fe461272018cc07cfafce11fe369c7525330804c37eec5a82f84cd475366",
     "https://bcr.bazel.build/modules/rules_cc/0.0.1/MODULE.bazel": "cb2aa0747f84c6c3a78dad4e2049c154f08ab9d166b1273835a8174940365647",
     "https://bcr.bazel.build/modules/rules_cc/0.0.10/MODULE.bazel": "ec1705118f7eaedd6e118508d3d26deba2a4e76476ada7e0e3965211be012002",
     "https://bcr.bazel.build/modules/rules_cc/0.0.13/MODULE.bazel": "0e8529ed7b323dad0775ff924d2ae5af7640b23553dfcd4d34344c7e7a867191",
@@ -121,8 +118,7 @@
     "https://bcr.bazel.build/modules/rules_cc/0.0.8/MODULE.bazel": "964c85c82cfeb6f3855e6a07054fdb159aced38e99a5eecf7bce9d53990afa3e",
     "https://bcr.bazel.build/modules/rules_cc/0.0.9/MODULE.bazel": "836e76439f354b89afe6a911a7adf59a6b2518fafb174483ad78a2a2fde7b1c5",
     "https://bcr.bazel.build/modules/rules_cc/0.1.1/MODULE.bazel": "2f0222a6f229f0bf44cd711dc13c858dad98c62d52bd51d8fc3a764a83125513",
-    "https://bcr.bazel.build/modules/rules_cc/0.1.2/MODULE.bazel": "557ddc3a96858ec0d465a87c0a931054d7dcfd6583af2c7ed3baf494407fd8d0",
-    "https://bcr.bazel.build/modules/rules_cc/0.1.2/source.json": "53fcb09b5816c83ca60d9d7493faf3bfaf410dfc2f15deb52d6ddd146b8d43f0",
+    "https://bcr.bazel.build/modules/rules_cc/0.1.1/source.json": "d61627377bd7dd1da4652063e368d9366fc9a73920bfa396798ad92172cf645c",
     "https://bcr.bazel.build/modules/rules_foreign_cc/0.9.0/MODULE.bazel": "c9e8c682bf75b0e7c704166d79b599f93b72cfca5ad7477df596947891feeef6",
     "https://bcr.bazel.build/modules/rules_fuzzing/0.5.2/MODULE.bazel": "40c97d1144356f52905566c55811f13b299453a14ac7769dfba2ac38192337a8",
     "https://bcr.bazel.build/modules/rules_go/0.33.0/MODULE.bazel": "a2b11b64cd24bf94f57454f53288a5dacfe6cb86453eee7761b7637728c1910c",
@@ -130,7 +126,6 @@
     "https://bcr.bazel.build/modules/rules_go/0.38.1/MODULE.bazel": "fb8e73dd3b6fc4ff9d260ceacd830114891d49904f5bda1c16bc147bcc254f71",
     "https://bcr.bazel.build/modules/rules_go/0.41.0/MODULE.bazel": "55861d8e8bb0e62cbd2896f60ff303f62ffcb0eddb74ecb0e5c0cbe36fc292c8",
     "https://bcr.bazel.build/modules/rules_go/0.42.0/MODULE.bazel": "8cfa875b9aa8c6fce2b2e5925e73c1388173ea3c32a0db4d2b4804b453c14270",
-    "https://bcr.bazel.build/modules/rules_go/0.44.0/MODULE.bazel": "55b2d9e775d7881dbe9a2fc68440442cd6ba32730170c782f1f0e6023a6d8db6",
     "https://bcr.bazel.build/modules/rules_go/0.46.0/MODULE.bazel": "3477df8bdcc49e698b9d25f734c4f3a9f5931ff34ee48a2c662be168f5f2d3fd",
     "https://bcr.bazel.build/modules/rules_go/0.57.0/MODULE.bazel": "bee44028b527cd6d1b7699a2c78714bba237b40ee21f90a83b472c94bc53159d",
     "https://bcr.bazel.build/modules/rules_go/0.57.0/source.json": "a782b756d87c68a223a48848eda4b0dac1c5fd1d925d648d7598b68aa1fb6d6d",
@@ -182,7 +177,6 @@
     "https://bcr.bazel.build/modules/rules_python/0.33.2/MODULE.bazel": "3e036c4ad8d804a4dad897d333d8dce200d943df4827cb849840055be8d2e937",
     "https://bcr.bazel.build/modules/rules_python/0.4.0/MODULE.bazel": "9208ee05fd48bf09ac60ed269791cf17fb343db56c8226a720fbb1cdf467166c",
     "https://bcr.bazel.build/modules/rules_python/0.40.0/MODULE.bazel": "9d1a3cd88ed7d8e39583d9ffe56ae8a244f67783ae89b60caafc9f5cf318ada7",
-    "https://bcr.bazel.build/modules/rules_python/1.3.0/MODULE.bazel": "8361d57eafb67c09b75bf4bbe6be360e1b8f4f18118ab48037f2bd50aa2ccb13",
     "https://bcr.bazel.build/modules/rules_python/1.4.1/MODULE.bazel": "8991ad45bdc25018301d6b7e1d3626afc3c8af8aaf4bc04f23d0b99c938b73a6",
     "https://bcr.bazel.build/modules/rules_python/1.4.1/source.json": "8ec8c90c70ccacc4de8ca1b97f599e756fb59173e898ee08b733006650057c07",
     "https://bcr.bazel.build/modules/rules_shell/0.2.0/MODULE.bazel": "fda8a652ab3c7d8fee214de05e7a9916d8b28082234e8d2c0094505c5268ed3c",
@@ -190,8 +184,7 @@
     "https://bcr.bazel.build/modules/rules_shell/0.3.0/source.json": "c55ed591aa5009401ddf80ded9762ac32c358d2517ee7820be981e2de9756cf3",
     "https://bcr.bazel.build/modules/rules_swift/1.16.0/MODULE.bazel": "4a09f199545a60d09895e8281362b1ff3bb08bbde69c6fc87aff5b92fcc916ca",
     "https://bcr.bazel.build/modules/rules_swift/2.1.1/MODULE.bazel": "494900a80f944fc7aa61500c2073d9729dff0b764f0e89b824eb746959bc1046",
-    "https://bcr.bazel.build/modules/rules_swift/2.4.0/MODULE.bazel": "1639617eb1ede28d774d967a738b4a68b0accb40650beadb57c21846beab5efd",
-    "https://bcr.bazel.build/modules/rules_swift/2.4.0/source.json": "a6577f57f9febbdc015a01f2a8f3487422032f134d6c61d18ed8e8ca3b9acc7c",
+    "https://bcr.bazel.build/modules/rules_swift/2.1.1/source.json": "40fc69dfaac64deddbb75bd99cdac55f4427d9ca0afbe408576a65428427a186",
     "https://bcr.bazel.build/modules/stardoc/0.5.1/MODULE.bazel": "1a05d92974d0c122f5ccf09291442580317cdd859f07a8655f1db9a60374f9f8",
     "https://bcr.bazel.build/modules/stardoc/0.5.3/MODULE.bazel": "c7f6948dae6999bf0db32c1858ae345f112cacf98f174c7a8bb707e41b974f1c",
     "https://bcr.bazel.build/modules/stardoc/0.5.4/MODULE.bazel": "6569966df04610b8520957cb8e97cf2e9faac2c0309657c537ab51c16c18a2a4",
@@ -213,7 +206,7 @@
   "moduleExtensions": {
     "//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "jzNYWm/FXGZ2nZnAPVoxYfIfVRY9rshpFiXTx/z7PXA=",
+        "bzlTransitiveDigest": "mSWn9d8H7EaKAWOHB4xdMAt8t2x64If3m7LjJnZvDEA=",
         "usagesDigest": "MPZC/xzGVbRvfxHYU74cPXZyyx32ojSPxKT0ZE+0WUE=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -261,12 +254,14 @@
     },
     "//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "GuR6BN5Ea6GisQ1VgI7A0fdoamDsFOd4GxISMq1rmOI=",
-        "usagesDigest": "Gez8qadr/2uDclCsgckd+dRdmeMn7nad9QCNBr5xLo4=",
+        "bzlTransitiveDigest": "mSWn9d8H7EaKAWOHB4xdMAt8t2x64If3m7LjJnZvDEA=",
+        "usagesDigest": "3gAU9n5Op2qqiGszPR8sJraNKYT2c6mBN9ysbRuWHDA=",
         "recordedFileInputs": {
+          "@@//e2e/smoke/codegen_app/pub_deps.json": "1f360270a671c0b00fd37abb03989d09840cd98b55272670abebcdf6bf11a087",
           "@@//e2e/smoke/dart_package/pub_deps.json": "73450fe56d893cfd0ff653d4d46d420ebee41b94efd9d983aa81582d1f6ffb6f",
-          "@@//e2e/smoke/flutter_app/pub_deps.json": "8a007e1950c80b4221db97807f08563208d6d24ac7bf9e740f9dadf9d41bf8b3",
-          "@@//e2e/smoke/gazelle_app/pub_deps.json": "d4873da35e844de30eb02195cc6093827348bac6428bd7c45619c1981716ed25"
+          "@@//e2e/smoke/flutter_app/pub_deps.json": "9ce6a63c3ca1975e97b2b4f4299c58a3e3fe1dd718e8b1224afd498121d9533f",
+          "@@//e2e/smoke/gazelle_app/pub_deps.json": "d4873da35e844de30eb02195cc6093827348bac6428bd7c45619c1981716ed25",
+          "@@//flutter/tests/analysis/pub_deps.json": "7c074babb777e14501577377e80fff2ec31011797ba2a6a47a70d3a60daee897"
         },
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -275,385 +270,1268 @@
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "_fe_analyzer_shared",
-              "version": "72.0.0"
+              "version": "72.0.0",
+              "hosted_deps": [
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_analyzer": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "analyzer",
-              "version": "6.7.0"
+              "version": "6.7.0",
+              "hosted_deps": [
+                "_fe_analyzer_shared",
+                "collection",
+                "convert",
+                "crypto",
+                "glob",
+                "macros",
+                "meta",
+                "package_config",
+                "path",
+                "pub_semver",
+                "source_span",
+                "watcher",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_archive": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "archive",
-              "version": "4.0.7"
+              "version": "4.0.9",
+              "hosted_deps": [
+                "path",
+                "posix"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_args": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "args",
-              "version": "2.7.0"
+              "version": "2.7.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_async": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "async",
-              "version": "2.11.0"
+              "version": "2.11.0",
+              "hosted_deps": [
+                "collection",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_boolean_selector": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "boolean_selector",
-              "version": "2.1.1"
+              "version": "2.1.1",
+              "hosted_deps": [
+                "source_span",
+                "string_scanner"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_build": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "build",
+              "version": "2.4.1",
+              "hosted_deps": [
+                "analyzer",
+                "async",
+                "convert",
+                "crypto",
+                "glob",
+                "logging",
+                "meta",
+                "package_config",
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_build_config": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "build_config",
+              "version": "1.1.1",
+              "hosted_deps": [
+                "checked_yaml",
+                "json_annotation",
+                "path",
+                "pubspec_parse",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_build_daemon": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "build_daemon",
+              "version": "4.0.2",
+              "hosted_deps": [
+                "built_collection",
+                "built_value",
+                "crypto",
+                "http_multi_server",
+                "logging",
+                "path",
+                "pool",
+                "shelf",
+                "shelf_web_socket",
+                "stream_transform",
+                "watcher",
+                "web_socket_channel"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_build_resolvers": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "build_resolvers",
+              "version": "2.4.2",
+              "hosted_deps": [
+                "analyzer",
+                "async",
+                "build",
+                "collection",
+                "convert",
+                "crypto",
+                "graphs",
+                "logging",
+                "package_config",
+                "path",
+                "pool",
+                "pub_semver",
+                "stream_transform",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_build_runner": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "build_runner",
+              "version": "2.4.13",
+              "hosted_deps": [
+                "analyzer",
+                "args",
+                "async",
+                "build",
+                "build_config",
+                "build_daemon",
+                "build_resolvers",
+                "build_runner_core",
+                "code_builder",
+                "collection",
+                "crypto",
+                "dart_style",
+                "frontend_server_client",
+                "glob",
+                "graphs",
+                "http_multi_server",
+                "io",
+                "js",
+                "logging",
+                "meta",
+                "mime",
+                "package_config",
+                "path",
+                "pool",
+                "pub_semver",
+                "pubspec_parse",
+                "shelf",
+                "shelf_web_socket",
+                "stack_trace",
+                "stream_transform",
+                "timing",
+                "watcher",
+                "web_socket_channel",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_build_runner_core": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "build_runner_core",
+              "version": "7.3.2",
+              "hosted_deps": [
+                "async",
+                "build",
+                "build_config",
+                "build_resolvers",
+                "collection",
+                "convert",
+                "crypto",
+                "glob",
+                "graphs",
+                "json_annotation",
+                "logging",
+                "meta",
+                "package_config",
+                "path",
+                "pool",
+                "timing",
+                "watcher",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_built_collection": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "built_collection",
+              "version": "5.1.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_built_value": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "built_value",
+              "version": "8.12.6",
+              "hosted_deps": [
+                "built_collection",
+                "collection",
+                "fixnum",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_characters": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "characters",
-              "version": "1.3.0"
+              "version": "1.3.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_checked_yaml": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "checked_yaml",
+              "version": "2.0.3",
+              "hosted_deps": [
+                "json_annotation",
+                "source_span",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_clock": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "clock",
-              "version": "1.1.1"
+              "version": "1.1.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_code_builder": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "code_builder",
+              "version": "4.10.1",
+              "hosted_deps": [
+                "built_collection",
+                "built_value",
+                "collection",
+                "matcher",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_collection": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "collection",
-              "version": "1.18.0"
+              "version": "1.18.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_color": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "color",
+              "version": "3.0.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_convert": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "convert",
-              "version": "3.1.2"
+              "version": "3.1.2",
+              "hosted_deps": [
+                "typed_data"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_copy_with_extension": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "copy_with_extension",
+              "version": "6.0.1",
+              "hosted_deps": [
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_copy_with_extension_gen": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "copy_with_extension_gen",
+              "version": "6.0.0",
+              "hosted_deps": [
+                "analyzer",
+                "build",
+                "copy_with_extension",
+                "meta",
+                "source_gen"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_crypto": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "crypto",
-              "version": "3.0.6"
+              "version": "3.0.7",
+              "hosted_deps": [
+                "typed_data"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_cupertino_icons": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "cupertino_icons",
-              "version": "1.0.6"
+              "version": "1.0.6",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_dart_style": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "dart_style",
-              "version": "3.0.1"
+              "version": "2.3.7",
+              "hosted_deps": [
+                "analyzer",
+                "args",
+                "collection",
+                "package_config",
+                "path",
+                "pub_semver",
+                "source_span"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_dartx": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "dartx",
+              "version": "1.2.0",
+              "hosted_deps": [
+                "characters",
+                "collection",
+                "crypto",
+                "meta",
+                "path",
+                "time"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_fake_async": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "fake_async",
-              "version": "1.3.1"
+              "version": "1.3.1",
+              "hosted_deps": [
+                "clock",
+                "collection"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_ffi": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "ffi",
-              "version": "2.1.3"
+              "version": "2.1.3",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_file": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "file",
-              "version": "7.0.1"
+              "version": "7.0.1",
+              "hosted_deps": [
+                "meta",
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_fixnum": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "fixnum",
-              "version": "1.1.1"
+              "version": "1.1.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": true
+            }
+          },
+          "pub_flutter_gen_core": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "flutter_gen_core",
+              "version": "5.10.0",
+              "hosted_deps": [
+                "archive",
+                "args",
+                "collection",
+                "color",
+                "dart_style",
+                "dartx",
+                "glob",
+                "image_size_getter",
+                "json_annotation",
+                "meta",
+                "mime",
+                "path",
+                "pub_semver",
+                "vector_graphics_compiler",
+                "xml",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_flutter_gen_runner": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "flutter_gen_runner",
+              "version": "5.10.0",
+              "hosted_deps": [
+                "build",
+                "collection",
+                "crypto",
+                "flutter_gen_core",
+                "glob",
+                "path",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_flutter_lints": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "flutter_lints",
-              "version": "2.0.3"
+              "version": "2.0.3",
+              "hosted_deps": [
+                "lints"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_frontend_server_client": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "frontend_server_client",
+              "version": "4.0.0",
+              "hosted_deps": [
+                "async",
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_glob": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "glob",
-              "version": "2.1.3"
+              "version": "2.1.3",
+              "hosted_deps": [
+                "async",
+                "collection",
+                "file",
+                "path",
+                "string_scanner"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_graphs": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "graphs",
+              "version": "2.3.2",
+              "hosted_deps": [
+                "collection"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_hashcodes": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "hashcodes",
+              "version": "2.0.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_http": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "http",
-              "version": "1.5.0"
+              "version": "1.6.0",
+              "hosted_deps": [
+                "async",
+                "http_parser",
+                "meta",
+                "web"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_http_multi_server": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "http_multi_server",
+              "version": "3.2.2",
+              "hosted_deps": [
+                "async"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_http_parser": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "http_parser",
-              "version": "4.0.2"
+              "version": "4.0.2",
+              "hosted_deps": [
+                "collection",
+                "source_span",
+                "string_scanner",
+                "typed_data"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_image_size_getter": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "image_size_getter",
+              "version": "2.4.1",
+              "hosted_deps": [
+                "collection",
+                "hashcodes",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_intl": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "intl",
-              "version": "0.19.0"
+              "version": "0.19.0",
+              "hosted_deps": [
+                "clock",
+                "meta",
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_intl_utils": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "intl_utils",
-              "version": "2.8.11"
+              "version": "2.8.11",
+              "hosted_deps": [
+                "analyzer",
+                "archive",
+                "args",
+                "dart_style",
+                "http",
+                "intl",
+                "path",
+                "petitparser",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_io": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "io",
+              "version": "1.0.5",
+              "hosted_deps": [
+                "meta",
+                "path",
+                "string_scanner"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_js": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "js",
+              "version": "0.7.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_json_annotation": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "json_annotation",
+              "version": "4.9.0",
+              "hosted_deps": [
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_leak_tracker": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "leak_tracker",
-              "version": "10.0.5"
+              "version": "10.0.5",
+              "hosted_deps": [
+                "clock",
+                "collection",
+                "meta",
+                "path",
+                "vm_service"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_leak_tracker_flutter_testing": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "leak_tracker_flutter_testing",
-              "version": "3.0.5"
+              "version": "3.0.5",
+              "hosted_deps": [
+                "leak_tracker",
+                "leak_tracker_testing",
+                "matcher",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_leak_tracker_testing": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "leak_tracker_testing",
-              "version": "3.0.1"
+              "version": "3.0.1",
+              "hosted_deps": [
+                "leak_tracker",
+                "matcher",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_lints": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "lints",
-              "version": "2.1.1"
+              "version": "2.1.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_logging": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "logging",
+              "version": "1.3.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_macros": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "macros",
-              "version": "0.1.2-main.4"
+              "version": "0.1.2-main.4",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_matcher": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "matcher",
-              "version": "0.12.16+1"
+              "version": "0.12.16+1",
+              "hosted_deps": [
+                "async",
+                "meta",
+                "stack_trace",
+                "term_glyph",
+                "test_api"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_material_color_utilities": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "material_color_utilities",
-              "version": "0.11.1"
+              "version": "0.11.1",
+              "hosted_deps": [
+                "collection"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_meta": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "meta",
-              "version": "1.15.0"
+              "version": "1.15.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": true
+            }
+          },
+          "pub_mime": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "mime",
+              "version": "2.0.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_package_config": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "package_config",
-              "version": "2.2.0"
+              "version": "2.2.0",
+              "hosted_deps": [
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_path": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "path",
-              "version": "1.9.0"
+              "version": "1.9.0",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": true
+            }
+          },
+          "pub_path_parsing": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "path_parsing",
+              "version": "1.1.0",
+              "hosted_deps": [
+                "meta",
+                "vector_math"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_petitparser": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "petitparser",
-              "version": "6.0.2"
+              "version": "6.0.2",
+              "hosted_deps": [
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_pool": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "pool",
+              "version": "1.5.2",
+              "hosted_deps": [
+                "async",
+                "stack_trace"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_posix": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "posix",
-              "version": "6.0.3"
+              "version": "6.5.0",
+              "hosted_deps": [
+                "ffi",
+                "meta",
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_protobuf": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "protobuf",
-              "version": "3.1.0"
+              "version": "3.1.0",
+              "hosted_deps": [
+                "collection",
+                "fixnum",
+                "meta"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": true
             }
           },
           "pub_protoc_plugin": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "protoc_plugin",
-              "version": "21.1.1"
+              "version": "21.1.1",
+              "keep_vendored_cache": true
             }
           },
           "pub_pub_semver": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "pub_semver",
-              "version": "2.2.0"
+              "version": "2.2.0",
+              "hosted_deps": [
+                "collection"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_pubspec_parse": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "pubspec_parse",
+              "version": "1.4.0",
+              "hosted_deps": [
+                "checked_yaml",
+                "collection",
+                "json_annotation",
+                "pub_semver",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_shelf": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "shelf",
+              "version": "1.4.1",
+              "hosted_deps": [
+                "async",
+                "collection",
+                "http_parser",
+                "path",
+                "stack_trace",
+                "stream_channel"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_shelf_web_socket": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "shelf_web_socket",
+              "version": "2.0.1",
+              "hosted_deps": [
+                "shelf",
+                "stream_channel",
+                "web_socket_channel"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_source_gen": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "source_gen",
+              "version": "1.5.0",
+              "hosted_deps": [
+                "analyzer",
+                "async",
+                "build",
+                "dart_style",
+                "glob",
+                "path",
+                "source_span",
+                "yaml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_source_span": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "source_span",
-              "version": "1.10.0"
+              "version": "1.10.0",
+              "hosted_deps": [
+                "collection",
+                "path",
+                "term_glyph"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_stack_trace": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "stack_trace",
-              "version": "1.11.1"
+              "version": "1.11.1",
+              "hosted_deps": [
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_stream_channel": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "stream_channel",
-              "version": "2.1.2"
+              "version": "2.1.2",
+              "hosted_deps": [
+                "async"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_stream_transform": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "stream_transform",
+              "version": "2.1.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_string_scanner": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "string_scanner",
-              "version": "1.2.0"
+              "version": "1.2.0",
+              "hosted_deps": [
+                "source_span"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_term_glyph": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "term_glyph",
-              "version": "1.2.1"
+              "version": "1.2.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_test_api": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "test_api",
-              "version": "0.7.2"
+              "version": "0.7.2",
+              "hosted_deps": [
+                "async",
+                "boolean_selector",
+                "collection",
+                "meta",
+                "source_span",
+                "stack_trace",
+                "stream_channel",
+                "string_scanner",
+                "term_glyph"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_time": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "time",
+              "version": "2.1.6",
+              "hosted_deps": [
+                "clock"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_timing": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "timing",
+              "version": "1.0.2",
+              "hosted_deps": [
+                "json_annotation"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_typed_data": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "typed_data",
-              "version": "1.4.0"
+              "version": "1.4.0",
+              "hosted_deps": [
+                "collection"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_vector_graphics_codec": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "vector_graphics_codec",
+              "version": "1.1.13",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_vector_graphics_compiler": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "vector_graphics_compiler",
+              "version": "1.1.16",
+              "hosted_deps": [
+                "args",
+                "meta",
+                "path",
+                "path_parsing",
+                "vector_graphics_codec",
+                "xml"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_vector_math": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "vector_math",
-              "version": "2.1.4"
+              "version": "2.1.4",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_vm_service": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "vm_service",
-              "version": "14.2.4"
+              "version": "14.2.4",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_watcher": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "watcher",
-              "version": "1.1.4"
+              "version": "1.2.1",
+              "hosted_deps": [
+                "async",
+                "path"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_web": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "web",
-              "version": "1.1.1"
+              "version": "1.1.1",
+              "hosted_deps": [],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_web_socket": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "web_socket",
+              "version": "1.0.1",
+              "hosted_deps": [
+                "web"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_web_socket_channel": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "web_socket_channel",
+              "version": "3.0.3",
+              "hosted_deps": [
+                "async",
+                "crypto",
+                "stream_channel",
+                "web",
+                "web_socket"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
+            }
+          },
+          "pub_xml": {
+            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
+            "attributes": {
+              "package": "xml",
+              "version": "6.5.0",
+              "hosted_deps": [
+                "collection",
+                "meta",
+                "petitparser"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           },
           "pub_yaml": {
             "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
             "attributes": {
               "package": "yaml",
-              "version": "3.1.3"
+              "version": "3.1.3",
+              "hosted_deps": [
+                "collection",
+                "source_span",
+                "string_scanner"
+              ],
+              "hosted_deps_explicit": true,
+              "keep_vendored_cache": false
             }
           }
         },
         "recordedRepoMappingEntries": []
-      }
-    },
-    "@@apple_support+//crosstool:setup.bzl%apple_cc_configure_extension": {
-      "general": {
-        "bzlTransitiveDigest": "gv4nokEMGNye4Jvoh7Tw0Lzs63zfklj+n4t0UegI7Ms=",
-        "usagesDigest": "+npsonfHmmeVeFGYO8lYaFoWwsZDdu458F14vI21hco=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "local_config_apple_cc_toolchains": {
-            "repoRuleId": "@@apple_support+//crosstool:setup.bzl%_apple_cc_autoconf_toolchains",
-            "attributes": {}
-          },
-          "local_config_apple_cc": {
-            "repoRuleId": "@@apple_support+//crosstool:setup.bzl%_apple_cc_autoconf",
-            "attributes": {}
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "apple_support+",
-            "bazel_tools",
-            "bazel_tools"
-          ],
-          [
-            "bazel_tools",
-            "rules_cc",
-            "rules_cc+"
-          ]
-        ]
       }
     },
     "@@aspect_bazel_lib+//lib:extensions.bzl%ext": {
@@ -1099,6 +1977,116 @@
         ]
       }
     },
+    "@@rules_apple+//apple:apple.bzl%provisioning_profile_repository_extension": {
+      "general": {
+        "bzlTransitiveDigest": "LHKXlgNAOD/mPnrK/XkpizV9+0iGKBHhwM01yf3hJko=",
+        "usagesDigest": "vsJl8Rw5NL+5Ag2wdUDoTeRF/5klkXO8545Iy7U1Q08=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "local_provisioning_profiles": {
+            "repoRuleId": "@@rules_apple+//apple/internal:local_provisioning_profiles.bzl%provisioning_profile_repository",
+            "attributes": {}
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "apple_support+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "bazel_tools",
+            "rules_cc",
+            "rules_cc+"
+          ],
+          [
+            "rules_apple+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "rules_apple+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "rules_apple+",
+            "build_bazel_apple_support",
+            "apple_support+"
+          ],
+          [
+            "rules_apple+",
+            "build_bazel_rules_swift",
+            "rules_swift+"
+          ],
+          [
+            "rules_cc+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "rules_cc+",
+            "rules_cc",
+            "rules_cc+"
+          ],
+          [
+            "rules_swift+",
+            "bazel_skylib",
+            "bazel_skylib+"
+          ],
+          [
+            "rules_swift+",
+            "bazel_tools",
+            "bazel_tools"
+          ],
+          [
+            "rules_swift+",
+            "build_bazel_apple_support",
+            "apple_support+"
+          ],
+          [
+            "rules_swift+",
+            "build_bazel_rules_swift",
+            "rules_swift+"
+          ],
+          [
+            "rules_swift+",
+            "build_bazel_rules_swift_local_config",
+            "rules_swift++non_module_deps+build_bazel_rules_swift_local_config"
+          ]
+        ]
+      }
+    },
+    "@@rules_apple+//apple:extensions.bzl%non_module_deps": {
+      "general": {
+        "bzlTransitiveDigest": "hZq9NZQ3DfMM3SejWMrPlGSZAv38GRVt6iSG5FbwbhQ=",
+        "usagesDigest": "M3VqFpeTCo4qmrNKGZw0dxBHvTYDrfV3cscGzlSAhQ4=",
+        "recordedFileInputs": {},
+        "recordedDirentsInputs": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "xctestrunner": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "urls": [
+                "https://github.com/google/xctestrunner/archive/b7698df3d435b6491b4b4c0f9fc7a63fbed5e3a6.tar.gz"
+              ],
+              "strip_prefix": "xctestrunner-b7698df3d435b6491b4b4c0f9fc7a63fbed5e3a6",
+              "sha256": "ae3a063c985a8633cb7eb566db21656f8db8eb9a0edb8c182312c7f0db53730d"
+            }
+          }
+        },
+        "recordedRepoMappingEntries": [
+          [
+            "rules_apple+",
+            "bazel_tools",
+            "bazel_tools"
+          ]
+        ]
+      }
+    },
     "@@rules_kotlin+//src/main/starlark/core/repositories:bzlmod_setup.bzl%rules_kotlin_extensions": {
       "general": {
         "bzlTransitiveDigest": "OlvsB0HsvxbR8ZN+J9Vf00X/+WVz/Y/5Xrq2LgcVfdo=",
@@ -1201,8 +2189,8 @@
     },
     "@@rules_swift+//swift:extensions.bzl%non_module_deps": {
       "general": {
-        "bzlTransitiveDigest": "wyM5KNlXr2xTVDyXRNH+6P1gq3ZCbFxUscWY1jDXrDM=",
-        "usagesDigest": "9w18ec4dj90mX/JqpR2tBU2YVc1GU9yNxi/d7q6lLVA=",
+        "bzlTransitiveDigest": "7HCu9g5L/A6rnapg3vth7ZT5JAXGhHB5cfk39qhGYuM=",
+        "usagesDigest": "mhACFnrdMv9Wi0Mt67bxocJqviRkDSV+Ee5Mqdj5akA=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -1349,6 +2337,11 @@
             "rules_swift+",
             "bazel_tools",
             "bazel_tools"
+          ],
+          [
+            "rules_swift+",
+            "build_bazel_rules_swift",
+            "rules_swift+"
           ]
         ]
       }

@@ -1,8 +1,11 @@
 bcr_test_module:
   module_path: "e2e/smoke"
   matrix:
-    platform: ["debian10", "macos", "ubuntu2004", "windows"]
-    bazel: ["8.x", "7.x", "6.x"]
+    # The action layer is POSIX-only today; Windows returns with the
+    # cross-platform action-runner workstream. Bazel 7.1+ is required
+    # (module_ctx.watch in the pub extension).
+    platform: ["macos", "ubuntu2004"]
+    bazel: ["8.x", "7.x"]
   tasks:
     run_tests:
       name: "Run test module"

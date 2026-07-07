@@ -14,30 +14,32 @@ ARCHIVE="rules_flutter-$TAG.tar.gz"
 # NB: configuration for 'git archive' is in /.gitattributes
 git archive --format=tar --prefix=${PREFIX}/ ${TAG} | gzip > $ARCHIVE
 SHA=$(shasum -a 256 $ARCHIVE | awk '{print $1}')
+INTEGRITY=$(python3 -c "import base64; print('sha256-' + base64.b64encode(bytes.fromhex('${SHA}')).decode())")
 
 cat << EOF
-## Using Bzlmod with Bazel 6 or greater
+## Using Bzlmod
 
-1. (Bazel 6 only) Enable with \`common --enable_bzlmod\` in \`.bazelrc\`.
-2. Add to your \`MODULE.bazel\` file:
+rules_flutter requires Bazel 7.1 or newer.
+
+Add to your \`MODULE.bazel\` file:
 
 \`\`\`starlark
 bazel_dep(name = "rules_flutter", version = "${TAG:1}")
 \`\`\`
 
-## Using WORKSPACE
-
-Paste this snippet into your \`WORKSPACE.bazel\` file:
+Until the release is available in the Bazel Central Registry, reference the
+archive directly:
 
 \`\`\`starlark
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-http_archive(
-    name = "rules_flutter",
-    sha256 = "${SHA}",
+bazel_dep(name = "rules_flutter", version = "${TAG:1}")
+archive_override(
+    module_name = "rules_flutter",
+    integrity = "${INTEGRITY}",
     strip_prefix = "${PREFIX}",
-    url = "https://github.com/spencerc/rules_flutter/releases/download/${TAG}/${ARCHIVE}",
+    urls = ["https://github.com/SpencerC/rules_flutter/releases/download/${TAG}/${ARCHIVE}"],
 )
-EOF
+\`\`\`
 
-awk 'f;/--SNIP--/{f=1}' e2e/smoke/WORKSPACE.bazel
-echo "\`\`\`" 
+See the [README](https://github.com/SpencerC/rules_flutter#readme) for
+toolchain registration and usage.
+EOF

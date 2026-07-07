@@ -27,7 +27,7 @@ jobs:
         ]
       exclude: |
         [
-          {"folder": ".", "bzlmodEnabled": false}
+          {"folder": ".", "bzlmodEnabled": false},
           {"folder": "e2e/smoke", "bzlmodEnabled": false}
         ]
       exclude_windows: true
