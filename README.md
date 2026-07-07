@@ -742,6 +742,8 @@ bazel run //:gazelle
 
 - [docs/rules.md](docs/rules.md) — generated API reference for every rule and
   attribute.
+- [docs/extensions.md](docs/extensions.md) — generated reference for the
+  `flutter` and `pub` module extensions.
 - [docs/hermeticity.md](docs/hermeticity.md) — the hermeticity contract: what
   is sealed, what is declared non-hermetic, and why.
 - [docs/migrating.md](docs/migrating.md) — migrating an existing Flutter app

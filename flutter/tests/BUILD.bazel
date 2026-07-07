@@ -28,7 +28,7 @@ test_suite(
         ":toolchain_tests",
         ":version_select_test",
         ":versions_test",
-        "//docs:update_test",
+        "//docs:update_tests",
         "//flutter/tests/analysis:analysis_tests",
     ],
 )

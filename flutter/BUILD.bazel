@@ -3,7 +3,10 @@ load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("//flutter/private:resolved_toolchain.bzl", "resolved_toolchain")
 
 # For stardoc to reference the files
-exports_files(["defs.bzl"])
+exports_files([
+    "defs.bzl",
+    "extensions.bzl",
+])
 
 # The CPU-heavy hermetic actions (dependency preparation/codegen and
 # web/desktop flutter builds) and the test rules default to no-remote-exec:
@@ -56,6 +59,9 @@ bzl_library(
     srcs = ["repositories.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        ":toolchain",
+        "//flutter/private:package_generation",
+        "//flutter/private:sdk_repo",
         "//flutter/private:toolchains_repo",
         "//flutter/private:versions",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
@@ -81,7 +87,12 @@ bzl_library(
     name = "extensions",
     srcs = ["extensions.bzl"],
     visibility = ["//visibility:public"],
-    deps = [":repositories"],
+    deps = [
+        ":repositories",
+        "//flutter/private:pub_repository",
+        "//flutter/private:version_select",
+        "//flutter/private:versions",
+    ],
 )
 
 bzl_library(

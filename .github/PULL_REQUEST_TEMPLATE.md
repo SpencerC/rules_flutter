@@ -9,7 +9,7 @@ tests where it makes sense. See CONTRIBUTING.md.
 
 ## Checklist
 
-- [ ] `bazel test //flutter/tests:all_tests //docs:update_test` passes
+- [ ] `bazel test //flutter/tests:all_tests //docs:update_tests` passes
 - [ ] `cd e2e/smoke && bazel test //:integration_tests` passes (if behavior changed)
 - [ ] Ran `bazel run //docs:update` if any rule/macro API changed
 - [ ] `pre-commit run --all-files` (buildifier + prettier) is clean
