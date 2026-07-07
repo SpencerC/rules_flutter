@@ -4,6 +4,7 @@ load(
     "dart_format_test",
     "flutter_analyze_test",
     "flutter_app",
+    "flutter_build_settings",
     "flutter_library",
     "flutter_test",
 )
@@ -80,6 +81,9 @@ build_test(
         # Write-back helpers emitted by the flutter_library macro.
         ":lib.format",
         ":lib.sync",
+        # Build settings emitted by flutter_build_settings.
+        ":settings_mode",
+        ":settings_build_number",
     ],
 )
 
@@ -89,11 +93,23 @@ build_test(
 # manual and excluded from CI. Run them locally with e.g.:
 #   ANDROID_HOME=~/Library/Android/sdk bazel build //flutter_app:mobile.apk
 #   bazel build //flutter_app:mobile.ios
+# Command-line build settings (mode + build number) for the mobile release
+# flow: build with --//flutter_app:settings_mode=release
+# --//flutter_app:settings_build_number=<n>.
+flutter_build_settings(
+    name = "settings",
+    mode_default = "debug",
+)
+
 flutter_app(
     name = "mobile",
     apk = {
         "srcs": [":android_files"],
-        "mode": "debug",
+        "mode": select({
+            ":settings_release": "release",
+            "//conditions:default": "debug",
+        }),
+        "build_number": ":settings_build_number",
         "android_sdk": "@androidsdk//:sdk_path",
     },
     embed = [":lib"],

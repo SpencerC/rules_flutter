@@ -271,6 +271,58 @@ with platform keys winning, `mode` overrides).
 | <a id="flutter_app-windows"></a>windows |  Files or dict spec for the {name}.windows target.   |  `None` |
 
 
+<a id="flutter_build_settings"></a>
+
+## flutter_build_settings
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "flutter_build_settings")
+
+flutter_build_settings(<a href="#flutter_build_settings-name">name</a>, <a href="#flutter_build_settings-mode_default">mode_default</a>, <a href="#flutter_build_settings-build_number">build_number</a>, <a href="#flutter_build_settings-visibility">visibility</a>)
+</pre>
+
+Emit the command-line build settings a release/multi-env app needs.
+
+flutter_app's `mode` and `build_number` are plain attributes meant to be
+driven by `select()` on user build settings. This macro creates the usual
+scaffolding so you don't hand-roll it:
+
+- `{name}_mode`: a string_flag over debug/profile/release (default
+  `mode_default`), plus a `{name}_<mode>` config_setting for each mode.
+- `{name}_build_number`: a string_flag (default empty) when `build_number`
+  is True, so a release wrapper can inject a version code on the command
+  line instead of rewriting pubspec.yaml.
+
+Wire them into flutter_app, e.g.:
+
+    flutter_app(
+        name = "app",
+        apk = {
+            "srcs": [":android_srcs"],
+            "mode": select({
+                ":settings_release": "release",
+                "//conditions:default": "debug",
+            }),
+            "build_number": ":settings_build_number",
+            "android_sdk": "@androidsdk//:sdk_path",
+        },
+        ...
+    )
+
+then build with `--//your/pkg:settings_mode=release
+--//your/pkg:settings_build_number=42`.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="flutter_build_settings-name"></a>name |  <p align="center"> - </p>   |  none |
+| <a id="flutter_build_settings-mode_default"></a>mode_default |  <p align="center"> - </p>   |  `"release"` |
+| <a id="flutter_build_settings-build_number"></a>build_number |  <p align="center"> - </p>   |  `True` |
+| <a id="flutter_build_settings-visibility"></a>visibility |  <p align="center"> - </p>   |  `None` |
+
+
 <a id="flutter_library"></a>
 
 ## flutter_library

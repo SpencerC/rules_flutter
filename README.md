@@ -433,6 +433,37 @@ flutter_app(
 bazel build //my_app:app.web --//my_app:env=prod
 ```
 
+For the common mobile-release axis — a build `mode` flag plus a
+`build_number` a release wrapper injects — the `flutter_build_settings` macro
+emits the `string_flag`s and per-mode `config_setting`s for you:
+
+```starlark
+load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_build_settings")
+
+# Emits :settings_mode (debug/profile/release), :settings_{debug,profile,release}
+# config_settings, and :settings_build_number.
+flutter_build_settings(name = "settings", mode_default = "debug")
+
+flutter_app(
+    name = "app",
+    embed = [":lib"],
+    apk = {
+        "srcs": [":android_srcs"],
+        "mode": select({
+            ":settings_release": "release",
+            "//conditions:default": "debug",
+        }),
+        "build_number": ":settings_build_number",
+        "android_sdk": "@androidsdk//:sdk_path",
+    },
+)
+```
+
+```bash
+bazel build //my_app:app.appbundle \
+    --//my_app:settings_mode=release --//my_app:settings_build_number=42
+```
+
 ### Development server
 
 Apps with a `web` platform also emit a `{name}.dev` helper that runs

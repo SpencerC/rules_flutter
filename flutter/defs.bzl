@@ -1,7 +1,7 @@
 """Public API for Flutter build rules"""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo", "string_flag")
 load("@protobuf//bazel/common:proto_common.bzl", "proto_common")
 load("@protobuf//bazel/common:proto_info.bzl", "ProtoInfo")
 load(
@@ -1093,6 +1093,66 @@ dependency graph.""",
 The generated workspace, pub cache, and dependency metadata are reused by
 flutter_app and flutter_test via the embed attribute.""",
 )
+
+_BUILD_MODES = ["debug", "profile", "release"]
+
+def flutter_build_settings(
+        name,
+        mode_default = "release",
+        build_number = True,
+        visibility = None):
+    """Emit the command-line build settings a release/multi-env app needs.
+
+    flutter_app's `mode` and `build_number` are plain attributes meant to be
+    driven by `select()` on user build settings. This macro creates the usual
+    scaffolding so you don't hand-roll it:
+
+    - `{name}_mode`: a string_flag over debug/profile/release (default
+      `mode_default`), plus a `{name}_<mode>` config_setting for each mode.
+    - `{name}_build_number`: a string_flag (default empty) when `build_number`
+      is True, so a release wrapper can inject a version code on the command
+      line instead of rewriting pubspec.yaml.
+
+    Wire them into flutter_app, e.g.:
+
+        flutter_app(
+            name = "app",
+            apk = {
+                "srcs": [":android_srcs"],
+                "mode": select({
+                    ":settings_release": "release",
+                    "//conditions:default": "debug",
+                }),
+                "build_number": ":settings_build_number",
+                "android_sdk": "@androidsdk//:sdk_path",
+            },
+            ...
+        )
+
+    then build with `--//your/pkg:settings_mode=release
+    --//your/pkg:settings_build_number=42`.
+    """
+    if mode_default not in _BUILD_MODES:
+        fail("flutter_build_settings mode_default must be one of {}".format(_BUILD_MODES))
+
+    string_flag(
+        name = name + "_mode",
+        build_setting_default = mode_default,
+        values = _BUILD_MODES,
+        visibility = visibility,
+    )
+    for mode in _BUILD_MODES:
+        native.config_setting(
+            name = "{}_{}".format(name, mode),
+            flag_values = {":{}_mode".format(name): mode},
+            visibility = visibility,
+        )
+    if build_number:
+        string_flag(
+            name = name + "_build_number",
+            build_setting_default = "",
+            visibility = visibility,
+        )
 
 def flutter_library(
         name,
