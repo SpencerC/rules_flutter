@@ -30,7 +30,7 @@ Fails when any of the given Dart sources are not dart-format clean.
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "dart_proto_library")
 
-dart_proto_library(<a href="#dart_proto_library-name">name</a>, <a href="#dart_proto_library-deps">deps</a>, <a href="#dart_proto_library-grpc">grpc</a>, <a href="#dart_proto_library-options">options</a>)
+dart_proto_library(<a href="#dart_proto_library-name">name</a>, <a href="#dart_proto_library-deps">deps</a>)
 </pre>
 
 Generates Dart sources from proto_library targets using the Dart protoc plugin.
@@ -42,8 +42,6 @@ Generates Dart sources from proto_library targets using the Dart protoc plugin.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="dart_proto_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="dart_proto_library-deps"></a>deps |  proto_library targets to generate Dart for. Generation covers the whole transitive proto closure (including well-known types such as google/protobuf/timestamp), matching what generated imports expect.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
-| <a id="dart_proto_library-grpc"></a>grpc |  Deprecated and ignored: gRPC stubs are always generated for protos that declare services.   | Boolean | optional |  `True`  |
-| <a id="dart_proto_library-options"></a>options |  Deprecated and ignored.   | List of strings | optional |  `[]`  |
 
 
 <a id="flutter_analyze_test"></a>

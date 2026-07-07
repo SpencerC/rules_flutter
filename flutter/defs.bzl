@@ -2638,13 +2638,6 @@ dart_proto_library = rule(
 whole transitive proto closure (including well-known types such as
 google/protobuf/timestamp), matching what generated imports expect.""",
         ),
-        "options": attr.string_list(
-            doc = "Deprecated and ignored.",
-        ),
-        "grpc": attr.bool(
-            default = True,
-            doc = "Deprecated and ignored: gRPC stubs are always generated for protos that declare services.",
-        ),
     },
     toolchains = ["//flutter:toolchain_type"],
     doc = "Generates Dart sources from proto_library targets using the Dart protoc plugin.",
