@@ -208,6 +208,34 @@ build --action_env=RULES_FLUTTER_CP_HOME=/home/me/.cache/rules_flutter_cocoapods
 The action creates the directory and exports it as `CP_HOME_DIR` before the
 Flutter tool drives `pod install`.
 
+### build_runner: persistent incremental state
+
+The dependency-preparation action runs `build_runner build` from a fresh
+workspace each time, so by default every source edit re-runs codegen cold.
+Point `//flutter:build_runner_cache` at an absolute directory to persist
+build_runner's incremental `.dart_tool/build` state across builds:
+
+```
+build --//flutter:build_runner_cache=/home/me/.cache/rules_flutter_build_runner
+build --sandbox_writable_path=/home/me/.cache/rules_flutter_build_runner
+```
+
+The action restores the cache before build_runner and saves it after, keyed
+by target label + Flutter version + `pub_deps.json` digest, under a portable
+lock. Every step is best-effort: an unwritable cache directory, a lost lock,
+or a failed copy all degrade to a cold build_runner run (a failed copy
+removes its partial destination, so a torn tree is never reused), and
+correctness then rests on build_runner's own content-digest invalidation —
+the same mechanism `build_runner watch` relies on. Measured on a large app, a
+single-file edit's preparation action dropped from ~68s to ~55s, and the
+saving grows the more codegen a change would otherwise redo.
+
+Unlike the hermetic default, this opt-in makes the preparation action inherit
+the client shell environment (so the cache directory is reachable), a
+documented, opt-in reduction in hermeticity of the same kind as the
+Gradle/CocoaPods caches above. Leave the flag empty (the default) for fully
+hermetic, byte-identical builds.
+
 ## Remote execution
 
 Hermetic is not the same as remote-executor-friendly. The dependency

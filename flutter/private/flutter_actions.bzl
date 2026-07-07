@@ -4,6 +4,108 @@ def shell_quote(arg):
     """Quote a string for safe interpolation into a bash script."""
     return "'" + arg.replace("'", "'\"'\"'") + "'"
 
+# Portable (macOS-safe, no flock) mkdir-locked helpers for the opt-in
+# build_runner incremental-state cache. Inserted verbatim into the
+# preparation script as pre-resolved bash (NOT .format()ed), so their
+# $()/${} are literal; <<LABEL>> is the only substitution (shell-quoted).
+#
+# Safety: every step is best-effort. A missing hash tool, an unwritable
+# cache dir, a lost lock, or a failed copy all degrade to a cold build_runner
+# run — they never fail the action, and a failed copy removes its partial
+# destination so a torn tree is never trusted.
+_BUILD_RUNNER_CACHE_HELPERS = """
+_br_hash() {
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 | cut -d' ' -f1
+    elif command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | cut -d' ' -f1
+    else
+        return 1
+    fi
+}
+_br_cache_key() {
+    { printf '%s\\0' <<LABEL>>; cat "$FLUTTER_ROOT/version" 2>/dev/null || true; cat "$WORKSPACE_DIR_ABS/pub_deps.json"; } | _br_hash
+}
+_br_lock_acquire() {
+    # $1 = lock dir. Returns 0 if acquired, 1 after a bounded wait; a miss
+    # just means this build runs without the shared cache. Steals a lock left
+    # by a crashed build (older than 10 minutes) so it never deadlocks.
+    local i
+    for i in $(seq 1 60); do
+        if mkdir "$1" 2>/dev/null; then
+            return 0
+        fi
+        if [ -n "$(find "$1" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+            rmdir "$1" 2>/dev/null || true
+        fi
+        sleep 1
+    done
+    return 1
+}
+_br_copy() {
+    # $1 src dir, $2 dest dir. On any failure, removes the (possibly partial)
+    # destination and returns non-zero so the caller starts cold.
+    if command -v rsync >/dev/null 2>&1; then
+        if rsync -a --delete "$1/" "$2/"; then return 0; fi
+    else
+        rm -rf "$2" && mkdir -p "$2" && cp -RL "$1/." "$2/" && return 0
+    fi
+    rm -rf "$2" 2>/dev/null || true
+    return 1
+}
+_br_cache_ready() {
+    # $1 = cache root. Returns 0 if it exists and is writable.
+    mkdir -p "$1" 2>/dev/null || return 1
+    if { : > "$1/.rules_flutter_wtest" && rm -f "$1/.rules_flutter_wtest"; } 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+"""
+
+_BUILD_RUNNER_CACHE_RESTORE = """
+if [ -n "${RULES_FLUTTER_BUILD_RUNNER_CACHE:-}" ]; then
+""" + _BUILD_RUNNER_CACHE_HELPERS + """
+    BR_CACHE_ROOT="$RULES_FLUTTER_BUILD_RUNNER_CACHE"
+    if ! _br_cache_ready "$BR_CACHE_ROOT"; then
+        echo "⚠ build_runner cache $BR_CACHE_ROOT is not writable (did you pass --sandbox_writable_path?); building cold" >&2
+    else
+        BR_KEY="$(_br_cache_key)" || BR_KEY=""
+        if [ -n "$BR_KEY" ]; then
+            BR_CACHE_DIR="$BR_CACHE_ROOT/$BR_KEY"
+            BR_LOCK="$BR_CACHE_ROOT/$BR_KEY.lock"
+            if _br_lock_acquire "$BR_LOCK"; then
+                if [ -d "$BR_CACHE_DIR/build" ]; then
+                    echo "Restoring build_runner cache from $BR_CACHE_DIR"
+                    mkdir -p "$WORKSPACE_DIR_ABS/.dart_tool"
+                    _br_copy "$BR_CACHE_DIR/build" "$WORKSPACE_DIR_ABS/.dart_tool/build" || true
+                fi
+                rmdir "$BR_LOCK" 2>/dev/null || true
+            fi
+        fi
+    fi
+fi
+"""
+
+_BUILD_RUNNER_CACHE_SAVE = """
+if [ -n "${RULES_FLUTTER_BUILD_RUNNER_CACHE:-}" ] && [ -d "$WORKSPACE_DIR_ABS/.dart_tool/build" ]; then
+    BR_CACHE_ROOT="$RULES_FLUTTER_BUILD_RUNNER_CACHE"
+    if _br_cache_ready "$BR_CACHE_ROOT"; then
+        BR_KEY="$(_br_cache_key)" || BR_KEY=""
+        if [ -n "$BR_KEY" ]; then
+            BR_CACHE_DIR="$BR_CACHE_ROOT/$BR_KEY"
+            BR_LOCK="$BR_CACHE_ROOT/$BR_KEY.lock"
+            if _br_lock_acquire "$BR_LOCK"; then
+                echo "Saving build_runner cache to $BR_CACHE_DIR"
+                mkdir -p "$BR_CACHE_DIR"
+                _br_copy "$WORKSPACE_DIR_ABS/.dart_tool/build" "$BR_CACHE_DIR/build" || true
+                rmdir "$BR_LOCK" 2>/dev/null || true
+            fi
+        fi
+    fi
+fi
+"""
+
 # Python snippet that resolves a `package:executable` command (from the
 # CODEGEN_CMD env var) to its bin/<executable>.dart entrypoint using the
 # package_config.json at PACKAGE_CONFIG_PATH. Injected as a format *value*,
@@ -580,7 +682,8 @@ def flutter_pub_get_action(
         run_build_runner_build = False,
         is_pub_package = False,
         allow_remote_exec = False,
-        preassembled_cache = None):
+        preassembled_cache = None,
+        build_runner_cache = ""):
     """Prepare Flutter/Dart dependencies from declared pub_deps.json metadata.
 
     Args:
@@ -609,10 +712,18 @@ def flutter_pub_get_action(
             a Dart edit re-runs codegen without re-merging the dependency
             caches. Mutually exclusive with a non-empty dependency_pub_caches
             and with is_pub_package (which republishes into its own cache).
+        build_runner_cache: Absolute directory (from //flutter:build_runner_cache)
+            for persisting build_runner's incremental .dart_tool/build state
+            across builds. Empty (default) keeps the action fully hermetic and
+            byte-identical; when set, the action inherits the client shell
+            environment and restores/saves the cache under a lock.
 
     Returns:
         Tuple of (prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir).
     """
+
+    # Only meaningful when this action actually runs build_runner.
+    use_build_runner_cache = bool(build_runner_cache) and run_build_runner_build
 
     if not flutter_toolchain.flutterinfo.tool_files:
         fail("No tool files found in Flutter toolchain")
@@ -646,6 +757,18 @@ def flutter_pub_get_action(
     generator_args = [shell_quote(cmd) for cmd in generator_commands]
     build_runner_common_args_quoted = [shell_quote(arg) for arg in build_runner_common_args]
     build_runner_build_args_quoted = [shell_quote(arg) for arg in build_runner_build_args]
+
+    # Opt-in build_runner incremental-state cache (//flutter:build_runner_cache).
+    # Restores/saves .dart_tool/build under a portable mkdir-lock, keyed by
+    # target + Flutter version + pub_deps digest. Copies are best-effort (a
+    # miss or torn cache just forces a full rebuild), so no lock leaks on
+    # failure and correctness never depends on the cache. Values are plain
+    # bash (sentinel-substituted, not .format()ed) so their $()/${} survive.
+    build_runner_cache_restore = ""
+    build_runner_cache_save = ""
+    if use_build_runner_cache:
+        build_runner_cache_restore = _BUILD_RUNNER_CACHE_RESTORE.replace("<<LABEL>>", shell_quote(str(ctx.label)))
+        build_runner_cache_save = _BUILD_RUNNER_CACHE_SAVE
 
     # PUB_CACHE handling differs by mode. With a preassembled cache the merge
     # (and its dependency-cache inputs) has already happened in a separate
@@ -1153,12 +1276,13 @@ PY
     if [ "$DELETE_CONFLICTING_PRESENT" = "0" ]; then
         CMD+=("--delete-conflicting-outputs")
     fi
-
+{build_runner_cache_restore}
     echo "Running build_runner build: ${{CMD[*]}}"
     if ! "${{CMD[@]}}"; then
         echo "✗ FATAL ERROR: build_runner build failed" >&2
         exit 1
     fi
+{build_runner_cache_save}
 fi
 
 echo ""
@@ -1178,6 +1302,8 @@ echo "=== Dependency preparation complete ==="
         run_build_runner_build = "1" if run_build_runner_build else "0",
         is_pub_package = "1" if is_pub_package else "0",
         resolve_entrypoint_py = RESOLVE_ENTRYPOINT_PY,
+        build_runner_cache_restore = build_runner_cache_restore,
+        build_runner_cache_save = build_runner_cache_save,
     )
 
     prepare_inputs = [working_dir, pubspec_file, pub_deps_file] + dep_pub_cache_files + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files
@@ -1242,6 +1368,13 @@ echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
         progress_message = "Preparing Flutter dependencies for %s" % ctx.label.name,
         execution_requirements = heavy_action_execution_requirements(allow_remote_exec),
         resource_set = heavy_action_resource_set,
+        # The cache opt-in needs the persistent directory reachable from the
+        # action. It is an out-of-sandbox path (the consumer also passes
+        # --sandbox_writable_path), so the action inherits the client shell
+        # env and receives the path explicitly. Off (default) leaves the
+        # action's env untouched and byte-identical.
+        use_default_shell_env = use_build_runner_cache,
+        env = {"RULES_FLUTTER_BUILD_RUNNER_CACHE": build_runner_cache} if use_build_runner_cache else None,
     )
 
     return prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir

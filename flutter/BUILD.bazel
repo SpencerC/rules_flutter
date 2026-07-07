@@ -1,5 +1,5 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("//flutter/private:resolved_toolchain.bzl", "resolved_toolchain")
 
 # For stardoc to reference the files
@@ -15,6 +15,23 @@ exports_files(["defs.bzl"])
 bool_flag(
     name = "allow_remote_execution",
     build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+# Opt-in persistent build_runner incremental state. Set to an absolute
+# directory to have the dependency-preparation action restore/save
+# build_runner's .dart_tool/build cache across builds, turning the cold
+# full-codegen inner loop into an incremental one:
+#   build --//flutter:build_runner_cache=/abs/path
+#   build --sandbox_writable_path=/abs/path
+# Empty (default) is fully hermetic and byte-identical. When set, the
+# preparation action additionally inherits the client shell environment
+# (a documented, opt-in reduction in hermeticity, like the Gradle/CocoaPods
+# cache escape hatches); a stale cache only forces a full rebuild, never
+# wrong output.
+string_flag(
+    name = "build_runner_cache",
+    build_setting_default = "",
     visibility = ["//visibility:public"],
 )
 

@@ -44,17 +44,25 @@ DartLibraryInfo = provider(
     },
 )
 
-# Hidden attr giving rules access to //flutter:allow_remote_execution; see
-# heavy_action_execution_requirements in flutter_actions.bzl for the posture.
+# Hidden attrs giving rules access to the ruleset build settings:
+# //flutter:allow_remote_execution (see heavy_action_execution_requirements)
+# and //flutter:build_runner_cache (opt-in build_runner incremental cache).
 ALLOW_REMOTE_EXECUTION_ATTR = {
     "_allow_remote_execution": attr.label(
         default = Label("//flutter:allow_remote_execution"),
+        providers = [BuildSettingInfo],
+    ),
+    "_build_runner_cache": attr.label(
+        default = Label("//flutter:build_runner_cache"),
         providers = [BuildSettingInfo],
     ),
 }
 
 def _allow_remote_exec(ctx):
     return ctx.attr._allow_remote_execution[BuildSettingInfo].value
+
+def _build_runner_cache(ctx):
+    return ctx.attr._build_runner_cache[BuildSettingInfo].value
 
 def _test_execution_info(ctx):
     """ExecutionInfo for the flutter test rules (see allow_remote_execution)."""
@@ -153,6 +161,7 @@ def _prepare_library_deps(ctx, flutter_toolchain, working_dir, pubspec_file, pub
         is_pub_package = ctx.attr.pub_package,
         allow_remote_exec = allow_remote,
         preassembled_cache = preassembled_cache,
+        build_runner_cache = _build_runner_cache(ctx),
     )
 
 def _render_pub_deps_generate_script(pubspec_file, flutter_bin):
