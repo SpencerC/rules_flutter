@@ -265,6 +265,35 @@ BuildBuddy's `EstimatedCPU`/`EstimatedMemory`). Locally, the actions declare
 a `resource_set` of several CPUs so Bazel's scheduler does not oversubscribe
 the machine.
 
+## CI caching: making no-change runs near-instant
+
+The prepare/assemble/codegen actions and the test rules are deterministic and
+remote-cacheable by default, so a rebuild with no source changes is all cache
+hits (seconds), not a re-run. Getting that on CI depends on the *consumer's*
+configuration:
+
+- **Persist a cache across runs.** The heavy work (SDK provisioning, pub-cache
+  assembly, codegen) is cacheable, but a repository fetch is not an action — a
+  fresh/ephemeral runner re-downloads and re-extracts the SDK and re-resolves
+  every pub repository unless you persist a `--repository_cache` on a durable
+  volume (or bake the pinned SDK + assembled pub cache into a warm runner image).
+  Pair it with a remote cache (`--remote_cache` + `--remote_upload_local_results`)
+  so the locally-executed `no-remote-exec` action results populate it.
+- **Do not put volatile values in the action environment.** `--action_env=HOME`
+  (or any volatile `--action_env`/`--repo_env`) becomes part of *every* action's
+  cache key, so runners (or a developer vs. CI) with a different `HOME` cannot
+  share cache entries — verified: changing `HOME` re-runs the prepared-workspace
+  actions. The hermetic actions set their own scratch `HOME`, so they do not need
+  it; scope `--action_env=HOME` to the iOS config that actually wants it (for
+  CocoaPods cache persistence) rather than applying it globally.
+- **Keep regeneration off the verify path.** If a "lint" job regenerates sources
+  in place (protobufs, `build_runner`/`intl_utils` output, formatting, goldens)
+  and commits them, run that as a *separate* step from `bazel test`: those
+  writes mutate the package sources, which invalidates the prepared-workspace
+  cache and forces a full codegen + test re-run even when nothing else changed.
+  A pure `bazel test` verify step stays cache-hittable; the hermetic build does
+  its own codegen, so it does not need the in-tree regenerated copies.
+
 ## Troubleshooting
 
 ### Seeing what an action actually ran
