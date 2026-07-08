@@ -799,19 +799,25 @@ mkdir -p "$PUB_CACHE_DIR_ABS"
 
 echo "=== Preparing pub cache from dependencies ==="
 DEP_CACHES=({dep_caches})
+HAVE_RSYNC=0
+command -v rsync >/dev/null 2>&1 && HAVE_RSYNC=1
 if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
     for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
         if [[ "$DEP_CACHE" != /* ]]; then
             DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
         fi
         if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
-            # The caches overlap (shared transitive packages) and earlier
-            # copies land read-only from bazel inputs; later copies must be
-            # able to write into those directories and replace files.
-            find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
-            if command -v rsync >/dev/null 2>&1; then
-                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
+            # The caches overlap (shared transitive packages). Unlike the
+            # separate assemble action, `pub get` runs against this cache in the
+            # same action, so files are byte-copied (not hardlinked) to stay
+            # independent of the read-only dependency inputs. --chmod=Du+w keeps
+            # destination directories writable (pub adds files under them) while
+            # leaving package files read-only — replacing the quadratic
+            # per-iteration full-tree chmod rescan with a one-shot flag.
+            if [ "$HAVE_RSYNC" -eq 1 ]; then
+                rsync -a --chmod=Du+w "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
             else
+                find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
                 cp -RLf "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
             fi
         fi
@@ -822,10 +828,10 @@ fi
 
 if [ -d "$WORKSPACE_DIR_ABS/.pub_cache" ]; then
     echo "Merging package-local .pub_cache"
-    find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
-    if command -v rsync >/dev/null 2>&1; then
-        rsync -a "$WORKSPACE_DIR_ABS/.pub_cache/" "$PUB_CACHE_DIR_ABS/"
+    if [ "$HAVE_RSYNC" -eq 1 ]; then
+        rsync -a --chmod=Du+w "$WORKSPACE_DIR_ABS/.pub_cache/" "$PUB_CACHE_DIR_ABS/"
     else
+        find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
         cp -RLf "$WORKSPACE_DIR_ABS/.pub_cache/." "$PUB_CACHE_DIR_ABS/"
     fi
 fi""".format(
