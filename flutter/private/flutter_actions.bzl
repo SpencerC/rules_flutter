@@ -520,19 +520,33 @@ mkdir -p "$PUB_CACHE_DIR_ABS"
 
 echo "=== Assembling pub cache from dependencies ==="
 DEP_CACHES=({dep_caches})
+HAVE_RSYNC=0
+command -v rsync >/dev/null 2>&1 && HAVE_RSYNC=1
 if [ ${{#DEP_CACHES[@]}} -gt 0 ]; then
     for DEP_CACHE in "${{DEP_CACHES[@]}}"; do
         if [[ "$DEP_CACHE" != /* ]]; then
             DEP_CACHE="$ORIGINAL_PWD/$DEP_CACHE"
         fi
         if [ -d "$DEP_CACHE" ] && [ -n "$(ls -A "$DEP_CACHE" 2>/dev/null)" ]; then
-            # The caches overlap (shared transitive packages) and earlier
-            # copies land read-only from bazel inputs; later copies must be
-            # able to write into those directories and replace files.
-            find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
-            if command -v rsync >/dev/null 2>&1; then
-                rsync -a "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
+            if [ "$HAVE_RSYNC" -eq 1 ]; then
+                # Hardlink the read-only dependency files instead of copying
+                # bytes. The assembled cache is consumed read-only downstream
+                # (flutter_pub_get_action points PUB_CACHE at it read-only), so
+                # sharing inodes with the dependency inputs is safe, and it turns
+                # a per-file copy of thousands of tiny pub files into near-instant
+                # links. --link-dest points at the source, so every file links;
+                # overlapping packages (identical pkg-version dirs) are deduped by
+                # rsync. --chmod=Du+w keeps destination directories writable for
+                # later merges while leaving files read-only so they stay
+                # hardlinkable — this replaces the per-iteration full-tree chmod
+                # rescan (which was quadratic over the growing tree). rsync falls
+                # back to a byte copy automatically when link-dest is on a
+                # different filesystem.
+                rsync -a --chmod=Du+w --link-dest="$DEP_CACHE" "$DEP_CACHE/" "$PUB_CACHE_DIR_ABS/"
             else
+                # No rsync: byte copy, making earlier read-only copies writable
+                # first so overlapping directories can be extended.
+                find "$PUB_CACHE_DIR_ABS" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
                 cp -RLf "$DEP_CACHE/." "$PUB_CACHE_DIR_ABS/"
             fi
         fi
