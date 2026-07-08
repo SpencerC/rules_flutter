@@ -16,8 +16,7 @@ func (pl *protoLang) Kinds() map[string]rule.KindInfo {
 				"deps": true,
 			},
 			MergeableAttrs: map[string]bool{
-				"deps":    true,
-				"options": true,
+				"deps": true,
 			},
 			ResolveAttrs: map[string]bool{
 				"deps": true,
