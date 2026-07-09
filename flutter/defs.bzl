@@ -2300,8 +2300,9 @@ flutter_test = rule(
 # dependency_overrides are stripped), then runs `flutter test --update-goldens`
 # and copies the produced `**/goldens/**` trees into the declared output dir.
 # Because it is a normal cached build action, an unchanged embed/test/lib graph
-# is a cache hit (no re-render). A failing widget test fails the action, so it
-# doubles as the widget-test gate — compiling the test binary exactly once.
+# is a cache hit (no re-render). The run is scoped to the golden tag(s) via
+# --tags so --run-skipped only un-skips golden tests; a failing golden test
+# fails the action (it does not replace a general widget-test gate).
 _GOLDENS_ACTION_SCRIPT = """#!/bin/bash
 set -euo pipefail
 
@@ -2312,7 +2313,8 @@ PUB_DEPS_SRC="$4"
 DART_TOOL_SRC="$5"
 FLUTTER_BIN_REL="$6"
 JOBS="$7"
-shift 7
+TEST_TAGS="$8"
+shift 8
 
 copy_tree() {
     if command -v rsync >/dev/null 2>&1; then
@@ -2392,6 +2394,12 @@ __PACKAGE_CONFIG_PY__
 PY
 
 CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test" "--no-pub" "--update-goldens" "--run-skipped")
+# Scope --run-skipped to the golden tag(s) so it only un-skips golden tests and
+# never wrongly runs tests that are `skip: true` for unrelated reasons
+# (parked/flaky/platform). Empty test_tags = unscoped (caller's explicit risk).
+if [ -n "$TEST_TAGS" ]; then
+    CMD+=("--tags" "$TEST_TAGS")
+fi
 if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
     CMD+=("-j" "$JOBS")
 fi
@@ -2447,19 +2455,39 @@ if [ -z "$SRC" ]; then
     exit 1
 fi
 
-while IFS= read -r existing; do
-    rm -rf "$existing"
-done < <(find "$PACKAGE_DIR" -type d -name goldens 2>/dev/null)
+# Collect the regenerated golden dirs FIRST. If none were produced, refuse to
+# touch the source tree — otherwise a bad/empty regeneration would silently
+# wipe the committed goldens.
+REGEN=()
+while IFS= read -r golden_dir; do
+    REGEN+=("$golden_dir")
+done < <(find -L "$SRC" -type d -name goldens 2>/dev/null)
+if [ "${#REGEN[@]}" -eq 0 ]; then
+    echo "✗ no goldens were regenerated; refusing to modify the source tree" >&2
+    exit 1
+fi
+
+# Clear existing goldens only WITHIN the regenerated test scope (never the whole
+# package or repo root), so removed images don't linger but out-of-scope goldens
+# are never deleted.
+TEST_ROOTS=(__TEST_ROOTS__)
+for root in "${TEST_ROOTS[@]}"; do
+    base="$PACKAGE_DIR/$root"
+    [ -d "$base" ] || continue
+    while IFS= read -r existing; do
+        rm -rf "$existing"
+    done < <(find "$base" -type d -name goldens 2>/dev/null)
+done
 
 count=0
-while IFS= read -r golden_dir; do
+for golden_dir in "${REGEN[@]}"; do
     rel="${golden_dir#"$SRC"/}"
     dest="$PACKAGE_DIR/$rel"
     mkdir -p "$(dirname "$dest")"
     cp -RL "$golden_dir" "$dest"
     chmod -R u+w "$dest" 2>/dev/null || true
     count=$((count + 1))
-done < <(find -L "$SRC" -type d -name goldens 2>/dev/null)
+done
 
 echo "Updated $count golden directory(ies) in $PACKAGE_DIR"
 """
@@ -2497,6 +2525,7 @@ def _flutter_goldens_impl(ctx):
             library_info.dart_tool.path,
             flutter_bin,
             str(ctx.attr.jobs),
+            ",".join(ctx.attr.test_tags),
         ] + ctx.attr.test_files,
         command = _GOLDENS_ACTION_SCRIPT,
         mnemonic = "FlutterUpdateGoldens",
@@ -2505,9 +2534,10 @@ def _flutter_goldens_impl(ctx):
     )
 
     runner = ctx.actions.declare_file(ctx.label.name + "_update_goldens.sh")
+    test_roots = " ".join([_shell_quote(t) for t in ctx.attr.test_files])
     ctx.actions.write(
         output = runner,
-        content = _GOLDENS_WRITEBACK_SCRIPT.replace("__PACKAGE__", ctx.label.package).replace("__GOLDENS_SHORT__", goldens_out.short_path),
+        content = _GOLDENS_WRITEBACK_SCRIPT.replace("__PACKAGE__", ctx.label.package).replace("__GOLDENS_SHORT__", goldens_out.short_path).replace("__TEST_ROOTS__", test_roots),
         is_executable = True,
     )
 
@@ -2532,7 +2562,18 @@ flutter_goldens = rule(
         ),
         "test_files": attr.string_list(
             default = ["test/"],
-            doc = "Test files or directories whose golden tests to (re)generate.",
+            doc = "Test files or directories whose golden tests to (re)generate. " +
+                  "Also bounds the write-back's clear step: only goldens under " +
+                  "these roots are cleared before restoring the regenerated set.",
+        ),
+        "test_tags": attr.string_list(
+            default = ["golden"],
+            doc = "Tags passed to `flutter test --tags`, scoping --run-skipped. " +
+                  "Defaults to [\"golden\"] so only golden-tagged tests are " +
+                  "un-skipped and rendered — a test that is `skip: true` for an " +
+                  "unrelated reason (parked/flaky/platform) is never run. Set to " +
+                  "[] to run every test under test_files (unscoped --run-skipped; " +
+                  "only safe when golden is the sole skip).",
         ),
         "jobs": attr.int(
             default = 0,
@@ -2544,14 +2585,20 @@ flutter_goldens = rule(
     doc = """Regenerates Flutter golden images hermetically and writes them back
 to the source tree.
 
-The build action runs `flutter test --update-goldens --run-skipped` inside a
-prepared workspace (dart_proto_library trees and other generated_srcs already
-mounted, so no source-tree pre-population/refresh is required) and captures the
-produced `**/goldens/**` PNG trees as a declared output — so an unchanged
-embed/test/lib graph is a cache hit and re-renders nothing. It also gates: a
-failing widget test fails the action, compiling the test binary exactly once.
-`bazel run` copies the (cached) goldens back into the source tree for review and
-commit.""",
+The build action runs `flutter test --tags <test_tags> --update-goldens
+--run-skipped` inside a prepared workspace (dart_proto_library trees and other
+generated_srcs already mounted, so no source-tree pre-population/refresh is
+required) and captures the produced `**/goldens/**` PNG trees as a declared
+output — so an unchanged embed/test/lib graph is a cache hit and re-renders
+nothing. `bazel run` copies the (cached) goldens back into the source tree for
+review and commit.
+
+By default it runs only golden-tagged tests (test_tags = ["golden"]), so a
+golden-test failure fails the action but it is NOT a general widget-test gate —
+keep a separate flutter_test target for that. The scoping is deliberate:
+`--run-skipped` un-skips tests, and limiting it to the golden tag ensures tests
+that are `skip: true` for unrelated reasons are never run. Set test_tags = []
+to run every test under test_files (only safe when golden is the sole skip).""",
 )
 
 def _flutter_analyze_test_impl(ctx):
