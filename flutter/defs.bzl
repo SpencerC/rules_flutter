@@ -2485,7 +2485,11 @@ for golden_dir in "${REGEN[@]}"; do
     dest="$PACKAGE_DIR/$rel"
     mkdir -p "$(dirname "$dest")"
     cp -RL "$golden_dir" "$dest"
-    chmod -R u+w "$dest" 2>/dev/null || true
+    # Bazel marks declared-output files read-only/executable (0555); copying
+    # that into the source tree would flip every golden's git mode to 100755.
+    # Normalize to standard modes so git sees only real (content) changes.
+    find "$dest" -type d -exec chmod 0755 {} + 2>/dev/null || true
+    find "$dest" -type f -exec chmod 0644 {} + 2>/dev/null || true
     count=$((count + 1))
 done
 
