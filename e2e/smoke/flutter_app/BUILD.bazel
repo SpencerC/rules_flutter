@@ -5,6 +5,7 @@ load(
     "flutter_analyze_test",
     "flutter_app",
     "flutter_build_settings",
+    "flutter_goldens",
     "flutter_library",
     "flutter_test",
 )
@@ -13,7 +14,10 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 flutter_library(
     name = "lib",
-    srcs = ["lib/main.dart"],
+    srcs = [
+        "dart_test.yaml",
+        "lib/main.dart",
+    ],
     data = glob(["l10n/**"]),
     generated_srcs = {
         # Mounted at lib/generated/<proto import path>.pb.dart, so main.dart
@@ -48,6 +52,16 @@ flutter_analyze_test(
     embed = [":lib"],
 )
 
+# Regenerates golden images hermetically (protos mounted; no source-tree
+# refresh needed) and writes them back on `bazel run`. Building it runs the
+# golden-tagged tests with --update-goldens; a cache hit re-renders nothing.
+flutter_goldens(
+    name = "update_goldens",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+    visibility = ["//visibility:public"],
+)
+
 dart_format_test(
     name = "lib_format",
     srcs = glob(
@@ -78,6 +92,10 @@ build_test(
     targets = [
         ":app.dev",
         ":app.web",
+        # Building the goldens target runs the hermetic FlutterUpdateGoldens
+        # action (compile + render + capture), validating golden regeneration
+        # on CI without writing to the source tree.
+        ":update_goldens",
         # Write-back helpers emitted by the flutter_library macro.
         ":lib.format",
         ":lib.sync",

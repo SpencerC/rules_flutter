@@ -2293,6 +2293,267 @@ flutter_test = rule(
     doc = """Runs Flutter tests using a prepared flutter_library workspace.""",
 )
 
+# Build-action script that regenerates goldens hermetically. It materializes a
+# writable copy of the prepared workspace (protos and other generated_srcs
+# already mounted, so nothing needs to exist in the source tree), regenerates
+# package_config.json from the declared pub_deps.json (never re-resolving —
+# dependency_overrides are stripped), then runs `flutter test --update-goldens`
+# and copies the produced `**/goldens/**` trees into the declared output dir.
+# Because it is a normal cached build action, an unchanged embed/test/lib graph
+# is a cache hit (no re-render). A failing widget test fails the action, so it
+# doubles as the widget-test gate — compiling the test binary exactly once.
+_GOLDENS_ACTION_SCRIPT = """#!/bin/bash
+set -euo pipefail
+
+OUT_DIR="$1"
+WORKSPACE_SRC="$2"
+PUB_CACHE_SRC="$3"
+PUB_DEPS_SRC="$4"
+DART_TOOL_SRC="$5"
+FLUTTER_BIN_REL="$6"
+JOBS="$7"
+shift 7
+
+copy_tree() {
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -aL "$1/" "$2/"
+    else
+        cp -RL "$1/." "$2/"
+    fi
+}
+
+# Scratch must live INSIDE the action root ($PWD, the execroot/sandbox): the
+# regenerated package_config points at the SDK by a path relative to the
+# runtime workspace, and only paths within the action root resolve (an
+# out-of-tree /tmp dir cannot reach the sandboxed SDK inputs).
+WORK="$(mktemp -d "$PWD/.rf_goldens.XXXXXX")"
+cleanup() { rm -rf "$WORK"; }
+trap cleanup EXIT
+
+RUNTIME_WORKSPACE="$WORK/ws"
+RUNTIME_PUB_CACHE="$WORK/pub_cache"
+mkdir -p "$RUNTIME_WORKSPACE" "$RUNTIME_PUB_CACHE"
+
+copy_tree "$WORKSPACE_SRC" "$RUNTIME_WORKSPACE"
+chmod -R u+w "$RUNTIME_WORKSPACE" 2>/dev/null || true
+
+if [ -d "$PUB_CACHE_SRC" ] && [ -n "$(ls -A "$PUB_CACHE_SRC" 2>/dev/null)" ]; then
+    copy_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"
+fi
+chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+
+if [ -d "$DART_TOOL_SRC" ]; then
+    mkdir -p "$RUNTIME_WORKSPACE/.dart_tool"
+    copy_tree "$DART_TOOL_SRC" "$RUNTIME_WORKSPACE/.dart_tool"
+    chmod -R u+w "$RUNTIME_WORKSPACE/.dart_tool" 2>/dev/null || true
+fi
+
+if [ -f "$PUB_DEPS_SRC" ]; then
+    cp "$PUB_DEPS_SRC" "$RUNTIME_WORKSPACE/pub_deps.json"
+    chmod u+w "$RUNTIME_WORKSPACE/pub_deps.json" 2>/dev/null || true
+fi
+
+FLUTTER_BIN_ABS="$PWD/$FLUTTER_BIN_REL"
+if [ ! -f "$FLUTTER_BIN_ABS" ]; then
+    FLUTTER_BIN_ABS="$FLUTTER_BIN_REL"
+fi
+if [ ! -f "$FLUTTER_BIN_ABS" ]; then
+    echo "Flutter binary not found: $FLUTTER_BIN_REL" >&2
+    exit 1
+fi
+FLUTTER_BIN_DIR="$(dirname "$FLUTTER_BIN_ABS")"
+FLUTTER_ROOT="$(cd "$FLUTTER_BIN_DIR/.." && pwd)"
+
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export FLUTTER_ALREADY_LOCKED=true
+export CI=true
+export PUB_ENVIRONMENT="flutter_tool:bazel"
+export PUB_CACHE="$RUNTIME_PUB_CACHE"
+export HOME="$WORK/home"
+mkdir -p "$HOME"
+export ANDROID_HOME=""
+export ANDROID_SDK_ROOT=""
+export FLUTTER_ROOT
+export PATH="$FLUTTER_BIN_DIR:$PATH"
+
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "python interpreter not found on PATH" >&2
+    exit 1
+fi
+export PUB_DEPS_PATH="$RUNTIME_WORKSPACE/pub_deps.json"
+export PUB_CACHE_ABS="$RUNTIME_PUB_CACHE"
+export WORKSPACE_ABS="$RUNTIME_WORKSPACE"
+export PACKAGE_CONFIG_PATH="$RUNTIME_WORKSPACE/.dart_tool/package_config.json"
+mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
+rm -f "$PACKAGE_CONFIG_PATH"
+"$PYTHON_BIN" <<'PY'
+__PACKAGE_CONFIG_PY__
+PY
+
+CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test" "--no-pub" "--update-goldens" "--run-skipped")
+if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
+    CMD+=("-j" "$JOBS")
+fi
+for pattern in "$@"; do
+    if [ -n "$pattern" ]; then
+        CMD+=("$pattern")
+    fi
+done
+
+( cd "$RUNTIME_WORKSPACE" && "${CMD[@]}" )
+
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
+while IFS= read -r golden_dir; do
+    rel="${golden_dir#./}"
+    mkdir -p "$OUT_DIR/$(dirname "$rel")"
+    copy_tree "$RUNTIME_WORKSPACE/$rel" "$OUT_DIR/$rel"
+done < <(cd "$RUNTIME_WORKSPACE" && find . -type d -name goldens 2>/dev/null)
+""".replace("__PACKAGE_CONFIG_PY__", PACKAGE_CONFIG_FROM_PUB_DEPS_PY)
+
+# `bazel run` write-back: copy the (cached) regenerated goldens into the source
+# tree. Clears existing goldens dirs first so removed images don't linger.
+_GOLDENS_WRITEBACK_SCRIPT = """#!/bin/bash
+set -euo pipefail
+
+resolve_runfile() {
+    local rel="$1"
+    for root in "${RUNFILES_DIR:-}" "$PWD" "$PWD.runfiles"; do
+        if [ -n "$root" ] && [ -e "$root/$rel" ]; then
+            echo "$root/$rel"
+            return 0
+        fi
+    done
+    [ -e "$rel" ] && { echo "$rel"; return 0; }
+    return 1
+}
+
+WORKSPACE_DIR="${BUILD_WORKSPACE_DIRECTORY:-}"
+if [ -z "$WORKSPACE_DIR" ]; then
+    echo "BUILD_WORKSPACE_DIRECTORY is not set; run via 'bazel run'." >&2
+    exit 1
+fi
+
+PACKAGE_SUBDIR="__PACKAGE__"
+PACKAGE_DIR="$WORKSPACE_DIR"
+if [ -n "$PACKAGE_SUBDIR" ]; then
+    PACKAGE_DIR="$WORKSPACE_DIR/$PACKAGE_SUBDIR"
+fi
+
+SRC="$(resolve_runfile "__GOLDENS_SHORT__")"
+if [ -z "$SRC" ]; then
+    echo "regenerated goldens not found in runfiles" >&2
+    exit 1
+fi
+
+while IFS= read -r existing; do
+    rm -rf "$existing"
+done < <(find "$PACKAGE_DIR" -type d -name goldens 2>/dev/null)
+
+count=0
+while IFS= read -r golden_dir; do
+    rel="${golden_dir#"$SRC"/}"
+    dest="$PACKAGE_DIR/$rel"
+    mkdir -p "$(dirname "$dest")"
+    cp -RL "$golden_dir" "$dest"
+    chmod -R u+w "$dest" 2>/dev/null || true
+    count=$((count + 1))
+done < <(find -L "$SRC" -type d -name goldens 2>/dev/null)
+
+echo "Updated $count golden directory(ies) in $PACKAGE_DIR"
+"""
+
+def _flutter_goldens_impl(ctx):
+    """Regenerate goldens hermetically (cached) and write them back on run."""
+    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_goldens")
+    flutter_toolchain, _ = _resolve_flutter_toolchain(ctx)
+
+    prepared_workspace = _prepare_overlay_workspace(
+        ctx,
+        library_info,
+        list(ctx.files.srcs),
+        "_goldens_workspace",
+        "PrepareFlutterGoldensWorkspace",
+    )
+
+    goldens_out = ctx.actions.declare_directory(ctx.label.name + "_goldens")
+
+    action_inputs = [
+        prepared_workspace,
+        library_info.pub_cache,
+        library_info.pub_deps,
+        library_info.dart_tool,
+    ] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files
+
+    ctx.actions.run_shell(
+        inputs = action_inputs,
+        outputs = [goldens_out],
+        arguments = [
+            goldens_out.path,
+            prepared_workspace.path,
+            library_info.pub_cache.path,
+            library_info.pub_deps.path,
+            library_info.dart_tool.path,
+            flutter_bin,
+            str(ctx.attr.jobs),
+        ] + ctx.attr.test_files,
+        command = _GOLDENS_ACTION_SCRIPT,
+        mnemonic = "FlutterUpdateGoldens",
+        progress_message = "Regenerating Flutter goldens for %s" % ctx.label.name,
+        execution_requirements = {} if _allow_remote_exec(ctx) else {"no-remote-exec": "1"},
+    )
+
+    runner = ctx.actions.declare_file(ctx.label.name + "_update_goldens.sh")
+    ctx.actions.write(
+        output = runner,
+        content = _GOLDENS_WRITEBACK_SCRIPT.replace("__PACKAGE__", ctx.label.package).replace("__GOLDENS_SHORT__", goldens_out.short_path),
+        is_executable = True,
+    )
+
+    return [
+        DefaultInfo(
+            executable = runner,
+            files = depset([goldens_out]),
+            runfiles = ctx.runfiles(files = [runner, goldens_out]),
+        ),
+    ]
+
+flutter_goldens = rule(
+    implementation = _flutter_goldens_impl,
+    attrs = {
+        "embed": attr.label_list(
+            providers = [FlutterLibraryInfo],
+            doc = "flutter_library target to embed (exactly one).",
+        ),
+        "srcs": attr.label_list(
+            allow_files = True,
+            doc = "Test sources (including golden tests) to overlay into the workspace.",
+        ),
+        "test_files": attr.string_list(
+            default = ["test/"],
+            doc = "Test files or directories whose golden tests to (re)generate.",
+        ),
+        "jobs": attr.int(
+            default = 0,
+            doc = "Concurrency for `flutter test -j` (0 = flutter's default).",
+        ),
+    } | ALLOW_REMOTE_EXECUTION_ATTR,
+    executable = True,
+    toolchains = ["//flutter:toolchain_type"],
+    doc = """Regenerates Flutter golden images hermetically and writes them back
+to the source tree.
+
+The build action runs `flutter test --update-goldens --run-skipped` inside a
+prepared workspace (dart_proto_library trees and other generated_srcs already
+mounted, so no source-tree pre-population/refresh is required) and captures the
+produced `**/goldens/**` PNG trees as a declared output — so an unchanged
+embed/test/lib graph is a cache hit and re-renders nothing. It also gates: a
+failing widget test fails the action, compiling the test binary exactly once.
+`bazel run` copies the (cached) goldens back into the source tree for review and
+commit.""",
+)
+
 def _flutter_analyze_test_impl(ctx):
     """Implementation for flutter_analyze_test rule."""
 

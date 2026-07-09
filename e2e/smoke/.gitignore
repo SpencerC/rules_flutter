@@ -1,0 +1,4 @@
+
+# Golden images are regenerated hermetically by //flutter_app:update_goldens
+# (never compared), so the platform-specific PNGs are not checked in.
+flutter_app/test/goldens/
