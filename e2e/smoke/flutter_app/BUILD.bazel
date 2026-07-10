@@ -52,6 +52,9 @@ flutter_test(
 flutter_test(
     name = "lib_test_sharded",
     srcs = glob(["test/**"]),
+    # Each single-file shard runs one suite at a time: declare that to the
+    # local scheduler (and exercise the cpu attr end to end).
+    cpu = 1,
     embed = [":lib"],
     jobs = 1,
     shard_count = 3,

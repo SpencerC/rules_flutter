@@ -95,10 +95,22 @@ def _resolve_flutter_toolchain(ctx):
     return flutter_toolchain, flutter_toolchain.flutterinfo.tool_files[0]
 
 def _test_execution_info(ctx):
-    """ExecutionInfo for the flutter test rules (see allow_remote_execution)."""
-    if _allow_remote_exec(ctx):
+    """ExecutionInfo for the flutter test rules (see allow_remote_execution).
+
+    Rules exposing a `cpu` attr (flutter_test, flutter_analyze_test) can
+    declare a local CPU reservation ("cpu:N") so Bazel's scheduler doesn't
+    co-locate more internally-parallel flutter runs than the worker has cores
+    for. 0 (default) declares nothing — the suites already overlap under the
+    default 1-CPU estimate, and reserving cores where none are spare would
+    only serialize them.
+    """
+    reqs = {} if _allow_remote_exec(ctx) else {"no-remote-exec": "1"}
+    cpu = getattr(ctx.attr, "cpu", 0)
+    if cpu > 0:
+        reqs["cpu:%d" % cpu] = ""
+    if not reqs:
         return []
-    return [testing.ExecutionInfo({"no-remote-exec": "1"})]
+    return [testing.ExecutionInfo(reqs)]
 
 def _check_embeddable(ctx, library_target, library_info):
     """Fail at analysis when embedding a library without an assembled cache.
@@ -2408,6 +2420,14 @@ flutter_test = rule(
             providers = [FlutterLibraryInfo],
             doc = "flutter_library targets to embed for testing.",
         ),
+        "cpu": attr.int(
+            default = 0,
+            doc = "Local CPUs to reserve for this test (execution requirement " +
+                  "`cpu:N`). 0 (default) declares nothing. Only useful together " +
+                  "with `jobs`/sharding on large workers — reserving cores " +
+                  "where none are spare just serializes tests that would " +
+                  "otherwise overlap.",
+        ),
         "jobs": attr.int(
             default = 0,
             doc = "Concurrency passed to `flutter test -j`. 0 (default) keeps " +
@@ -2856,6 +2876,11 @@ flutter_analyze_test = rule(
         "extra_args": attr.string_list(
             default = [],
             doc = "Additional arguments forwarded to flutter analyze.",
+        ),
+        "cpu": attr.int(
+            default = 0,
+            doc = "Local CPUs to reserve for this test (execution requirement " +
+                  "`cpu:N`); see flutter_test.cpu. 0 (default) declares nothing.",
         ),
         "pub_cache_materialization": attr.string(
             default = "auto",
