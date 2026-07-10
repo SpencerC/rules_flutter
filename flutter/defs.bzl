@@ -2251,6 +2251,10 @@ def _flutter_test_impl(ctx):
 
     test_runner_content = _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin) + """
 CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test" "--no-pub")
+JOBS="{jobs}"
+if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
+    CMD+=("-j" "$JOBS")
+fi
 IFS=$'\n'
 for pattern in $'{test_patterns}'; do
     if [ -n "$pattern" ]; then
@@ -2278,6 +2282,7 @@ fi
 exit "$RESULT"
 """.format(
         test_patterns = test_patterns_literal,
+        jobs = str(ctx.attr.jobs),
     )
 
     ctx.actions.write(
@@ -2300,6 +2305,13 @@ flutter_test = rule(
         "embed": attr.label_list(
             providers = [FlutterLibraryInfo],
             doc = "flutter_library targets to embed for testing.",
+        ),
+        "jobs": attr.int(
+            default = 0,
+            doc = "Concurrency passed to `flutter test -j`. 0 (default) keeps " +
+                  "flutter's own default (the number of cores). Cap this when " +
+                  "several flutter_test targets run concurrently on one worker " +
+                  "so their internal parallelism doesn't oversubscribe it.",
         ),
         "srcs": attr.label_list(
             allow_files = True,
