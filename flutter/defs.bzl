@@ -12,6 +12,7 @@ load(
     "flutter_build_action",
     "flutter_pub_get_action",
     "flutter_stage_pub_package_action",
+    "tree_output_execution_requirements",
 )
 
 FlutterLibraryInfo = provider(
@@ -45,7 +46,8 @@ DartLibraryInfo = provider(
 )
 
 # Hidden attrs giving rules access to the ruleset build settings:
-# //flutter:allow_remote_execution (see heavy_action_execution_requirements)
+# //flutter:allow_remote_execution (see heavy_action_execution_requirements),
+# //flutter:remote_cache_trees (see tree_output_execution_requirements),
 # and //flutter:build_runner_cache (opt-in build_runner incremental cache).
 ALLOW_REMOTE_EXECUTION_ATTR = {
     "_allow_remote_execution": attr.label(
@@ -56,6 +58,10 @@ ALLOW_REMOTE_EXECUTION_ATTR = {
         default = Label("//flutter:build_runner_cache"),
         providers = [BuildSettingInfo],
     ),
+    "_remote_cache_trees": attr.label(
+        default = Label("//flutter:remote_cache_trees"),
+        providers = [BuildSettingInfo],
+    ),
 }
 
 def _allow_remote_exec(ctx):
@@ -63,6 +69,9 @@ def _allow_remote_exec(ctx):
 
 def _build_runner_cache(ctx):
     return ctx.attr._build_runner_cache[BuildSettingInfo].value
+
+def _remote_cache_trees(ctx):
+    return ctx.attr._remote_cache_trees[BuildSettingInfo].value
 
 def _resolve_flutter_toolchain(ctx):
     """Return (toolchain, flutter_bin File) for the resolved Flutter toolchain.
@@ -155,6 +164,7 @@ def _prepare_library_deps(ctx, flutter_toolchain, working_dir, pubspec_file, pub
     single-action path.
     """
     allow_remote = _allow_remote_exec(ctx)
+    cache_trees = _remote_cache_trees(ctx)
     use_preassembled = ctx.attr.assemble_dep_caches and not ctx.attr.pub_package
 
     preassembled_cache = None
@@ -164,6 +174,7 @@ def _prepare_library_deps(ctx, flutter_toolchain, working_dir, pubspec_file, pub
             ctx,
             transitive_pub_caches,
             allow_remote_exec = allow_remote,
+            remote_cache_trees = cache_trees,
         )
     elif ctx.attr.assemble_dep_caches:
         dep_caches = transitive_pub_caches
@@ -181,6 +192,7 @@ def _prepare_library_deps(ctx, flutter_toolchain, working_dir, pubspec_file, pub
         run_build_runner_build = "build" in ctx.attr.build_runner_modes,
         is_pub_package = ctx.attr.pub_package,
         allow_remote_exec = allow_remote,
+        remote_cache_trees = cache_trees,
         preassembled_cache = preassembled_cache,
         build_runner_cache = _build_runner_cache(ctx),
     )
@@ -972,6 +984,8 @@ def _flutter_library_impl(ctx):
         other_files,
         list(ctx.files.data),
         extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
+        allow_remote_exec = _allow_remote_exec(ctx),
+        remote_cache_trees = _remote_cache_trees(ctx),
     )
 
     prepared_workspace, pub_get_output, pub_cache_dir, pub_deps, dart_tool_dir = _prepare_library_deps(
@@ -2191,6 +2205,14 @@ done
         command = copy_script,
         mnemonic = mnemonic,
         progress_message = "%s for %s" % (mnemonic, ctx.label.name),
+        # A ~100MB local copy of the library workspace feeding local-only
+        # test/goldens actions: never worth remote execution (a remote hit
+        # would just force a full tree download) and, by default, kept out of
+        # the remote cache (see tree_output_execution_requirements).
+        execution_requirements = tree_output_execution_requirements(
+            _allow_remote_exec(ctx),
+            _remote_cache_trees(ctx),
+        ),
     )
 
     return prepared_workspace
@@ -3012,6 +3034,8 @@ def _dart_library_impl(ctx):
                 [],
                 list(ctx.files.data),
                 extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
+                allow_remote_exec = _allow_remote_exec(ctx),
+                remote_cache_trees = _remote_cache_trees(ctx),
             )
 
             # Prepare dependency cache and package metadata from declared pub_deps.json.
