@@ -1947,7 +1947,7 @@ def flutter_app(
 
     native.alias(**alias_args)
 
-def _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin, log_name = "flutter_test.log"):
+def _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin, log_name = "flutter_test.log", pub_cache_mode = "copy"):
     """Render the bash prologue materializing a mutable runtime workspace.
 
     After this fragment runs, $RUNTIME_WORKSPACE holds a writable copy of the
@@ -1955,6 +1955,12 @@ def _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin, log
     regenerated package config; $TEST_LOG points at the log file and
     $FLUTTER_BIN_ABS/$FLUTTER_ROOT are exported. The current directory is
     unchanged.
+
+    pub_cache_mode selects how the (multi-GB) pub cache is materialized:
+    "copy" (byte copy, the historical behavior), "hardlink" (link the
+    dereferenced files; fails over to copy), "reference" (no materialization —
+    the package config points into the Bazel-provided cache read-only), or
+    "auto" (hardlink with copy fallback).
     """
     return """#!/bin/bash
 set -euo pipefail
@@ -1967,6 +1973,22 @@ copy_tree() {{
         rsync -aL "$src/" "$dest/"
     else
         cp -RL "$src/." "$dest/"
+    fi
+}}
+
+# Materialize a tree without moving bytes: hardlink the dereferenced symlink
+# targets (GNU cp -RLl) or APFS-clone them (macOS cp -c). Fails (nonzero) when
+# src/dest sit on different filesystems or cp lacks the flag — callers fall
+# back to copy_tree. Linked files stay read-only, sharing inodes with the
+# Bazel-owned source tree; that is safe for the pub cache, which the test
+# only reads.
+link_tree() {{
+    local src="$1"
+    local dest="$2"
+    if [ "$(uname)" = "Darwin" ]; then
+        cp -c -RL "$src/." "$dest/" 2>/dev/null
+    else
+        cp -RLl "$src/." "$dest/" 2>/dev/null
     fi
 }}
 
@@ -2068,10 +2090,36 @@ copy_tree "$WORKSPACE_ABS" "$RUNTIME_WORKSPACE"
 chmod -R u+w "$RUNTIME_WORKSPACE" 2>/dev/null || true
 
 mkdir -p "$RUNTIME_PUB_CACHE"
+PUB_CACHE_MODE="{pub_cache_mode}"
+PUB_CACHE_FOR_CONFIG="$RUNTIME_PUB_CACHE"
 if [ -n "$PUB_CACHE_ABS" ] && [ -d "$PUB_CACHE_ABS" ] && [ -n "$(ls -A "$PUB_CACHE_ABS" 2>/dev/null)" ]; then
-    copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
+    case "$PUB_CACHE_MODE" in
+        reference)
+            # Use the Bazel-provided cache in place, read-only. The package
+            # config references packages by path, so no materialized copy is
+            # needed; $RUNTIME_PUB_CACHE stays an empty writable scratch dir
+            # for any stray tool write. Canonicalize so the relative rootUris
+            # computed against the runtime workspace traverse real paths
+            # (macOS /var vs /private/var).
+            PUB_CACHE_FOR_CONFIG="$(cd "$PUB_CACHE_ABS" && pwd -P)"
+            ;;
+        copy)
+            copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
+            chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+            ;;
+        *)
+            # auto/hardlink: link the multi-GB cache instead of copying it;
+            # fall back to the byte copy when linking isn't possible
+            # (cross-device TEST_TMPDIR, non-APFS macOS volume, busybox cp).
+            if ! link_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"; then
+                rm -rf "$RUNTIME_PUB_CACHE"
+                mkdir -p "$RUNTIME_PUB_CACHE"
+                copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
+                chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+            fi
+            ;;
+    esac
 fi
-chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
 
 if [ -n "$DART_TOOL_ABS" ] && [ -d "$DART_TOOL_ABS" ]; then
     mkdir -p "$RUNTIME_WORKSPACE/.dart_tool"
@@ -2110,8 +2158,8 @@ if [ -z "$PYTHON_BIN" ]; then
     exit 1
 fi
 export PUB_DEPS_PATH="$RUNTIME_WORKSPACE/pub_deps.json"
-export PUB_CACHE_ABS="$RUNTIME_PUB_CACHE"
-export WORKSPACE_ABS="$RUNTIME_WORKSPACE"
+export PUB_CACHE_ABS="$PUB_CACHE_FOR_CONFIG"
+export WORKSPACE_ABS="$(cd "$RUNTIME_WORKSPACE" && pwd -P)"
 export PACKAGE_CONFIG_PATH="$RUNTIME_WORKSPACE/.dart_tool/package_config.json"
 mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
 rm -f "$PACKAGE_CONFIG_PATH"
@@ -2135,6 +2183,7 @@ fi
         dart_tool_path = library_info.dart_tool.path,
         flutter_bin = flutter_bin,
         log_name = log_name,
+        pub_cache_mode = pub_cache_mode,
         package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
 
@@ -2249,7 +2298,12 @@ def _flutter_test_impl(ctx):
 
     test_runner = ctx.actions.declare_file(ctx.label.name + "_test_runner.sh")
 
-    test_runner_content = _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin) + """
+    test_runner_content = _render_runtime_bootstrap(
+        prepared_workspace,
+        library_info,
+        flutter_bin,
+        pub_cache_mode = ctx.attr.pub_cache_materialization,
+    ) + """
 CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test" "--no-pub")
 JOBS="{jobs}"
 if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
@@ -2361,6 +2415,17 @@ flutter_test = rule(
                   "several flutter_test targets run concurrently on one worker " +
                   "so their internal parallelism doesn't oversubscribe it.",
         ),
+        "pub_cache_materialization": attr.string(
+            default = "auto",
+            values = ["auto", "copy", "hardlink", "reference"],
+            doc = "How the test materializes the (multi-GB) pub cache at run " +
+                  "time. `auto` (default) hardlinks the dereferenced files and " +
+                  "falls back to a byte copy when linking isn't possible; " +
+                  "`copy` forces the historical byte copy; `hardlink` forces " +
+                  "linking (with the same copy fallback); `reference` skips " +
+                  "materialization entirely and points the regenerated package " +
+                  "config into the Bazel-provided cache read-only.",
+        ),
         "srcs": attr.label_list(
             allow_files = True,
             doc = "Test source files to copy into the runtime workspace.",
@@ -2406,6 +2471,17 @@ copy_tree() {
     fi
 }
 
+# Hardlink the dereferenced files instead of copying bytes (the scratch dir is
+# inside the action root, so same-filesystem is the norm); fall back to a
+# byte copy. Linked pub-cache files stay read-only — the test only reads them.
+link_tree() {
+    if [ "$(uname)" = "Darwin" ]; then
+        cp -c -RL "$1/." "$2/" 2>/dev/null
+    else
+        cp -RLl "$1/." "$2/" 2>/dev/null
+    fi
+}
+
 # Scratch must live INSIDE the action root ($PWD, the execroot/sandbox): the
 # regenerated package_config points at the SDK by a path relative to the
 # runtime workspace, and only paths within the action root resolve (an
@@ -2422,9 +2498,13 @@ copy_tree "$WORKSPACE_SRC" "$RUNTIME_WORKSPACE"
 chmod -R u+w "$RUNTIME_WORKSPACE" 2>/dev/null || true
 
 if [ -d "$PUB_CACHE_SRC" ] && [ -n "$(ls -A "$PUB_CACHE_SRC" 2>/dev/null)" ]; then
-    copy_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"
+    if ! link_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"; then
+        rm -rf "$RUNTIME_PUB_CACHE"
+        mkdir -p "$RUNTIME_PUB_CACHE"
+        copy_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"
+        chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+    fi
 fi
-chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
 
 if [ -d "$DART_TOOL_SRC" ]; then
     mkdir -p "$RUNTIME_WORKSPACE/.dart_tool"
@@ -2715,6 +2795,7 @@ def _flutter_analyze_test_impl(ctx):
         library_info,
         flutter_bin,
         log_name = "flutter_analyze.log",
+        pub_cache_mode = ctx.attr.pub_cache_materialization,
     ) + """
 CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "analyze" "--no-pub" {flags})
 
@@ -2775,6 +2856,12 @@ flutter_analyze_test = rule(
         "extra_args": attr.string_list(
             default = [],
             doc = "Additional arguments forwarded to flutter analyze.",
+        ),
+        "pub_cache_materialization": attr.string(
+            default = "auto",
+            values = ["auto", "copy", "hardlink", "reference"],
+            doc = "How the analyze run materializes the pub cache; see " +
+                  "flutter_test.pub_cache_materialization.",
         ),
     } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,

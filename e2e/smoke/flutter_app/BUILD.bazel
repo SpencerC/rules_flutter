@@ -57,6 +57,23 @@ flutter_test(
     shard_count = 3,
 )
 
+# Pin the pub-cache materialization modes at runtime: the default target above
+# covers `auto` (hardlink with copy fallback); these cover the forced byte
+# copy and the zero-copy read-only reference.
+flutter_test(
+    name = "lib_test_copy_cache",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+    pub_cache_materialization = "copy",
+)
+
+flutter_test(
+    name = "lib_test_reference_cache",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+    pub_cache_materialization = "reference",
+)
+
 flutter_analyze_test(
     name = "lib_analyze",
     srcs = glob(["test/**"]),
