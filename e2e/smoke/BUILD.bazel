@@ -93,6 +93,7 @@ test_suite(
         "//flutter_app:lib_analyze",
         "//flutter_app:lib_format",
         "//flutter_app:lib_test",
+        "//flutter_app:lib_test_sharded",
         "//flutter_app:web_build_args_test",
         "//proto_service:proto_generation_test",
     ],

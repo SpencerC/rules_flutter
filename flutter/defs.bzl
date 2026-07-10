@@ -2255,13 +2255,61 @@ JOBS="{jobs}"
 if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
     CMD+=("-j" "$JOBS")
 fi
+
+# Bazel test sharding protocol: acknowledge support up front (with
+# --incompatible_check_sharding_support an untouched status file fails the
+# test whenever shard_count is set).
+if [ -n "${{TEST_SHARD_STATUS_FILE:-}}" ]; then
+    touch "$TEST_SHARD_STATUS_FILE" 2>/dev/null || true
+fi
+
+TEST_ARGS=()
 IFS=$'\n'
 for pattern in $'{test_patterns}'; do
     if [ -n "$pattern" ]; then
-        CMD+=("$pattern")
+        TEST_ARGS+=("$pattern")
     fi
 done
 unset IFS
+
+TOTAL_SHARDS="${{TEST_TOTAL_SHARDS:-1}}"
+if [ "$TOTAL_SHARDS" -gt 1 ]; then
+    # Partition the test files here rather than passing --total-shards to
+    # flutter: package:test shards by suite in directory-listing order (which
+    # is not sorted, so the partition would depend on readdir order) and exits
+    # 79 when a shard receives no suites. Expanding the patterns ourselves and
+    # round-robin-assigning the LC_ALL=C-sorted file list keeps every shard's
+    # slice deterministic, disjoint, and complete, and lets an empty shard
+    # pass without paying flutter startup.
+    SHARD_INDEX="${{TEST_SHARD_INDEX:-0}}"
+    EXPANDED="$(
+        for pattern in ${{TEST_ARGS[@]+"${{TEST_ARGS[@]}}"}}; do
+            trimmed="${{pattern%/}}"
+            if [ -d "$RUNTIME_WORKSPACE/$trimmed" ]; then
+                (cd "$RUNTIME_WORKSPACE" && find "$trimmed" -type f -name '*_test.dart')
+            else
+                echo "$pattern"
+            fi
+        done | LC_ALL=C sort -u
+    )"
+    TEST_ARGS=()
+    idx=0
+    while IFS= read -r test_file; do
+        [ -n "$test_file" ] || continue
+        if [ $(( idx % TOTAL_SHARDS )) -eq "$SHARD_INDEX" ]; then
+            TEST_ARGS+=("$test_file")
+        fi
+        idx=$(( idx + 1 ))
+    done <<< "$EXPANDED"
+    if [ "${{#TEST_ARGS[@]}}" -eq 0 ]; then
+        echo "No test files fall in shard $SHARD_INDEX of $TOTAL_SHARDS; passing." | tee -a "$TEST_LOG"
+        exit 0
+    fi
+fi
+
+for test_arg in ${{TEST_ARGS[@]+"${{TEST_ARGS[@]}}"}}; do
+    CMD+=("$test_arg")
+done
 
 pushd "$RUNTIME_WORKSPACE" >/dev/null
 

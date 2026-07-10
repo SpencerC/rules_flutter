@@ -46,6 +46,17 @@ flutter_test(
     visibility = ["//visibility:public"],
 )
 
+# Sharded variant: with only two test files under test/, three shards leave
+# shard 2 empty — exercising the runner's deterministic partition, the
+# TEST_SHARD_STATUS_FILE acknowledgement, and the empty-shard pass path.
+flutter_test(
+    name = "lib_test_sharded",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+    jobs = 1,
+    shard_count = 3,
+)
+
 flutter_analyze_test(
     name = "lib_analyze",
     srcs = glob(["test/**"]),
