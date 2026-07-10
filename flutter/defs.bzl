@@ -3038,6 +3038,43 @@ dart_format_test = rule(
     doc = "Fails when any of the given Dart sources are not dart-format clean.",
 )
 
+# --incompatible_enable_proto_toolchain_resolution support: when the flag is
+# set, protoc comes from the resolved proto toolchain (typically a prebuilt
+# binary registered by e.g. toolchains_protoc) instead of the source-built
+# @protobuf//:protoc, keeping protobuf's C++ compilation graph out of
+# analysis entirely. The flag surfaces as a load-time constant, so rule
+# shape (attrs/toolchains) is fixed per invocation — the same migration
+# pattern as rules_go and protobuf's private toolchain_helpers.bzl (which
+# instructs other repositories to copy it).
+_PROTO_TOOLCHAIN_TYPE = Label("@protobuf//bazel/private:proto_toolchain_type")
+
+_INCOMPATIBLE_PROTO_TOOLCHAIN_RESOLUTION = getattr(
+    proto_common,
+    "INCOMPATIBLE_ENABLE_PROTO_TOOLCHAIN_RESOLUTION",
+    False,
+)
+
+def _proto_toolchain_requests():
+    """Extra toolchain requests for rules/aspects that run protoc."""
+    if _INCOMPATIBLE_PROTO_TOOLCHAIN_RESOLUTION:
+        return [config_common.toolchain_type(_PROTO_TOOLCHAIN_TYPE, mandatory = False)]
+    return []
+
+def _if_legacy_proto_toolchain(legacy_attrs):
+    """The given attrs only when protoc is NOT resolved via toolchains."""
+    if _INCOMPATIBLE_PROTO_TOOLCHAIN_RESOLUTION:
+        return {}
+    return legacy_attrs
+
+def _find_protoc(ctx):
+    """Returns protoc for action use, from the resolved proto toolchain or the legacy attr."""
+    if _INCOMPATIBLE_PROTO_TOOLCHAIN_RESOLUTION:
+        toolchain = ctx.toolchains[_PROTO_TOOLCHAIN_TYPE]
+        if not toolchain:
+            fail("No toolchains registered for '%s'." % _PROTO_TOOLCHAIN_TYPE)
+        return toolchain.proto.proto_compiler
+    return ctx.executable._protoc
+
 def _dart_proto_aspect_impl(target, ctx):
     """Generate Dart sources for one proto_library node in the deps closure."""
 
@@ -3124,12 +3161,15 @@ exec "$DART_BIN" --packages="$PACKAGE_CONFIG_PATH" "$ENTRYPOINT" "$@"
         plugin = None,
         runtime = None,
         provided_proto_sources = [],
-        proto_compiler = ctx.executable._protoc,
+        proto_compiler = _find_protoc(ctx),
         protoc_opts = [],
         progress_message = "Generating Dart protos %{label}",
         mnemonic = "DartProtoCompile",
         allowlist_different_package = None,
-        toolchain_type = None,
+        # Under toolchain resolution, proto_common.compile passes this to
+        # actions.run(toolchain = ...) so the action executes on the platform
+        # the resolved protoc binary was built for.
+        toolchain_type = _PROTO_TOOLCHAIN_TYPE if _INCOMPATIBLE_PROTO_TOOLCHAIN_RESOLUTION else None,
     )
 
     args = ctx.actions.args()
@@ -3156,18 +3196,19 @@ exec "$DART_BIN" --packages="$PACKAGE_CONFIG_PATH" "$ENTRYPOINT" "$@"
 _dart_proto_aspect = aspect(
     implementation = _dart_proto_aspect_impl,
     attr_aspects = ["deps"],
-    attrs = {
+    attrs = _if_legacy_proto_toolchain({
         "_protoc": attr.label(
             default = Label("@protobuf//:protoc"),
             cfg = "exec",
             executable = True,
         ),
+    }) | {
         "_dart_plugin_files": attr.label(
             default = Label("@pub_protoc_plugin//:protoc_plugin_files"),
         ),
     },
     required_providers = [ProtoInfo],
-    toolchains = ["//flutter:toolchain_type"],
+    toolchains = ["//flutter:toolchain_type"] + _proto_toolchain_requests(),
     doc = "Generates Dart protobuf sources for every proto_library in the deps closure.",
 )
 

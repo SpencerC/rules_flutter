@@ -7,6 +7,19 @@ bazel_dep(name = "protobuf", version = "32.1")
 bazel_dep(name = "rules_shell", version = "0.4.1")
 bazel_dep(name = "rules_multirun", version = "0.13.0")
 
+# Prebuilt protoc, used when building with
+# --incompatible_enable_proto_toolchain_resolution: dart_proto_library must
+# then generate through the resolved proto toolchain instead of the
+# source-built @protobuf//:protoc (root-module registrations win over
+# protobuf's own source toolchain).
+bazel_dep(name = "toolchains_protoc", version = "0.6.1")
+
+protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
+protoc.toolchain(version = "v32.1")
+use_repo(protoc, "toolchains_protoc_hub")
+
+register_toolchains("@toolchains_protoc_hub//:all")
+
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
 
 # Host Android SDK for the manual mobile example targets in //flutter_app.

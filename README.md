@@ -379,6 +379,33 @@ flutter_library(
 )
 ```
 
+### Prebuilt protoc
+
+By default the aspect invokes the source-built `@protobuf//:protoc`, which
+drags protobuf's C++ compilation graph (tens of thousands of configured
+targets) into analysis. `dart_proto_library` supports
+[proto toolchain resolution](https://protobuf.dev/support/migration/#toolchain-resolution):
+with `--incompatible_enable_proto_toolchain_resolution` set, protoc comes from
+the resolved proto toolchain instead, so registering a prebuilt one — e.g.
+[toolchains_protoc](https://github.com/aspect-build/toolchains_protoc) —
+removes that graph entirely:
+
+```starlark
+# MODULE.bazel
+bazel_dep(name = "toolchains_protoc", version = "0.6.1")
+
+protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
+protoc.toolchain(version = "v33.0")
+use_repo(protoc, "toolchains_protoc_hub")
+
+register_toolchains("@toolchains_protoc_hub//:all")
+```
+
+```
+# .bazelrc
+common --incompatible_enable_proto_toolchain_resolution
+```
+
 ## Building apps: flutter_app
 
 `flutter_app` is a macro that emits one target per configured platform —

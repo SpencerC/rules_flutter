@@ -36,6 +36,13 @@ it reaches 1.0.
   near-instant read-only linking; `reference` skips materialization entirely;
   `copy` pins the historical behavior. The goldens action stages its cache
   with the same clone-or-copy strategy.
+- `dart_proto_library` supports proto toolchain resolution
+  (`--incompatible_enable_proto_toolchain_resolution`): protoc comes from the
+  resolved proto toolchain (e.g. a prebuilt binary registered by
+  `toolchains_protoc`) instead of the source-built `@protobuf//:protoc`,
+  keeping protobuf's C++ compilation graph out of analysis. Without the flag,
+  behavior is unchanged. The e2e workspace registers `toolchains_protoc` so
+  flag-on runs exercise the prebuilt path.
 
 ### Changed
 
