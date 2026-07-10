@@ -255,7 +255,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "O3HA4frWDGGFVQLI4CBVAujR6ey/8AUDKejS906iPeM=",
+        "bzlTransitiveDigest": "fIy1wzKEojuxzlVG3OVJ+AXcqsEwLMwSZ4jpowoIu44=",
         "usagesDigest": "28OnpcYnSmzay/V6WMwTNE0upCyG0V5VmLKmR7xi70Y=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -265,6 +265,7 @@
             "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "macos",
+              "integrity": "",
               "flutter_version": "3.24.0",
               "precache": [
                 "web"
@@ -275,6 +276,7 @@
             "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "linux",
+              "integrity": "",
               "flutter_version": "3.24.0",
               "precache": [
                 "web"
@@ -285,6 +287,7 @@
             "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
             "attributes": {
               "platform": "windows",
+              "integrity": "",
               "flutter_version": "3.24.0",
               "precache": [
                 "web"
@@ -309,7 +312,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%pub": {
       "general": {
-        "bzlTransitiveDigest": "O3HA4frWDGGFVQLI4CBVAujR6ey/8AUDKejS906iPeM=",
+        "bzlTransitiveDigest": "fIy1wzKEojuxzlVG3OVJ+AXcqsEwLMwSZ4jpowoIu44=",
         "usagesDigest": "8P2FYQtelPagBVJ+QGRG7oizLHy3cwyOJtcLU4HfBrk=",
         "recordedFileInputs": {
           "@@//codegen_app/pub_deps.json": "1f360270a671c0b00fd37abb03989d09840cd98b55272670abebcdf6bf11a087",

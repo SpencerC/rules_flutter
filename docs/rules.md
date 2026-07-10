@@ -51,7 +51,8 @@ Generates Dart sources from proto_library targets using the Dart protoc plugin.
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "flutter_analyze_test")
 
-flutter_analyze_test(<a href="#flutter_analyze_test-name">name</a>, <a href="#flutter_analyze_test-srcs">srcs</a>, <a href="#flutter_analyze_test-embed">embed</a>, <a href="#flutter_analyze_test-extra_args">extra_args</a>, <a href="#flutter_analyze_test-fatal_infos">fatal_infos</a>, <a href="#flutter_analyze_test-fatal_warnings">fatal_warnings</a>)
+flutter_analyze_test(<a href="#flutter_analyze_test-name">name</a>, <a href="#flutter_analyze_test-srcs">srcs</a>, <a href="#flutter_analyze_test-cpu">cpu</a>, <a href="#flutter_analyze_test-embed">embed</a>, <a href="#flutter_analyze_test-extra_args">extra_args</a>, <a href="#flutter_analyze_test-fatal_infos">fatal_infos</a>, <a href="#flutter_analyze_test-fatal_warnings">fatal_warnings</a>,
+                     <a href="#flutter_analyze_test-pub_cache_materialization">pub_cache_materialization</a>)
 </pre>
 
 Runs `flutter analyze` hermetically against a prepared flutter_library workspace.
@@ -63,10 +64,53 @@ Runs `flutter analyze` hermetically against a prepared flutter_library workspace
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="flutter_analyze_test-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="flutter_analyze_test-srcs"></a>srcs |  Additional files overlaid before analyzing (e.g. analysis_options.yaml, test sources).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_analyze_test-cpu"></a>cpu |  Local CPUs to reserve for this test (execution requirement `cpu:N`); see flutter_test.cpu. 0 (default) declares nothing.   | Integer | optional |  `0`  |
 | <a id="flutter_analyze_test-embed"></a>embed |  flutter_library targets whose prepared workspace is analyzed.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="flutter_analyze_test-extra_args"></a>extra_args |  Additional arguments forwarded to flutter analyze.   | List of strings | optional |  `[]`  |
 | <a id="flutter_analyze_test-fatal_infos"></a>fatal_infos |  Treat info-level issues as fatal (--fatal-infos).   | Boolean | optional |  `False`  |
 | <a id="flutter_analyze_test-fatal_warnings"></a>fatal_warnings |  Treat warnings as fatal; set False to pass --no-fatal-warnings.   | Boolean | optional |  `True`  |
+| <a id="flutter_analyze_test-pub_cache_materialization"></a>pub_cache_materialization |  How the analyze run materializes the pub cache; see flutter_test.pub_cache_materialization.   | String | optional |  `"auto"`  |
+
+
+<a id="flutter_goldens"></a>
+
+## flutter_goldens
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "flutter_goldens")
+
+flutter_goldens(<a href="#flutter_goldens-name">name</a>, <a href="#flutter_goldens-srcs">srcs</a>, <a href="#flutter_goldens-embed">embed</a>, <a href="#flutter_goldens-jobs">jobs</a>, <a href="#flutter_goldens-test_files">test_files</a>, <a href="#flutter_goldens-test_tags">test_tags</a>)
+</pre>
+
+Regenerates Flutter golden images hermetically and writes them back
+to the source tree.
+
+The build action runs `flutter test --tags <test_tags> --update-goldens
+--run-skipped` inside a prepared workspace (dart_proto_library trees and other
+generated_srcs already mounted, so no source-tree pre-population/refresh is
+required) and captures the produced `**/goldens/**` PNG trees as a declared
+output — so an unchanged embed/test/lib graph is a cache hit and re-renders
+nothing. `bazel run` copies the (cached) goldens back into the source tree for
+review and commit.
+
+By default it runs only golden-tagged tests (test_tags = ["golden"]), so a
+golden-test failure fails the action but it is NOT a general widget-test gate —
+keep a separate flutter_test target for that. The scoping is deliberate:
+`--run-skipped` un-skips tests, and limiting it to the golden tag ensures tests
+that are `skip: true` for unrelated reasons are never run. Set test_tags = []
+to run every test under test_files (only safe when golden is the sole skip).
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="flutter_goldens-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="flutter_goldens-srcs"></a>srcs |  Test sources (including golden tests) to overlay into the workspace.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_goldens-embed"></a>embed |  flutter_library target to embed (exactly one).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_goldens-jobs"></a>jobs |  Concurrency for `flutter test -j` (0 = flutter's default).   | Integer | optional |  `0`  |
+| <a id="flutter_goldens-test_files"></a>test_files |  Test files or directories whose golden tests to (re)generate. Also bounds the write-back's clear step: only goldens under these roots are cleared before restoring the regenerated set.   | List of strings | optional |  `["test/"]`  |
+| <a id="flutter_goldens-test_tags"></a>test_tags |  Tags passed to `flutter test --tags`, scoping --run-skipped. Defaults to ["golden"] so only golden-tagged tests are un-skipped and rendered — a test that is `skip: true` for an unrelated reason (parked/flaky/platform) is never run. Set to [] to run every test under test_files (unscoped --run-skipped; only safe when golden is the sole skip).   | List of strings | optional |  `["golden"]`  |
 
 
 <a id="flutter_test"></a>
@@ -76,7 +120,7 @@ Runs `flutter analyze` hermetically against a prepared flutter_library workspace
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "flutter_test")
 
-flutter_test(<a href="#flutter_test-name">name</a>, <a href="#flutter_test-srcs">srcs</a>, <a href="#flutter_test-embed">embed</a>, <a href="#flutter_test-test_files">test_files</a>)
+flutter_test(<a href="#flutter_test-name">name</a>, <a href="#flutter_test-srcs">srcs</a>, <a href="#flutter_test-cpu">cpu</a>, <a href="#flutter_test-embed">embed</a>, <a href="#flutter_test-jobs">jobs</a>, <a href="#flutter_test-pub_cache_materialization">pub_cache_materialization</a>, <a href="#flutter_test-test_files">test_files</a>)
 </pre>
 
 Runs Flutter tests using a prepared flutter_library workspace.
@@ -88,7 +132,10 @@ Runs Flutter tests using a prepared flutter_library workspace.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="flutter_test-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="flutter_test-srcs"></a>srcs |  Test source files to copy into the runtime workspace.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_test-cpu"></a>cpu |  Local CPUs to reserve for this test (execution requirement `cpu:N`). 0 (default) declares nothing. Only useful together with `jobs`/sharding on large workers — reserving cores where none are spare just serializes tests that would otherwise overlap.   | Integer | optional |  `0`  |
 | <a id="flutter_test-embed"></a>embed |  flutter_library targets to embed for testing.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_test-jobs"></a>jobs |  Concurrency passed to `flutter test -j`. 0 (default) keeps flutter's own default (the number of cores). Cap this when several flutter_test targets run concurrently on one worker so their internal parallelism doesn't oversubscribe it.   | Integer | optional |  `0`  |
+| <a id="flutter_test-pub_cache_materialization"></a>pub_cache_materialization |  How the test materializes the (multi-GB) pub cache at run time. `auto` (default) hardlinks the dereferenced files and falls back to a byte copy when linking isn't possible; `copy` forces the historical byte copy; `hardlink` forces linking (with the same copy fallback); `reference` skips materialization entirely and points the regenerated package config into the Bazel-provided cache read-only.   | String | optional |  `"auto"`  |
 | <a id="flutter_test-test_files"></a>test_files |  Test files or directories to run   | List of strings | optional |  `["test/"]`  |
 
 

@@ -26,10 +26,24 @@ it reaches 1.0.
 - Performance: opt-in `build_runner` incremental cache, split pub-cache
   assembly, per-package staging fast path, and local-execution-with-remote-cache
   defaults for heavy actions (`--//flutter:allow_remote_execution` to opt in).
+- `flutter_test`: Bazel `shard_count` support (deterministic runner-side
+  partition; empty shards pass), a `jobs` attr (`flutter test -j`) to cap
+  internal concurrency, and an optional `cpu` attr declaring a local CPU
+  reservation. `flutter_analyze_test` gains `cpu` too.
+- `pub_cache_materialization` attr on `flutter_test`/`flutter_analyze_test`:
+  the test-time pub cache is now hardlinked (or APFS-cloned) instead of byte-
+  copied by default (`auto`), with `copy`, `hardlink`, and zero-copy
+  `reference` modes; the goldens action stages its cache the same way.
 
 ### Changed
 
 - Semver-aware toolchain version selection (previously lexicographic).
+- Large tree outputs (assembled pub cache, prepared/overlay workspaces, the
+  workspace seed) now default to `no-remote-cache`: uploading them on every
+  source change drained CI invocations for minutes while rebuilding them
+  locally takes seconds, and they stay eligible for the local disk cache.
+  Opt back in with `--//flutter:remote_cache_trees`. Staged pub packages,
+  golden renders, and `flutter build` outputs remain remotely cached.
 
 ### Removed
 
