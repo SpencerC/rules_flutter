@@ -1969,10 +1969,11 @@ def _render_runtime_bootstrap(prepared_workspace, library_info, flutter_bin, log
     unchanged.
 
     pub_cache_mode selects how the (multi-GB) pub cache is materialized:
-    "copy" (byte copy, the historical behavior), "hardlink" (link the
-    dereferenced files; fails over to copy), "reference" (no materialization —
-    the package config points into the Bazel-provided cache read-only), or
-    "auto" (hardlink with copy fallback).
+    "copy" (byte copy, the historical behavior), "hardlink" (opt-in: link the
+    dereferenced files — read-only, inode-shared with the Bazel tree; fails
+    over to copy), "reference" (no materialization — the package config points
+    into the Bazel-provided cache read-only), or "auto" (APFS clone on macOS,
+    byte copy elsewhere; always writable).
     """
     return """#!/bin/bash
 set -euo pipefail
@@ -1991,9 +1992,9 @@ copy_tree() {{
 # Materialize a tree without moving bytes: hardlink the dereferenced symlink
 # targets (GNU cp -RLl) or APFS-clone them (macOS cp -c). Fails (nonzero) when
 # src/dest sit on different filesystems or cp lacks the flag — callers fall
-# back to copy_tree. Linked files stay read-only, sharing inodes with the
-# Bazel-owned source tree; that is safe for the pub cache, which the test
-# only reads.
+# back to copy_tree. Hardlinked files share inodes with the Bazel-owned
+# source tree and stay read-only; APFS clones are fresh copy-on-write inodes
+# and may be made writable safely.
 link_tree() {{
     local src="$1"
     local dest="$2"
@@ -2002,6 +2003,18 @@ link_tree() {{
     else
         cp -RLl "$src/." "$dest/" 2>/dev/null
     fi
+}}
+
+# Reset a possibly partially-linked destination for a copy retry. A failed
+# link_tree leaves the source's read-only (0555) directory skeleton behind,
+# which a plain rm -rf cannot unlink into as non-root — restore directory
+# write bits first (directories are never hardlinked, so this cannot touch
+# inodes shared with the source tree).
+reset_dest() {{
+    local dest="$1"
+    find "$dest" -type d ! -perm -200 -exec chmod u+w {{}} + 2>/dev/null || true
+    rm -rf "$dest"
+    mkdir -p "$dest"
 }}
 
 resolve_path() {{
@@ -2115,17 +2128,34 @@ if [ -n "$PUB_CACHE_ABS" ] && [ -d "$PUB_CACHE_ABS" ] && [ -n "$(ls -A "$PUB_CAC
             # (macOS /var vs /private/var).
             PUB_CACHE_FOR_CONFIG="$(cd "$PUB_CACHE_ABS" && pwd -P)"
             ;;
+        hardlink)
+            # Explicit opt-in: hardlink the dereferenced files (near-instant
+            # for a multi-GB cache). The links share inodes with the
+            # Bazel-owned tree and stay READ-ONLY — safe as long as nothing
+            # writes into the cache at test time. Falls back to the byte
+            # copy when linking isn't possible (cross-device TEST_TMPDIR,
+            # busybox cp).
+            if ! link_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"; then
+                reset_dest "$RUNTIME_PUB_CACHE"
+                copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
+                chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+            fi
+            ;;
         copy)
             copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
             chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
             ;;
         *)
-            # auto/hardlink: link the multi-GB cache instead of copying it;
-            # fall back to the byte copy when linking isn't possible
-            # (cross-device TEST_TMPDIR, non-APFS macOS volume, busybox cp).
-            if ! link_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"; then
-                rm -rf "$RUNTIME_PUB_CACHE"
-                mkdir -p "$RUNTIME_PUB_CACHE"
+            # auto: on macOS, APFS-clone the cache (fresh copy-on-write
+            # inodes, so restoring the historical writable contract via
+            # chmod is safe); everywhere else keep the byte copy — Linux
+            # hardlinks would share inodes with bazel-out AND drop the
+            # writable contract, which `hardlink` exists to opt into
+            # explicitly.
+            if [ "$(uname)" = "Darwin" ] && link_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"; then
+                chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+            else
+                reset_dest "$RUNTIME_PUB_CACHE"
                 copy_tree "$PUB_CACHE_ABS" "$RUNTIME_PUB_CACHE"
                 chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
             fi
@@ -2367,6 +2397,13 @@ if [ "$TOTAL_SHARDS" -gt 1 ]; then
         fi
         idx=$(( idx + 1 ))
     done <<< "$EXPANDED"
+    if [ "$idx" -eq 0 ]; then
+        # Nothing matched ANY shard: an unsharded run would fail ("No tests
+        # ran"), so all shards silently passing would green-light a target
+        # that runs nothing.
+        echo "✗ test_files patterns matched no *_test.dart files; failing." | tee -a "$TEST_LOG"
+        exit 1
+    fi
     if [ "${{#TEST_ARGS[@]}}" -eq 0 ]; then
         echo "No test files fall in shard $SHARD_INDEX of $TOTAL_SHARDS; passing." | tee -a "$TEST_LOG"
         exit 0
@@ -2439,12 +2476,16 @@ flutter_test = rule(
             default = "auto",
             values = ["auto", "copy", "hardlink", "reference"],
             doc = "How the test materializes the (multi-GB) pub cache at run " +
-                  "time. `auto` (default) hardlinks the dereferenced files and " +
-                  "falls back to a byte copy when linking isn't possible; " +
-                  "`copy` forces the historical byte copy; `hardlink` forces " +
-                  "linking (with the same copy fallback); `reference` skips " +
-                  "materialization entirely and points the regenerated package " +
-                  "config into the Bazel-provided cache read-only.",
+                  "time. `auto` (default) APFS-clones it on macOS (fresh " +
+                  "copy-on-write inodes, kept writable) and byte-copies " +
+                  "elsewhere — behaviorally identical to `copy` everywhere. " +
+                  "`copy` forces the historical byte copy. `hardlink` opts " +
+                  "into linking the dereferenced files (near-instant, but the " +
+                  "links share inodes with the Bazel-owned tree and stay " +
+                  "read-only; falls back to a copy when linking isn't " +
+                  "possible). `reference` skips materialization entirely and " +
+                  "points the regenerated package config into the " +
+                  "Bazel-provided cache read-only.",
         ),
         "srcs": attr.label_list(
             allow_files = True,
@@ -2491,15 +2532,21 @@ copy_tree() {
     fi
 }
 
-# Hardlink the dereferenced files instead of copying bytes (the scratch dir is
-# inside the action root, so same-filesystem is the norm); fall back to a
-# byte copy. Linked pub-cache files stay read-only — the test only reads them.
-link_tree() {
-    if [ "$(uname)" = "Darwin" ]; then
-        cp -c -RL "$1/." "$2/" 2>/dev/null
-    else
-        cp -RLl "$1/." "$2/" 2>/dev/null
-    fi
+# APFS-clone the dereferenced files instead of copying bytes on macOS (fresh
+# copy-on-write inodes, safe to chmod); anywhere else the byte copy keeps the
+# historical writable staging contract.
+clone_tree() {
+    [ "$(uname)" = "Darwin" ] || return 1
+    cp -c -RL "$1/." "$2/" 2>/dev/null
+}
+
+# Reset a possibly partially-cloned destination for a copy retry: a failed
+# clone can leave the source's read-only (0555) directory skeleton, which a
+# plain rm -rf cannot unlink into as non-root.
+reset_dest() {
+    find "$1" -type d ! -perm -200 -exec chmod u+w {} + 2>/dev/null || true
+    rm -rf "$1"
+    mkdir -p "$1"
 }
 
 # Scratch must live INSIDE the action root ($PWD, the execroot/sandbox): the
@@ -2507,7 +2554,13 @@ link_tree() {
 # runtime workspace, and only paths within the action root resolve (an
 # out-of-tree /tmp dir cannot reach the sandboxed SDK inputs).
 WORK="$(mktemp -d "$PWD/.rf_goldens.XXXXXX")"
-cleanup() { rm -rf "$WORK"; }
+# Tolerant cleanup: restore directory write bits before removing (staged
+# trees can carry 0555 dirs) and never let the EXIT trap's status replace a
+# successful run's exit code.
+cleanup() {
+    find "$WORK" -type d ! -perm -200 -exec chmod u+w {} + 2>/dev/null || true
+    rm -rf "$WORK" 2>/dev/null || true
+}
 trap cleanup EXIT
 
 RUNTIME_WORKSPACE="$WORK/ws"
@@ -2518,9 +2571,10 @@ copy_tree "$WORKSPACE_SRC" "$RUNTIME_WORKSPACE"
 chmod -R u+w "$RUNTIME_WORKSPACE" 2>/dev/null || true
 
 if [ -d "$PUB_CACHE_SRC" ] && [ -n "$(ls -A "$PUB_CACHE_SRC" 2>/dev/null)" ]; then
-    if ! link_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"; then
-        rm -rf "$RUNTIME_PUB_CACHE"
-        mkdir -p "$RUNTIME_PUB_CACHE"
+    if clone_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"; then
+        chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
+    else
+        reset_dest "$RUNTIME_PUB_CACHE"
         copy_tree "$PUB_CACHE_SRC" "$RUNTIME_PUB_CACHE"
         chmod -R u+w "$RUNTIME_PUB_CACHE" 2>/dev/null || true
     fi

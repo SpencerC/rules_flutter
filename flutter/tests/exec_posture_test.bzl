@@ -48,14 +48,10 @@ def _tree_output_posture_test_impl(ctx):
         tree_output_execution_requirements(False, True),
     )
 
-    # //flutter:allow_remote_execution lifts the execution restriction only.
-    asserts.equals(
-        env,
-        {"no-remote-cache": "1"},
-        tree_output_execution_requirements(True, False),
-    )
-
-    # Both flags: no restrictions at all.
+    # Under //flutter:allow_remote_execution nothing is restricted:
+    # remotely executed actions must store outputs in the remote CAS, so
+    # remote_cache_trees is ignored there.
+    asserts.equals(env, None, tree_output_execution_requirements(True, False))
     asserts.equals(env, None, tree_output_execution_requirements(True, True))
     return unittest.end(env)
 

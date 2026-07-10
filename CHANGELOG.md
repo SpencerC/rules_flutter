@@ -31,9 +31,11 @@ it reaches 1.0.
   internal concurrency, and an optional `cpu` attr declaring a local CPU
   reservation. `flutter_analyze_test` gains `cpu` too.
 - `pub_cache_materialization` attr on `flutter_test`/`flutter_analyze_test`:
-  the test-time pub cache is now hardlinked (or APFS-cloned) instead of byte-
-  copied by default (`auto`), with `copy`, `hardlink`, and zero-copy
-  `reference` modes; the goldens action stages its cache the same way.
+  `auto` (default) APFS-clones the test-time pub cache on macOS and
+  byte-copies elsewhere (both writable, like before); `hardlink` opts into
+  near-instant read-only linking; `reference` skips materialization entirely;
+  `copy` pins the historical behavior. The goldens action stages its cache
+  with the same clone-or-copy strategy.
 
 ### Changed
 

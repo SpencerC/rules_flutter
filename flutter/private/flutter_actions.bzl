@@ -1441,17 +1441,19 @@ def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees):
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec.
         remote_cache_trees: Whether //flutter:remote_cache_trees is set; when
-            False the action carries no-remote-cache.
+            False (and execution is local) the action carries no-remote-cache.
+            Ignored under allow_remote_exec: remotely executed actions must
+            store their outputs in the remote CAS, so suppressing the cache
+            there would only force constant re-execution.
 
     Returns:
-        An execution_requirements dict, or None when both flags lift their
-        restrictions.
+        An execution_requirements dict, or None when nothing is restricted.
     """
     reqs = {}
     if not allow_remote_exec:
         reqs["no-remote-exec"] = "1"
-    if not remote_cache_trees:
-        reqs["no-remote-cache"] = "1"
+        if not remote_cache_trees:
+            reqs["no-remote-cache"] = "1"
     return reqs or None
 
 def heavy_action_resource_set(os, inputs_size):

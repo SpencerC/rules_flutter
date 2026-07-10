@@ -247,17 +247,38 @@ worker has been observed taking 50+ minutes remotely).
 
 The rules therefore default these actions — and the `flutter_test` /
 `flutter_analyze_test` / `dart_format_test` runners — to
-**local execution with remote caching**: they carry `no-remote-exec`, so
-their results still populate and hit your remote cache, but the work happens
-on the machine running Bazel. Android and iOS builds are additionally
-`no-sandbox`/`requires-network` (see the per-target table above) and are not
-affected by this section.
+**local execution** (`no-remote-exec`), with the *remote-cache* treatment
+split by output shape:
+
+- Small, expensive, high-value results stay **remotely cached**: staged pub
+  packages, `flutter build` outputs, `dart_proto_library` compiles, golden
+  renders (`flutter_goldens`), and test results.
+- The **large tree artifacts** — the assembled pub cache (multi-GB), the
+  prepared workspace + `.dart_tool` (invalidated by every source edit), the
+  workspace seed, and the per-target overlay workspaces — additionally carry
+  `no-remote-cache`. Uploading them via `--remote_upload_local_results` on
+  every change has been observed draining a CI invocation for minutes after
+  the last test finished, while rebuilding them locally takes seconds; they
+  remain eligible for the local disk cache (`--disk_cache`). Opt the trees
+  back into the remote cache — e.g. when a warm main-branch runner populates
+  a cache that ephemeral PR runners read — with:
+
+  ```
+  build --//flutter:remote_cache_trees
+  ```
+
+Android and iOS builds are additionally `no-sandbox`/`requires-network` (see
+the per-target table above) and are not affected by this section.
 
 On a well-resourced RBE fleet you can opt back into remote execution:
 
 ```
 build --//flutter:allow_remote_execution
 ```
+
+Under `allow_remote_execution` the tree posture is moot — remotely executed
+actions must store their outputs in the remote CAS, so `remote_cache_trees`
+is ignored there.
 
 Executor sizing is intentionally left to you: pass your vendor's sizing
 through target-level `exec_properties` or platform properties (for example
