@@ -399,11 +399,23 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
     lines.append(")")
 
     if pub_cache_files_target:
+        # The vendored closure is consumed only as opaque action inputs
+        # (tools resolve files by path under external/<repo>/.pub_cache), so
+        # expose it as ONE source-directory artifact instead of a per-file
+        # glob: a pub.package closure runs to tens of thousands of files, and
+        # a file-level glob turns each into a configured target — measured at
+        # ~40k targets (~150s of cold analysis) for protoc_plugin alone. Repo
+        # contents only change on refetch, so directory-level invalidation is
+        # exact here.
         lines.extend([
             "",
             "filegroup(",
             '    name = "{}",'.format(pub_cache_files_target),
-            '    srcs = glob([".pub_cache/**"]),',
+            "    srcs = glob(",
+            '        [".pub_cache"],',
+            "        exclude_directories = 0,",
+            "        allow_empty = True,",
+            "    ),",
             ")",
         ])
 
@@ -435,9 +447,43 @@ def generate_package_build(repository_ctx, package_name, package_dir = ".", sdk_
         _DEF_VISIBILITY,
         ")",
         "",
+        # Whole-repo payload for consumers that execute out of this repo by
+        # path (e.g. the dart_proto_library aspect running protoc_plugin).
+        # Top-level directories are exposed as source-directory artifacts
+        # rather than a recursive file glob — see _pub_cache_files above.
+        # Exceptions that stay per-file globs:
+        #   - "lib" (and a hypothetical self-named directory): a directory
+        #     glob entry whose name matches a target in this package resolves
+        #     to the TARGET, not the directory — pulling the whole
+        #     dart_library dep graph into the filegroup (and, in SDK repos, a
+        #     dependency cycle through the toolchain).
+        #   - "bin": holds executable entrypoints (e.g. protoc_plugin.dart)
+        #     that should stay content-digest-tracked, and the package rule's
+        #     own srcs may carry bin/*.dart as FILE artifacts — an action
+        #     receiving the same path as both a file and a directory input
+        #     fails sandbox staging. For the same reason, do not combine this
+        #     filegroup with ":{package}" or ":_package_payload" in a single
+        #     action's inputs.
         "filegroup(",
         '    name = "{}_files",'.format(package_name),
-        '    srcs = glob(["**/*"], exclude = ["BUILD", "BUILD.bazel"]),',
+        "    srcs = glob(",
+        '        ["*"],',
+        "        exclude = [",
+        '            "BUILD",',
+        '            "BUILD.bazel",',
+        '            "bin",',
+        '            "lib",',
+        '            "{}",'.format(package_name),
+        "        ],",
+        "        exclude_directories = 0,",
+        "    ) + glob(",
+        "        [",
+        '            "bin/**",',
+        '            "lib/**",',
+        '            "{}/**",'.format(package_name),
+        "        ],",
+        "        allow_empty = True,",
+        "    ),",
         _DEF_VISIBILITY,
         ")",
     ])

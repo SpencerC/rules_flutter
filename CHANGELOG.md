@@ -47,6 +47,19 @@ it reaches 1.0.
 ### Changed
 
 - Semver-aware toolchain version selection (previously lexicographic).
+- Generated pub-repository BUILD files expose the vendored `.pub_cache` (and
+  other non-`lib`/`bin` top-level directories in `<package>_files`) as
+  source-directory artifacts instead of recursive per-file globs. A
+  pub.package closure runs to tens of thousands of files, and file-level
+  globs made each one a configured target — ~40k targets and ~150s of cold
+  analysis for `protoc_plugin` alone in the `dart_proto_library` aspect
+  graph; directory artifacts collapse that to seconds. Repo contents only
+  change on refetch, so invalidation is unaffected in normal operation
+  (hand-editing files under `external/` now requires `bazel fetch --force`
+  to be picked up; set
+  `startup --host_jvm_args=-DBAZEL_TRACK_SOURCE_DIRECTORIES=1` to restore
+  content-level tracking). Existing `DartProtoCompile` results re-execute
+  once after upgrading (action inputs changed shape).
 - Large tree outputs (assembled pub cache, prepared/overlay workspaces, the
   workspace seed) now default to `no-remote-cache`: uploading them on every
   source change drained CI invocations for minutes while rebuilding them
