@@ -3,7 +3,7 @@ bcr_test_module:
   matrix:
     # The action layer is POSIX-only today; Windows returns with the
     # cross-platform action-runner workstream. Bazel 8+ only.
-    platform: ["macos", "ubuntu2004"]
+    platform: ["macos", "ubuntu2204"]
     bazel: ["8.x"]
   tasks:
     run_tests:

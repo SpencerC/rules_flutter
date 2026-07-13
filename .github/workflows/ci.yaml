@@ -33,6 +33,38 @@ jobs:
           {"folder": "e2e/smoke", "bzlmodEnabled": false}
         ]
       exclude_windows: true
+  # The standalone example consumes rules_flutter as a plain bazel_dep; in-repo
+  # CI overrides it with the working tree. After the first BCR release, a
+  # no-override leg is added as the "did the release actually publish" canary.
+  example:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the example against the working tree
+        working-directory: examples/hello_world
+        run: |
+          bazel test --override_module=rules_flutter=$GITHUB_WORKSPACE //...
+          bazel build --override_module=rules_flutter=$GITHUB_WORKSPACE //:app.web
+  # bazel_compatibility declares ">=8.0.0"; exercise the floor, not just the
+  # .bazelversion pin.
+  bazel-floor:
+    runs-on: ubuntu-24.04
+    env:
+      USE_BAZEL_VERSION: 8.0.0
+    steps:
+      - uses: actions/checkout@v4
+      # //docs staleness goldens are rendered by the pinned .bazelversion's
+      # stardoc; older stardoc renders tag-class attrs differently, so the
+      # docs gate is excluded from the floor leg.
+      - name: Root module tests at the minimum supported Bazel
+        run: bazel test //... -- -//docs/...
+      - name: Example at the minimum supported Bazel
+        working-directory: examples/hello_world
+        run: bazel test --override_module=rules_flutter=$GITHUB_WORKSPACE //...
   pre-commit:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +73,7 @@ jobs:
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
   # on "all matrix jobs were successful".
   conclusion:
-    needs: [test, pre-commit]
+    needs: [test, example, bazel-floor, pre-commit]
     runs-on: ubuntu-latest
     if: always()
     steps:
