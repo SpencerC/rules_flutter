@@ -23,11 +23,13 @@ jobs:
       folders: |
         [
           ".",
+          "gazelle",
           "e2e/smoke"
         ]
       exclude: |
         [
           {"folder": ".", "bzlmodEnabled": false},
+          {"folder": "gazelle", "bzlmodEnabled": false},
           {"folder": "e2e/smoke", "bzlmodEnabled": false}
         ]
       exclude_windows: true

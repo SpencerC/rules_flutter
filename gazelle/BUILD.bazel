@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "nogo")
+
+nogo(
+    name = "nogo",
+    vet = True,
+    visibility = ["//visibility:public"],
+)
+
+# Convenience for Go module maintenance, e.g. `bazel run //:go -- mod tidy`.
+alias(
+    name = "go",
+    actual = "@rules_go//go",
+)

@@ -16,8 +16,9 @@
 - `bazel test //e2e/smoke:smoke_test` — External smoke test.
 - `bazel run //tools:update_flutter_versions` — Refresh Flutter SDK versions/hashes.
 - `bazel run //:gazelle — Regenerate Bazel/Gazelle targets.
-- `bazel test //gazelle/...` — Run Gazelle plugin Go tests.
-- AGENTS: Run all builds and tests through Bazel; do **not** invoke host toolchains directly (e.g. avoid `go test`, use `bazel test //gazelle/...`).
+- `cd gazelle && bazel test //...` — Run Gazelle plugin Go tests (the plugin
+  is its own Bazel module, `rules_flutter_gazelle`).
+- AGENTS: Run all builds and tests through Bazel; do **not** invoke host toolchains directly (e.g. avoid `go test`, use `cd gazelle && bazel test //...`).
 - `pre-commit install` and `bazel run @buildifier_prebuilt//:buildifier` — Set up hooks and format BUILD/Starlark.
 
 ## Pre-Commit & Quality Gates

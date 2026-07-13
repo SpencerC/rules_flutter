@@ -1,0 +1,13 @@
+{
+  "homepage": "https://github.com/SpencerC/rules_flutter",
+  "maintainers": [
+    {
+      "name": "Spencer Connaughton",
+      "github": "SpencerC",
+      "github_user_id": 817672
+    }
+  ],
+  "repository": ["github:SpencerC/rules_flutter"],
+  "versions": [],
+  "yanked_versions": {}
+}

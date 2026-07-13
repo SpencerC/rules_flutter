@@ -45,8 +45,8 @@ git_override(
 
 The examples later in this README also assume `bazel_dep` entries for
 `protobuf`, `bazel_skylib`, and `rules_multirun` where those repositories
-appear (and the Gazelle section additionally needs `gazelle` and
-`bazel_skylib_gazelle_plugin`). See
+appear (and the Gazelle section additionally needs `gazelle`,
+`rules_flutter_gazelle`, and `bazel_skylib_gazelle_plugin`). See
 [`e2e/smoke/MODULE.bazel`](e2e/smoke/MODULE.bazel) for a complete working
 example.
 
@@ -736,8 +736,18 @@ Both helpers are opt-out via `create_format_target = False` /
 
 ## Gazelle automation
 
-`rules_flutter` ships Gazelle plugins to keep BUILD files in sync with your
-Flutter sources and proto schemas. Enable them by composing a custom binary:
+The Gazelle plugins ship as their own Bazel module,
+`rules_flutter_gazelle`, so that consumers who don't use Gazelle never
+resolve Go rules or a Go toolchain. Depend on it as a dev dependency —
+BUILD-file generation is repo tooling, not something your dependents need:
+
+```starlark
+# MODULE.bazel
+bazel_dep(name = "gazelle", version = "0.36.0", dev_dependency = True, repo_name = "bazel_gazelle")
+bazel_dep(name = "rules_flutter_gazelle", version = "0.0.0", dev_dependency = True)
+```
+
+Then compose a custom binary with the languages you need:
 
 ```starlark
 # BUILD.bazel
@@ -748,8 +758,8 @@ gazelle_binary(
     languages = [
         "@bazel_skylib_gazelle_plugin//bzl",
         "@bazel_gazelle//language/proto",
-        "@rules_flutter//gazelle/flutter",
-        "@rules_flutter//gazelle/dartproto",
+        "@rules_flutter_gazelle//flutter",
+        "@rules_flutter_gazelle//dartproto",
     ],
 )
 
@@ -794,6 +804,7 @@ execution) and how to resolve each.
 - **Core rule coverage:** `bazel test //flutter/tests:all_tests`
 - **External smoke tests:** `cd e2e/smoke && bazel test //:integration_tests`
 - **Regenerate BUILD files:** `bazel run //:gazelle` (and the smoke workspace equivalent)
+- **Gazelle plugin Go tests:** `cd gazelle && bazel test //...`
 - **Format BUILD/Starlark:** `bazel run @buildifier_prebuilt//:buildifier`
 - **Update Flutter SDK metadata:** `bazel run //tools:update_flutter_versions`
 - **Install hooks:** `pre-commit install`

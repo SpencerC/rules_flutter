@@ -1,26 +1,17 @@
 load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
-load("@rules_go//go:def.bzl", "nogo")
+
+# Test-fixture Flutter package; its BUILD file is hand-written.
+# gazelle:exclude flutter/tests/analysis
 
 gazelle_binary(
     name = "gazelle_bin",
     languages = [
         "@bazel_skylib_gazelle_plugin//bzl",
-        "//gazelle/flutter",
+        "@rules_flutter_gazelle//flutter",
     ],
 )
 
 gazelle(
     name = "gazelle",
     gazelle = "gazelle_bin",
-)
-
-nogo(
-    name = "ggx_nogo",
-    vet = True,
-    visibility = ["//visibility:public"],
-)
-
-alias(
-    name = "go",
-    actual = "@rules_go//go",
 )

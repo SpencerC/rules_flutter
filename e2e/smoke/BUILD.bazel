@@ -12,8 +12,8 @@ gazelle_binary(
     languages = [
         "@bazel_skylib_gazelle_plugin//bzl",
         "@bazel_gazelle//language/proto",
-        "@rules_flutter//gazelle/flutter",
-        "@rules_flutter//gazelle/dartproto",
+        "@rules_flutter_gazelle//flutter",
+        "@rules_flutter_gazelle//dartproto",
     ],
 )
 
@@ -99,9 +99,4 @@ test_suite(
         "//flutter_app:web_build_args_test",
         "//proto_service:proto_generation_test",
     ],
-)
-
-alias(
-    name = "go",
-    actual = "@rules_go//go",
 )

@@ -1,7 +1,6 @@
 bazel_dep(name = "rules_flutter", version = "0.0.0", dev_dependency = True)
 bazel_dep(name = "bazel_skylib", version = "1.7.1", dev_dependency = True)
 
-bazel_dep(name = "rules_go", version = "0.57.0")
 bazel_dep(name = "gazelle", version = "0.36.0", repo_name = "bazel_gazelle")
 bazel_dep(name = "protobuf", version = "32.1")
 bazel_dep(name = "rules_shell", version = "0.4.1")
@@ -36,6 +35,24 @@ local_path_override(
     module_name = "rules_flutter",
     path = "../..",
 )
+
+# The Gazelle plugin ships as its own module so plain rules_flutter consumers
+# never resolve Go rules or a Go toolchain; this workspace tests both modules.
+bazel_dep(name = "rules_flutter_gazelle", version = "0.0.0", dev_dependency = True)
+local_path_override(
+    module_name = "rules_flutter_gazelle",
+    path = "../../gazelle",
+)
+
+# Without a root-module pin, Go SDK selection falls through to rules_android's
+# go_sdk.download(version = "1.22.4"), whose darwin internal linker emits no
+# LC_UUID load command — current macOS dyld refuses to start such binaries
+# (the gazelle_binary dies with SIGABRT). Pin a modern SDK at the root, which
+# always takes precedence.
+bazel_dep(name = "rules_go", version = "0.57.0", dev_dependency = True)
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
+go_sdk.download(version = "1.25.0")
 
 flutter = use_extension("@rules_flutter//flutter:extensions.bzl", "flutter")
 flutter.toolchain(
@@ -96,7 +113,3 @@ use_repo(
     "pub_vm_service",
     "pub_yaml",
 )
-
-# Go dependencies for gazelle plugin
-go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
-go_deps.from_file(go_mod = "//:go.mod")

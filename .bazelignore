@@ -1,2 +1,4 @@
 e2e/
+gazelle/
 .bazelbsp
+.claude/

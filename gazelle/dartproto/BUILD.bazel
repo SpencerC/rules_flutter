@@ -10,7 +10,7 @@ go_library(
     importpath = "github.com/spencerconnaughton/rules_flutter/gazelle/dartproto",
     visibility = ["//visibility:public"],
     deps = [
-        "//gazelle/flutter",
+        "//flutter",
         "@bazel_gazelle//config",
         "@bazel_gazelle//label",
         "@bazel_gazelle//language",
