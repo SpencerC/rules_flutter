@@ -46,6 +46,16 @@ it reaches 1.0.
 
 ### Changed
 
+- **Breaking:** the Gazelle plugin moved into its own Bazel module,
+  `rules_flutter_gazelle`, published from the same repository and release
+  tag. Labels changed from `@rules_flutter//gazelle/{flutter,dartproto}` to
+  `@rules_flutter_gazelle//{flutter,dartproto}`, and consumers add
+  `bazel_dep(name = "rules_flutter_gazelle", ..., dev_dependency = True)`.
+  Plain `rules_flutter` consumers no longer resolve `rules_go`, Gazelle, a
+  Go SDK, or Go module dependencies at all — previously these were non-dev
+  dependencies inherited by every consumer.
+- Release archives stamp the real version into both modules' `MODULE.bazel`
+  (main carries `0.0.0` between releases).
 - Semver-aware toolchain version selection (previously lexicographic).
 - Generated pub-repository BUILD files expose the vendored `.pub_cache` (and
   other non-`lib`/`bin` top-level directories in `<package>_files`) as
