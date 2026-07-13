@@ -8,11 +8,5 @@
     "group:recommended",
     "replacements:all",
     "workarounds:all"
-  ],
-  "packageRules": [
-    {
-      "matchFiles": ["MODULE.bazel"],
-      "enabled": false
-    }
   ]
 }

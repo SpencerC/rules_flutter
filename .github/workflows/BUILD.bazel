@@ -2,7 +2,15 @@ load("@buildifier_prebuilt//:rules.bzl", "buildifier")
 
 buildifier(
     name = "buildifier.check",
-    exclude_patterns = ["./.git/*"],
+    exclude_patterns = [
+        "./.git/*",
+        # Untracked, machine-generated or out-of-scope trees: absent on CI
+        # checkouts, but present locally.
+        "./.bazelbsp/*",
+        "./e2e/smoke/.bazelbsp/*",
+        "./.claude/*",
+        "./oss-outreach/*",
+    ],
     lint_mode = "warn",
     mode = "diff",
 )
