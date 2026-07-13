@@ -77,6 +77,12 @@ it reaches 1.0.
   Opt back in with `--//flutter:remote_cache_trees`. Staged pub packages,
   golden renders, and `flutter build` outputs remain remotely cached.
 
+### Fixed
+
+- Targets in the repository root package no longer flatten their `srcs` to
+  basenames when staging app/test workspaces (`test/` and `web/` trees kept
+  their layout only for targets living in a subpackage).
+
 ### Removed
 
 - Deprecated, ignored `dart_proto_library` `options`/`grpc` attributes.

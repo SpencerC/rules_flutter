@@ -914,6 +914,11 @@ def _compute_relative_to_package(ctx, file):
         prefix = package + "/"
         if short_path.startswith(prefix):
             return short_path[len(prefix):]
+    elif not short_path.startswith("../"):
+        # Root package: a main-repo short_path is already package-relative.
+        # Without this, root-package targets flatten srcs to basenames and
+        # lose their directory layout (test/, web/, ...).
+        return short_path
 
     return file.basename
 

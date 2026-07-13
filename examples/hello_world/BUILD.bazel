@@ -1,0 +1,28 @@
+load("@rules_flutter//flutter:defs.bzl", "flutter_app", "flutter_library", "flutter_test")
+
+flutter_library(
+    name = "lib",
+    srcs = glob(["lib/**"]),
+    pubspec = "pubspec.yaml",
+    deps = [
+        "@flutter_sdk//flutter/packages/flutter",
+        "@flutter_sdk//flutter/packages/flutter_test",
+    ],
+)
+
+flutter_test(
+    name = "widget_test",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+)
+
+filegroup(
+    name = "web_files",
+    srcs = glob(["web/**"]),
+)
+
+flutter_app(
+    name = "app",
+    embed = [":lib"],
+    web = [":web_files"],
+)

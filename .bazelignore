@@ -1,4 +1,5 @@
 e2e/
+examples/
 gazelle/
 .bazelbsp
 .claude/
