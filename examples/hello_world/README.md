@@ -19,7 +19,8 @@ toolchains.
 
 1. Add the package to [`pubspec.yaml`](pubspec.yaml).
 2. `bazel run //:lib.update` — re-resolves and rewrites `pub_deps.json`.
-3. `bazel mod tidy` — updates the `use_repo` list in `MODULE.bazel`.
+3. In `MODULE.bazel`, assign the pub extension and list the new repository:
+   `pub = use_extension(...)` + `use_repo(pub, "pub_<package>")`.
 4. Reference `@pub_<package>//:<package>` in the `deps` of `:lib`.
 
 ## Layout

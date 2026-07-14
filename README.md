@@ -158,7 +158,11 @@ the maintenance loop when dependencies change is:
 # 1. Edit pubspec.yaml.
 # 2. Refresh the pinned dependency report (also creates it the first time):
 bazel run //my_app:lib.update
-# 3. Let the pub extension rescan pub_deps.json files and update use_repo:
+# 3. Expose any NEW direct dependencies to your module: add them to the
+#    pub extension's use_repo list in MODULE.bazel, e.g.
+#    use_repo(pub, "pub_freezed", ...). (`bazel mod tidy` keeps the list
+#    formatted and prunes empty stanzas, but the pub extension does not yet
+#    report metadata that would let it add entries automatically.)
 bazel mod tidy
 # 4. Commit pubspec.yaml, pub_deps.json, and MODULE.bazel together.
 ```

@@ -16,9 +16,9 @@ use_repo(
 register_toolchains("@flutter_toolchains//:all")
 
 # One repository per hosted pub package, discovered from the checked-in
-# pub_deps.json. After editing pubspec.yaml run:
-#   bazel run //:lib.update && bazel mod tidy
-# and reference direct deps as @pub_<package>//:<package> (bazel mod tidy
-# maintains the use_repo list; none are needed while the app only uses SDK
-# packages).
+# pub_deps.json. After editing pubspec.yaml, run `bazel run //:lib.update`,
+# then expose direct deps here (`pub = use_extension(...)` +
+# `use_repo(pub, "pub_<package>")`) and reference them as
+# @pub_<package>//:<package>. No use_repo entries are needed while the app
+# only uses SDK packages.
 use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
