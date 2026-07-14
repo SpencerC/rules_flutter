@@ -7,6 +7,8 @@ it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-14
+
 ### Added
 
 - Hermetic Flutter toolchains via the `flutter` module extension (no host
@@ -87,10 +89,5 @@ it reaches 1.0.
 
 - Deprecated, ignored `dart_proto_library` `options`/`grpc` attributes.
 
-<!--
-On release, cut a versioned section here, e.g.:
-
-## [0.1.0] - 2026-XX-XX
--->
-
-[Unreleased]: https://github.com/SpencerC/rules_flutter/commits/main
+[Unreleased]: https://github.com/SpencerC/rules_flutter/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/SpencerC/rules_flutter/commits/v0.2.0
