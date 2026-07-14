@@ -20,7 +20,12 @@ test_suite(
     ],
 )
 
-# All tests in the main workspace (integration tests live under //e2e/smoke)
+# All tests in the main workspace (integration tests live under //e2e/smoke).
+# The docs staleness gate (//docs:update_tests) is intentionally NOT listed:
+# its goldens only match the pinned .bazelversion's stardoc rendering, and a
+# suite entry would pull the manual-tagged tests into wildcard runs on CI's
+# Bazel-floor legs. Run it explicitly alongside this suite:
+#   bazel test //flutter/tests:all_tests //docs:update_tests
 test_suite(
     name = "all_tests",
     tests = [
@@ -28,7 +33,6 @@ test_suite(
         ":toolchain_tests",
         ":version_select_test",
         ":versions_test",
-        "//docs:update_tests",
         "//flutter/tests/analysis:analysis_tests",
     ],
 )

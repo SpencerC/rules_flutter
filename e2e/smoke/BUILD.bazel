@@ -98,5 +98,6 @@ test_suite(
         "//flutter_app:lib_test_sharded",
         "//flutter_app:web_build_args_test",
         "//proto_service:proto_generation_test",
+        "//shell_example:test_access",
     ],
 )

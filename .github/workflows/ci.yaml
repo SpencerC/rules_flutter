@@ -49,22 +49,27 @@ jobs:
         run: |
           bazel test --override_module=rules_flutter=$GITHUB_WORKSPACE //...
           bazel build --override_module=rules_flutter=$GITHUB_WORKSPACE //:app.web
-  # bazel_compatibility declares ">=8.0.0"; exercise the floor, not just the
-  # .bazelversion pin.
+  # bazel_compatibility declares ">=8.0.0". The reusable workflow already
+  # tests the root/gazelle/e2e folders at 8.0.0; this job covers the example
+  # (which isn't a workflow folder) at the floor.
   bazel-floor:
     runs-on: ubuntu-24.04
     env:
       USE_BAZEL_VERSION: 8.0.0
     steps:
       - uses: actions/checkout@v4
-      # //docs staleness goldens are rendered by the pinned .bazelversion's
-      # stardoc; older stardoc renders tag-class attrs differently, so the
-      # docs gate is excluded from the floor leg.
-      - name: Root module tests at the minimum supported Bazel
-        run: bazel test //... -- -//docs/...
       - name: Example at the minimum supported Bazel
         working-directory: examples/hello_world
         run: bazel test --override_module=rules_flutter=$GITHUB_WORKSPACE //...
+  # The docs staleness gate runs only under the pinned .bazelversion: its
+  # goldens match that version's stardoc rendering, so the tests are
+  # manual-tagged and invoked explicitly here.
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docs staleness gate at the pinned Bazel
+        run: bazel test //docs:update_tests
   pre-commit:
     runs-on: ubuntu-latest
     steps:
@@ -73,7 +78,7 @@ jobs:
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
   # on "all matrix jobs were successful".
   conclusion:
-    needs: [test, example, bazel-floor, pre-commit]
+    needs: [test, example, bazel-floor, docs, pre-commit]
     runs-on: ubuntu-latest
     if: always()
     steps:

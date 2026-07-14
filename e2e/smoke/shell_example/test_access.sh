@@ -20,16 +20,24 @@ set -e
 
 echo "Looking for dart and flutter binaries..."
 
-# The @flutter_sdk repository provides platform-agnostic symlinks at stable paths.
-# These symlinks point to the actual platform-specific binaries, allowing scripts
-# to use a simple rlocation call without platform-specific logic.
+# Direct SDK invocations follow the same contract as the rules' actions
+# (docs/hermeticity.md): the launcher must not take the sealed cache's
+# lockfile, refresh versions, or write analytics into a read-only HOME.
+export FLUTTER_ALREADY_LOCKED=true
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export HOME="${TEST_TMPDIR:-$(mktemp -d)}"
 
-DART_BIN=$(rlocation "rules_flutter++flutter+flutter_sdk/bin/dart")
-FLUTTER_BIN=$(rlocation "rules_flutter++flutter+flutter_sdk/bin/flutter")
+# The @flutter_sdk repository provides platform-agnostic symlinks at stable
+# paths. The runfiles paths are passed as arguments via $(rlocationpath ...)
+# expansion, so the script never hardcodes a canonical repository name (which
+# differs depending on which module instantiated the flutter extension).
+
+DART_BIN=$(rlocation "$1")
+FLUTTER_BIN=$(rlocation "$2")
 
 if [[ -z "$DART_BIN" || ! -f "$DART_BIN" ]]; then
     echo "ERROR: Failed to locate dart binary"
-    echo "Expected path: rules_flutter++flutter+flutter_sdk/bin/dart"
+    echo "Expected runfiles path: $1"
     exit 1
 fi
 
@@ -42,6 +50,6 @@ if [[ -z "$FLUTTER_BIN" ]]; then
 fi
 
 echo "Found flutter at: $FLUTTER_BIN"
-"$FLUTTER_BIN" --version
+"$FLUTTER_BIN" --no-version-check --version
 
 echo "Success! Both dart and flutter binaries are accessible."

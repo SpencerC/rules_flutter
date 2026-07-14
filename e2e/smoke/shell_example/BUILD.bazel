@@ -3,9 +3,14 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 sh_test(
     name = "test_access",
     srcs = ["test_access.sh"],
+    args = [
+        "$(rlocationpath @flutter_sdk//:dart_bin)",
+        "$(rlocationpath @flutter_sdk//:flutter_bin)",
+    ],
     data = [
         "@flutter_sdk//:dart_bin",
         "@flutter_sdk//:flutter_bin",
     ],
+    visibility = ["//visibility:public"],
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )

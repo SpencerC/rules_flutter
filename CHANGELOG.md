@@ -84,6 +84,16 @@ it reaches 1.0.
 - Targets in the repository root package no longer flatten their `srcs` to
   basenames when staging app/test workspaces (`test/` and `web/` trees kept
   their layout only for targets living in a subpackage).
+- Linux hosts no longer fail against the sealed SDK cache with older Flutter
+  versions (e.g. 3.24): the fetch-time ios-usb artifact materialization now
+  covers both artifact-name generations (`usbmuxd` as well as `libusbmuxd`),
+  so the tool's up-to-date probe passes instead of rewriting
+  `usbmuxd.stamp` into the read-only cache on every invocation.
+- The `shell_example` smoke test resolves the SDK binaries through
+  `$(rlocationpath ...)` and the runfiles library instead of a hardcoded
+  canonical repository name, follows the documented launcher contract
+  (`FLUTTER_ALREADY_LOCKED`, scratch `HOME`), and is wired into the e2e
+  suite.
 
 ### Removed
 

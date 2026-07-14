@@ -173,6 +173,11 @@ def _warm_first_run_stamps(repository_ctx):
     # up-to-date check passes forever after, and the sealed cache stays
     # untouched. (On macOS the real artifacts exist; nothing to do.)
     if not _host_matches_platform(repository_ctx, "macos"):
+        # Union of the artifact names across Flutter generations: older
+        # releases (e.g. 3.24) name the usbmuxd artifact without the lib
+        # prefix and probe iproxy inside it; newer releases use libusbmuxd
+        # and add libimobiledeviceglue. Extra directories are harmless — the
+        # tool only probes the artifacts its own version declares.
         ios_usb_probe_files = {
             "ios-deploy": [],
             "libimobiledevice": ["idevicescreenshot", "idevicesyslog"],
@@ -180,6 +185,7 @@ def _warm_first_run_stamps(repository_ctx):
             "libplist": [],
             "libusbmuxd": ["iproxy"],
             "openssl": [],
+            "usbmuxd": ["iproxy"],
         }
         for artifact, executables in ios_usb_probe_files.items():
             artifact_dir = "flutter/bin/cache/artifacts/" + artifact

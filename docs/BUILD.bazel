@@ -19,10 +19,17 @@ stardoc_with_diff_test(
 # update_docs matched nothing here, silently writing no files and creating no
 # diff test, which let docs/rules.md go stale. This also emits :update_test,
 # which gates staleness in //flutter/tests:all_tests.
+#
+# Tagged manual: the goldens are rendered by the pinned .bazelversion's
+# stardoc, and older Bazel renders extension tag classes differently, so
+# wildcard runs on CI's Bazel-floor legs must skip these. They still run
+# where named explicitly: //docs:update_tests and //flutter/tests:all_tests,
+# under the pinned version.
 write_source_files(
     name = "update",
     files = {
         "extensions.md": ":extensions-docgen.md",
         "rules.md": ":rules-docgen.md",
     },
+    tags = ["manual"],
 )
