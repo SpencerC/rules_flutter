@@ -7,6 +7,24 @@ it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-14
+
+### Fixed
+
+- `dart_format_test` actually checks formatting now. The runner embedded a
+  newline-joined `$'...'` literal that bash never word-splits, so
+  `dart format` received one newline-joined pseudo-path, printed "No file or
+  directory found", formatted nothing, and exited 0 — the gate passed
+  vacuously on every multi-file target since its introduction. File lists
+  are now emitted as properly quoted shell array literals, and an empty
+  list fails loudly. The same latent pattern in the `flutter_test` runner
+  (harmless with zero or one `test_files` entries, broken with several) is
+  fixed the same way.
+- The `pub` extension's `pub_deps.json` scan honors the consuming
+  workspace's `.bazelignore`: stale copies inside ignored trees (nested
+  workspaces, tool worktrees, vendored checkouts) no longer join — or
+  version-conflict with — the real dependency scan.
+
 ## [0.2.0] - 2026-07-14
 
 ### Added
@@ -99,5 +117,6 @@ it reaches 1.0.
 
 - Deprecated, ignored `dart_proto_library` `options`/`grpc` attributes.
 
-[Unreleased]: https://github.com/SpencerC/rules_flutter/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/SpencerC/rules_flutter/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/SpencerC/rules_flutter/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/SpencerC/rules_flutter/commits/v0.2.0

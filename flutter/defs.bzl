@@ -2338,10 +2338,11 @@ def _flutter_test_impl(ctx):
         "PrepareFlutterTestWorkspace",
     )
 
-    def _escape_pattern(pattern):
-        return pattern.replace("\\", "\\\\").replace("'", "\\'")
-
-    test_patterns_literal = "\n".join([_escape_pattern(pattern) for pattern in ctx.attr.test_files])
+    # A properly quoted shell array literal (the historical newline-joined
+    # $'...' form was never word-split by bash, so multiple test_files
+    # entries collapsed into one bogus pattern; it went unnoticed because
+    # test_files almost always has zero or one entry).
+    test_patterns_literal = " ".join([_shell_quote(pattern) for pattern in ctx.attr.test_files])
 
     test_runner = ctx.actions.declare_file(ctx.label.name + "_test_runner.sh")
 
@@ -2364,14 +2365,7 @@ if [ -n "${{TEST_SHARD_STATUS_FILE:-}}" ]; then
     touch "$TEST_SHARD_STATUS_FILE" 2>/dev/null || true
 fi
 
-TEST_ARGS=()
-IFS=$'\n'
-for pattern in $'{test_patterns}'; do
-    if [ -n "$pattern" ]; then
-        TEST_ARGS+=("$pattern")
-    fi
-done
-unset IFS
+TEST_ARGS=({test_patterns})
 
 TOTAL_SHARDS="${{TEST_TOTAL_SHARDS:-1}}"
 if [ "$TOTAL_SHARDS" -gt 1 ]; then
@@ -2969,7 +2963,12 @@ def _dart_format_test_impl(ctx):
     else:
         flutter_rel = ctx.workspace_name + "/" + flutter_short
 
-    files_literal = "\n".join([f.short_path for f in ctx.files.srcs])
+    # Emit a properly quoted shell array literal. Historical note: this used
+    # to embed a newline-joined $'...' literal iterated with IFS=$'\n' — but
+    # bash never word-splits quoted literals, so dart format received ONE
+    # newline-joined pseudo-path, printed "No file or directory found",
+    # formatted nothing, and exited 0: the gate was vacuously green.
+    files_literal = " ".join([_shell_quote(f.short_path) for f in ctx.files.srcs])
 
     runner = ctx.actions.declare_file(ctx.label.name + "_format_runner.sh")
     runner_content = """#!/bin/bash
@@ -2996,14 +2995,11 @@ export CI=true
 
 cd "$RUNFILES_ROOT/${{TEST_WORKSPACE:-_main}}"
 
-FILES=()
-IFS=$'\n'
-for f in $'{files}'; do
-    if [ -n "$f" ]; then
-        FILES+=("$f")
-    fi
-done
-unset IFS
+FILES=({files})
+if [ "${{#FILES[@]}}" -eq 0 ]; then
+    echo "✗ dart_format_test received no files" >&2
+    exit 1
+fi
 
 exec "$DART_BIN" format --output=none --set-exit-if-changed "${{FILES[@]}}"
 """.format(

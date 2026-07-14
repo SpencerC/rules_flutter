@@ -119,11 +119,36 @@ results = []
 SKIP_PREFIXES = ("bazel-",)
 SKIP_NAMES = {".git", ".hg", ".svn", ".dart_tool"}
 
+# Honor the workspace's .bazelignore: ignored trees are not part of the
+# build (nested workspaces, tool worktrees, vendored checkouts), and stale
+# pub_deps.json copies inside them must not join -- or version-conflict
+# with -- the real dependency scan.
+ignored = []
+try:
+    with open(os.path.join(root, ".bazelignore")) as fh:
+        for line in fh:
+            entry = line.split("#", 1)[0].strip().strip("/")
+            if entry:
+                ignored.append(entry.replace(os.sep, "/"))
+except OSError:
+    pass
+
+def is_ignored(rel):
+    rel = rel.replace(os.sep, "/")
+    for entry in ignored:
+        if rel == entry or rel.startswith(entry + "/"):
+            return True
+    return False
+
 for dirpath, dirnames, filenames in os.walk(root):
+    rel_dir = os.path.relpath(dirpath, root)
+    if rel_dir == ".":
+        rel_dir = ""
     dirnames[:] = [
         name
         for name in dirnames
-        if not name.startswith(SKIP_PREFIXES) and name not in SKIP_NAMES
+        if not name.startswith(SKIP_PREFIXES) and name not in SKIP_NAMES and
+        not is_ignored(rel_dir + "/" + name if rel_dir else name)
     ]
     if "pub_deps.json" in filenames:
         results.append(os.path.join(dirpath, "pub_deps.json"))
