@@ -35,15 +35,41 @@ time (network is available to repository rules).""",
 }
 
 # Sentinel paths (relative to flutter/bin/cache) proving an artifact group is
-# already present in the extracted archive.
+# already present in the extracted archive. "{arch}" is substituted with the
+# repository platform's Flutter arch suffix (x64 or arm64).
 _PRECACHE_SENTINELS = {
     "android": "artifacts/engine/android-arm64-release",
     "ios": "artifacts/engine/ios-release",
-    "linux": "artifacts/engine/linux-x64-release",
+    "linux": "artifacts/engine/linux-{arch}-release",
     "macos": "artifacts/engine/darwin-x64-release",
     "web": "flutter_web_sdk",
     "windows": "artifacts/engine/windows-x64-release",
 }
+
+# Platforms that reuse another platform's release archive. Flutter publishes no
+# linux-arm64 SDK tarball, but the framework sources, flutter_tools snapshot and
+# templates in the x64 archive are architecture-independent — only bin/cache
+# holds native code, and that is replaced by _strip_foreign_arch_artifacts plus
+# the fetch-time precache below.
+_ARCHIVE_ALIASES = {
+    "linux_arm64": "linux",
+}
+
+# Flutter's own arch suffix for each platform (see bin/internal/update_dart_sdk.sh).
+_PLATFORM_ARCH = {
+    "linux_arm64": "arm64",
+}
+
+def _archive_platform(platform):
+    """Release-archive platform whose tarball this platform downloads."""
+    return _ARCHIVE_ALIASES.get(platform, platform)
+
+def _platform_arch(platform):
+    """Flutter arch suffix used in bin/cache artifact paths."""
+    return _PLATFORM_ARCH.get(platform, "x64")
+
+def _sentinel_path(group, platform):
+    return _PRECACHE_SENTINELS[group].replace("{arch}", _platform_arch(platform))
 
 # The tail of bin/internal/update_engine_version.sh that unconditionally
 # rewrites engine.stamp/engine.realm on every launcher invocation. Replaced at
@@ -91,18 +117,44 @@ def _patch_engine_version_script(repository_ctx):
         legacy_utf8 = False,
     )
 
-def _host_matches_platform(repository_ctx, platform):
+def _host_is_arm64(repository_ctx):
+    return repository_ctx.os.arch.lower() in ["aarch64", "arm64"]
+
+def _host_is_os(repository_ctx, os_family):
+    """True when the host OS is os_family, ignoring architecture.
+
+    Distinct from _host_matches_platform: artifact *groups* (see
+    _PRECACHE_GROUP_HOSTS) are named after operating systems, so routing them
+    through the arch-aware platform check would disable e.g. the `linux` group
+    on an arm64 Linux host.
+    """
     os_name = repository_ctx.os.name.lower()
-    if platform == "macos":
+    if os_family == "macos":
         return os_name.startswith("mac") or os_name.startswith("darwin")
-    return os_name.startswith(platform)
+    return os_name.startswith(os_family)
+
+def _host_matches_platform(repository_ctx, platform):
+    if platform == "macos":
+        return _host_is_os(repository_ctx, "macos")
+    if not _host_is_os(repository_ctx, _archive_platform(platform)):
+        return False
+
+    # Linux distinguishes architectures: an arm64 SDK repo can only be
+    # completed on an arm64 host (the fetch-time precache below runs the
+    # launcher, which downloads native artifacts for the machine it is on),
+    # and the x64 repo must not claim an arm64 host.
+    if _archive_platform(platform) == "linux":
+        return _host_is_arm64(repository_ctx) == (_platform_arch(platform) == "arm64")
+    return True
 
 def _ensure_precached_artifacts(repository_ctx):
     """Verify requested artifact groups exist; precache them if fetchable."""
     missing = [
         group
         for group in repository_ctx.attr.precache
-        if not repository_ctx.path("flutter/bin/cache/" + _PRECACHE_SENTINELS[group]).exists
+        if not repository_ctx.path(
+            "flutter/bin/cache/" + _sentinel_path(group, repository_ctx.attr.platform),
+        ).exists
     ]
     if not missing:
         return
@@ -172,7 +224,7 @@ def _warm_first_run_stamps(repository_ctx):
     # files before the warm-up: precache then records matching stamps, the
     # up-to-date check passes forever after, and the sealed cache stays
     # untouched. (On macOS the real artifacts exist; nothing to do.)
-    if not _host_matches_platform(repository_ctx, "macos"):
+    if not _host_is_os(repository_ctx, "macos"):
         # Union of the artifact names across Flutter generations: older
         # releases (e.g. 3.24) name the usbmuxd artifact without the lib
         # prefix and probe iproxy inside it; newer releases use libusbmuxd
@@ -197,7 +249,7 @@ def _warm_first_run_stamps(repository_ctx):
         group
         for group in repository_ctx.attr.precache
         if _PRECACHE_GROUP_HOSTS.get(group) == None or
-           _host_matches_platform(repository_ctx, _PRECACHE_GROUP_HOSTS[group])
+           _host_is_os(repository_ctx, _PRECACHE_GROUP_HOSTS[group])
     ]
     args = ["flutter/bin/flutter", "--no-version-check", "precache"]
     for group in _PRECACHE_GROUP_HOSTS:
@@ -257,7 +309,9 @@ def _resolve_integrity(repository_ctx):
     platform — this runs lazily per-platform, so cross-OS repos that are never
     fetched never trip on it.
     """
-    platform = repository_ctx.attr.platform
+    # Platforms that reuse another platform's archive verify against that
+    # archive's integrity — it is literally the same download.
+    platform = _archive_platform(repository_ctx.attr.platform)
     version = repository_ctx.attr.flutter_version
     override = repository_ctx.attr.integrity
     if override:
@@ -274,12 +328,75 @@ def _resolve_integrity(repository_ctx):
         platform = platform,
     ))
 
+def _strip_foreign_arch_artifacts(repository_ctx):
+    """Remove native artifacts belonging to the archive's architecture.
+
+    Only reached for platforms in _ARCHIVE_ALIASES, which download another
+    architecture's release archive. Deleting the native pieces (and the stamps
+    that mark them current) makes the fetch-time precache in
+    _warm_first_run_stamps refetch them for the host: the launcher's
+    update_dart_sdk.sh picks the Dart SDK by `uname -m`, and flutter_tools
+    resolves engine artifacts through its own host-platform detection. Both
+    then land on the arm64 downloads Flutter publishes per engine revision,
+    even though it ships no arm64 SDK tarball.
+    """
+    archive_arch = _platform_arch(_archive_platform(repository_ctx.attr.platform))
+
+    stale = [
+        # Native Dart SDK (dart, dartaotruntime, and the AOT snapshots).
+        "flutter/bin/cache/dart-sdk",
+        "flutter/bin/cache/engine-dart-sdk.stamp",
+        # Host engine artifacts: flutter_tester, gen_snapshot, impellerc.
+        "flutter/bin/cache/artifacts/engine/linux-{}".format(archive_arch),
+        "flutter/bin/cache/artifacts/engine/linux-{}-profile".format(archive_arch),
+        "flutter/bin/cache/artifacts/engine/linux-{}-release".format(archive_arch),
+        # font-subset ships per-arch alongside the engine artifacts.
+        "flutter/bin/cache/artifacts/engine/font-subset.stamp",
+        "flutter/bin/cache/font-subset.stamp",
+    ]
+    for path in stale:
+        target = repository_ctx.path(path)
+        if target.exists:
+            repository_ctx.delete(target)
+
+def _verify_rearchitected(repository_ctx):
+    """Fail at fetch time if the host-arch native artifacts are still missing.
+
+    _strip_foreign_arch_artifacts relies on the fetch-time precache to refetch
+    the Dart SDK and host engine artifacts for the host architecture. If a
+    future Flutter release stops doing that as a side effect of `precache`, the
+    SDK would still assemble and only break much later inside a build action,
+    with an exec-format error or a missing flutter_tester. Check here instead.
+    """
+    arch = _platform_arch(repository_ctx.attr.platform)
+    required = [
+        ("Dart SDK", "flutter/bin/cache/dart-sdk/bin/dart"),
+        ("engine artifacts", "flutter/bin/cache/artifacts/engine/linux-{}/flutter_tester".format(arch)),
+    ]
+    missing = [name for name, path in required if not repository_ctx.path(path).exists]
+    if missing:
+        fail(
+            ("rules_flutter: the {} SDK is missing {} after the fetch-time precache. " +
+             "The x64 release archive was re-architected but Flutter did not refetch the " +
+             "host-arch replacements. Check that Flutter {} still publishes " +
+             "dart-sdk-linux-{}.zip and linux-{}/artifacts.zip for its engine revision.").format(
+                repository_ctx.attr.platform,
+                " and ".join(missing),
+                repository_ctx.attr.flutter_version,
+                arch,
+                arch,
+            ),
+        )
+
 def _flutter_repo_impl(repository_ctx):
-    # Flutter SDK download URLs from Google Cloud Storage
+    # Flutter SDK download URLs from Google Cloud Storage. Platforms without
+    # their own release archive (see _ARCHIVE_ALIASES) download a sibling
+    # architecture's and are re-architected below.
     platform = repository_ctx.attr.platform
-    extension = "zip" if platform == "windows" else ("zip" if platform == "macos" else "tar.xz")
+    archive_platform = _archive_platform(platform)
+    extension = "zip" if archive_platform == "windows" else ("zip" if archive_platform == "macos" else "tar.xz")
     url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/{0}/flutter_{0}_{1}-stable.{2}".format(
-        platform,
+        archive_platform,
         repository_ctx.attr.flutter_version,
         extension,
     )
@@ -291,8 +408,18 @@ def _flutter_repo_impl(repository_ctx):
     )
 
     _patch_engine_version_script(repository_ctx)
+    if platform in _ARCHIVE_ALIASES:
+        if not _host_matches_platform(repository_ctx, platform):
+            fail(
+                ("rules_flutter: the {} SDK reuses the {} release archive and must refetch native " +
+                 "artifacts for the host, so it can only be fetched on a matching host. " +
+                 "Build this target on a {} machine.").format(platform, archive_platform, platform),
+            )
+        _strip_foreign_arch_artifacts(repository_ctx)
     _ensure_precached_artifacts(repository_ctx)
     _warm_first_run_stamps(repository_ctx)
+    if platform in _ARCHIVE_ALIASES:
+        _verify_rearchitected(repository_ctx)
 
     # Drop transient download staging shipped in (or created by) the archive.
     downloads = repository_ctx.path("flutter/bin/cache/downloads")

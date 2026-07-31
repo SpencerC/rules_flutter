@@ -31,6 +31,18 @@ PLATFORMS = {
             "@platforms//cpu:x86_64",
         ],
     ),
+    # Flutter publishes no linux-arm64 SDK archive, but it does publish
+    # linux-arm64 engine artifacts and a linux-arm64 Dart SDK. This platform
+    # reuses the x64 release archive (framework sources, flutter_tools, and
+    # templates are architecture-independent) and swaps the architecture-
+    # specific parts of bin/cache. See _rearchitect_linux_arm64 in
+    # repositories.bzl.
+    "linux_arm64": struct(
+        compatible_with = [
+            "@platforms//os:linux",
+            "@platforms//cpu:arm64",
+        ],
+    ),
     "windows": struct(
         compatible_with = [
             "@platforms//os:windows",

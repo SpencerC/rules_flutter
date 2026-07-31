@@ -6,19 +6,27 @@ on `@<name>_sdk` (e.g. `@flutter_sdk`) without caring about the underlying
 platform repository name.
 """
 
-def _host_platform(os_name):
-    """Normalize Bazel host OS strings to Flutter platform suffixes."""
-    lower_name = os_name.lower()
+def _is_arm64(repository_ctx):
+    """True when the host CPU is 64-bit ARM."""
+    return repository_ctx.os.arch.lower() in ["aarch64", "arm64"]
+
+def _host_platform(repository_ctx):
+    """Normalize the Bazel host OS/CPU to a Flutter platform suffix.
+
+    Only Linux distinguishes architectures: the macOS archive is a universal
+    binary and Flutter ships no Windows-on-ARM release.
+    """
+    lower_name = repository_ctx.os.name.lower()
     if lower_name.startswith("mac"):
         return "macos"
     if lower_name.startswith("linux"):
-        return "linux"
+        return "linux_arm64" if _is_arm64(repository_ctx) else "linux"
     if lower_name.startswith("windows"):
         return "windows"
-    fail("Unsupported host platform '{}'. Expected macOS, Linux, or Windows.".format(os_name))
+    fail("Unsupported host platform '{}'. Expected macOS, Linux, or Windows.".format(repository_ctx.os.name))
 
 def _sdk_repo_impl(repository_ctx):
-    platform = _host_platform(repository_ctx.os.name)
+    platform = _host_platform(repository_ctx)
     target_repo = "{}_{}".format(repository_ctx.attr.user_repository_name, platform)
 
     canonical_target_repo = _canonical_target_repo(repository_ctx.name, target_repo)
@@ -51,7 +59,7 @@ def _write_binary_symlinks(repository_ctx, canonical_target_repo):
     - rules_flutter++flutter+flutter_sdk/bin/dart
     - rules_flutter++flutter+flutter_sdk/bin/flutter
     """
-    platform = _host_platform(repository_ctx.os.name)
+    platform = _host_platform(repository_ctx)
 
     if platform == "windows":
         dart_name = "dart.exe"
