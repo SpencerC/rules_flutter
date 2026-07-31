@@ -515,6 +515,29 @@ flutter_toolchain(
     # by now, so the cache can be sealed.
     _seal_sdk_cache(repository_ctx)
 
+    # Let Bazel keep the *materialized* repository in the repo contents cache
+    # (--repo_contents_cache), so a fresh output base reuses the unpacked SDK
+    # instead of rebuilding it. This is the difference between a 145s and a 10s
+    # cold build here: unpacking the xz archive and running the fetch-time
+    # precache is ~70s of serial work that is otherwise repeated for every new
+    # output base -- every CI runner, and every reboot on a machine whose
+    # output base sits on tmpfs. The repository cache does not help, because it
+    # caches the downloaded archive rather than the tree derived from it.
+    #
+    # Cacheable only when the repository was built the "complete" way: the
+    # archive is pinned by version and checked against its integrity hash, and
+    # the patching, stripping and BUILD generation are deterministic. The host
+    # check is the subtle part. _ensure_precached_artifacts and
+    # _warm_first_run_stamps are skipped when the host does not match the
+    # repository platform, so the same attributes can yield either a precached
+    # or a not-precached tree depending on the machine -- and the host is not
+    # part of the cache key. Marking only the matching-host case reproducible
+    # means a cache entry always denotes the fully-populated variant, and any
+    # host that would hit it produces exactly that.
+    return repository_ctx.repo_metadata(
+        reproducible = _host_matches_platform(repository_ctx, platform),
+    )
+
 def _generate_flutter_packages(repository_ctx):
     """Generate BUILD files for packages bundled within the Flutter SDK."""
 
