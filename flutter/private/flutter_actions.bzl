@@ -255,6 +255,36 @@ def add_package(name, root_path):
     pkg["languageVersion"] = _package_language_version(root_path)
     packages.append(pkg)
 
+def _path_deps_from_pubspec(root_path):
+    # `flutter pub deps --json` reports source == "path" but omits where the
+    # package lives, so recover the location from the pubspec declaring it.
+    locations = dict()
+    pubspec = os.path.join(root_path, "pubspec.yaml")
+    if not os.path.exists(pubspec):
+        return locations
+
+    in_deps = False
+    current = None
+    with open(pubspec, "r", encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip())
+            stripped = line.strip()
+            if indent == 0:
+                in_deps = stripped.startswith("dependencies:") or stripped.startswith("dev_dependencies:")
+                current = None
+            elif not in_deps:
+                continue
+            elif indent <= 2:
+                current = stripped[:-1] if stripped.endswith(":") else None
+            elif current and stripped.startswith("path:"):
+                locations[current] = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+    return locations
+
+
+path_dep_locations = _path_deps_from_pubspec(workspace_root)
+
 for entry in data.get("packages", []):
     name = entry.get("name")
     source = entry.get("source")
@@ -281,6 +311,8 @@ for entry in data.get("packages", []):
             path_value = description
         elif isinstance(description, dict):
             path_value = description.get("path") or ""
+        if not path_value:
+            path_value = path_dep_locations.get(name) or ""
         if path_value:
             add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
 
@@ -1138,6 +1170,36 @@ def add_package(name, root_path):
     pkg["languageVersion"] = _package_language_version(root_path)
     packages.append(pkg)
 
+def _path_deps_from_pubspec(root_path):
+    # `flutter pub deps --json` reports source == "path" but omits where the
+    # package lives, so recover the location from the pubspec declaring it.
+    locations = dict()
+    pubspec = os.path.join(root_path, "pubspec.yaml")
+    if not os.path.exists(pubspec):
+        return locations
+
+    in_deps = False
+    current = None
+    with open(pubspec, "r", encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            indent = len(line) - len(line.lstrip())
+            stripped = line.strip()
+            if indent == 0:
+                in_deps = stripped.startswith("dependencies:") or stripped.startswith("dev_dependencies:")
+                current = None
+            elif not in_deps:
+                continue
+            elif indent <= 2:
+                current = stripped[:-1] if stripped.endswith(":") else None
+            elif current and stripped.startswith("path:"):
+                locations[current] = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+    return locations
+
+
+path_dep_locations = _path_deps_from_pubspec(workspace_root)
+
 for entry in data.get("packages", []):
     name = entry.get("name")
     source = entry.get("source")
@@ -1164,6 +1226,8 @@ for entry in data.get("packages", []):
             path_value = description
         elif isinstance(description, dict):
             path_value = description.get("path") or ""
+        if not path_value:
+            path_value = path_dep_locations.get(name) or ""
         if path_value:
             add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
 
@@ -1210,6 +1274,8 @@ if not os.path.exists(lock_path):
                 path_value = description
             elif isinstance(description, dict):
                 path_value = description.get("path") or ""
+            if not path_value:
+                path_value = path_dep_locations.get(name) or ""
             lines.append("    source: path")
             lines.append("    description:")
             lines.append('      path: "{{}}"'.format(path_value))
