@@ -339,6 +339,12 @@ def _strip_foreign_arch_artifacts(repository_ctx):
     resolves engine artifacts through its own host-platform detection. Both
     then land on the arm64 downloads Flutter publishes per engine revision,
     even though it ships no arm64 SDK tarball.
+
+    Note this has to invalidate the tool snapshot as well as the artifacts.
+    The refetch is a side effect of the launcher's bootstrap, and the
+    bootstrap is gated on the snapshot being stale -- so deleting artifacts
+    without deleting the snapshot produces an SDK that skips the bootstrap and
+    then cannot run at all.
     """
     archive_arch = _platform_arch(_archive_platform(repository_ctx.attr.platform))
 
@@ -346,6 +352,19 @@ def _strip_foreign_arch_artifacts(repository_ctx):
         # Native Dart SDK (dart, dartaotruntime, and the AOT snapshots).
         "flutter/bin/cache/dart-sdk",
         "flutter/bin/cache/engine-dart-sdk.stamp",
+        # The tool snapshot and its stamp, which are what gate the launcher's
+        # bootstrap. shared.sh only calls update_dart_sdk.sh from inside the
+        # "is flutter_tools.snapshot stale?" branch, so leaving a valid
+        # snapshot and matching stamp behind means the launcher decides it has
+        # nothing to do, skips the bootstrap, and execs the Dart SDK that was
+        # just deleted two lines above -- `flutter precache` then dies with
+        # "bin/cache/dart-sdk/bin/dart: No such file or directory" (code 127)
+        # before it can refetch anything. A git checkout of the SDK has no
+        # snapshot, which is why this only bites the re-architected archives.
+        # The snapshot is a portable Dart kernel file, so discarding it costs
+        # a rebuild at fetch time and nothing else.
+        "flutter/bin/cache/flutter_tools.snapshot",
+        "flutter/bin/cache/flutter_tools.stamp",
         # Host engine artifacts: flutter_tester, gen_snapshot, impellerc.
         "flutter/bin/cache/artifacts/engine/linux-{}".format(archive_arch),
         "flutter/bin/cache/artifacts/engine/linux-{}-profile".format(archive_arch),
