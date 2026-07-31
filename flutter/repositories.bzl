@@ -274,6 +274,101 @@ def _warm_first_run_stamps(repository_ctx):
             result.stderr,
         ))
 
+def _relative_uri(uri, root_uri, base_dir):
+    """Rewrite `uri` as a reference relative to `base_dir`, or None.
+
+    `base_dir` is the repository-relative directory holding the
+    package_config.json that carries the URI. Returns None when the URI is
+    already relative or points outside the repository, both of which the
+    caller leaves alone.
+    """
+    if not uri.startswith(root_uri + "/"):
+        return None
+
+    target_parts = uri[len(root_uri) + 1:].rstrip("/").split("/")
+    base_parts = base_dir.split("/")
+
+    shared = 0
+    for i in range(min(len(target_parts), len(base_parts))):
+        if target_parts[i] != base_parts[i]:
+            break
+        shared = i + 1
+
+    # A directory URI needs the trailing slash: package_config resolves each
+    # package's `packageUri` (typically "lib/") against it, and without it the
+    # last segment would be dropped as a sibling.
+    return "/".join([".."] * (len(base_parts) - shared) + target_parts[shared:]) + "/"
+
+def _relocate_package_configs(repository_ctx):
+    """Make the SDK's package_config.json files independent of the fetch path.
+
+    `pub get` records every package's `rootUri` as an absolute file:// URI, so
+    the SDK it writes only resolves at the path it was fetched into. Bazel's
+    repo contents cache breaks precisely that assumption: the repository is
+    moved out of the output base it was built in and later served to a
+    different one, on a different machine.
+
+    The tool notices. PubDependencies.isUpToDate walks the recorded roots and
+    checks each pubspec.yaml exists; with dead absolute paths it reports the
+    artifact stale, and Cache.updateAll then instantiates the artifact updater,
+    whose constructor creates bin/cache/downloads -- inside the tree
+    _seal_sdk_cache just made read-only. Every `flutter analyze` and `flutter
+    test` action dies with a FileSystemException before running.
+
+    Rewriting the roots as relative references fixes it at the source: the
+    paths resolve against the config file's own location, so they are correct
+    wherever the repository ends up. This is what makes the repository
+    genuinely relocatable, which is the property `reproducible` promises --
+    hence the boolean return, which gates it.
+
+    Only `rootUri` is touched. The `flutterRoot` and `pubCache` metadata keys
+    are pub's own bookkeeping, read by pub to decide whether a re-resolve is
+    needed and dereferenced as absolute paths when it is; a stale value there
+    biases toward re-resolving, which is the safe direction, whereas a
+    relative one would be parsed as a file path and mislead it.
+    """
+    if repository_ctx.os.name.lower().startswith("windows"):
+        return False
+
+    result = repository_ctx.execute([
+        "find",
+        "flutter",
+        "-type",
+        "f",
+        "-path",
+        "*/.dart_tool/package_config.json",
+    ])
+    if result.return_code != 0:
+        fail("rules_flutter: locating the SDK's package_config.json files failed: " + result.stderr)
+
+    root_uri = "file://" + str(repository_ctx.path("."))
+    relocatable = True
+    for config_path in result.stdout.split("\n"):
+        config_path = config_path.strip()
+        if not config_path:
+            continue
+
+        config = json.decode(repository_ctx.read(config_path))
+        base_dir = config_path.rsplit("/", 1)[0]
+
+        rewrote = False
+        for package in config.get("packages", []):
+            relative = _relative_uri(package.get("rootUri", ""), root_uri, base_dir)
+            if relative != None:
+                package["rootUri"] = relative
+                rewrote = True
+            elif package.get("rootUri", "").startswith("file:"):
+                # An absolute root outside the repository -- a PUB_CACHE
+                # somewhere else, or a path pub resolved through a symlink this
+                # rule cannot see. Nothing to rewrite it to, so the tree stays
+                # tied to this machine and must not be cached as reproducible.
+                relocatable = False
+
+        if rewrote:
+            repository_ctx.file(config_path, json.encode_indent(config, indent = "  ") + "\n")
+
+    return relocatable
+
 def _seal_sdk_cache(repository_ctx):
     """Make bin/cache read-only so any residual write attempt fails loudly.
 
@@ -511,6 +606,10 @@ flutter_toolchain(
 
     repository_ctx.file("BUILD.bazel", build_content)
 
+    # After the last pub invocation, so no `pub get` can reintroduce absolute
+    # roots, and before the seal, which makes these files unwritable.
+    relocatable = _relocate_package_configs(repository_ctx)
+
     # Last step: package BUILD files (written into bin/cache/pkg above) exist
     # by now, so the cache can be sealed.
     _seal_sdk_cache(repository_ctx)
@@ -534,8 +633,12 @@ flutter_toolchain(
     # part of the cache key. Marking only the matching-host case reproducible
     # means a cache entry always denotes the fully-populated variant, and any
     # host that would hit it produces exactly that.
+    #
+    # And cacheable only when the tree can survive being served from somewhere
+    # other than where it was built, which is what the contents cache does to
+    # it -- see _relocate_package_configs.
     return repository_ctx.repo_metadata(
-        reproducible = _host_matches_platform(repository_ctx, platform),
+        reproducible = relocatable and _host_matches_platform(repository_ctx, platform),
     )
 
 def _generate_flutter_packages(repository_ctx):
