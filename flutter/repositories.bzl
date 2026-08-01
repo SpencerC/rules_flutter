@@ -299,6 +299,17 @@ def _relative_uri(uri, root_uri, base_dir):
     # last segment would be dropped as a sibling.
     return "/".join([".."] * (len(base_parts) - shared) + target_parts[shared:]) + "/"
 
+def _resolves_outside_repo(repository_ctx, uri):
+    """Does `uri` name an absolute path that exists outside this repository?
+
+    Such a path makes the repository machine-specific -- see the caller. A
+    `file:` URI that resolves to nothing does not: it is already broken here
+    and would be no more broken elsewhere.
+    """
+    if not uri.startswith("file://"):
+        return False
+    return repository_ctx.path(uri[len("file://"):]).exists
+
 def _relocate_package_configs(repository_ctx):
     """Make the SDK's package_config.json files independent of the fetch path.
 
@@ -357,11 +368,18 @@ def _relocate_package_configs(repository_ctx):
             if relative != None:
                 package["rootUri"] = relative
                 rewrote = True
-            elif package.get("rootUri", "").startswith("file:"):
-                # An absolute root outside the repository -- a PUB_CACHE
-                # somewhere else, or a path pub resolved through a symlink this
-                # rule cannot see. Nothing to rewrite it to, so the tree stays
-                # tied to this machine and must not be cached as reproducible.
+            elif _resolves_outside_repo(repository_ctx, package.get("rootUri", "")):
+                # An absolute root outside the repository that exists on this
+                # machine -- a PUB_CACHE somewhere else, say. Nothing to
+                # rewrite it to, so the tree is tied to this machine and must
+                # not be cached as reproducible.
+                #
+                # Only when it exists. The release archive ships its own
+                # flutter/.dart_tool/package_config.json full of paths from
+                # Flutter's build bot (/b/s/w/ir/...), dead on every machine
+                # including the one that fetched. Those are stale archive junk,
+                # equally broken wherever the repository sits, so they say
+                # nothing about whether it can be moved.
                 relocatable = False
 
         if rewrote:
