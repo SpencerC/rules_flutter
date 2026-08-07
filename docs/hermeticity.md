@@ -297,6 +297,11 @@ Under `allow_remote_execution` the tree posture is moot — remotely executed
 actions must store their outputs in the remote CAS, so `remote_cache_trees`
 is ignored there.
 
+The flag is opt-in and **unverified against a real RBE fleet**. See
+[remote-execution.md](remote-execution.md) for what has been audited, what
+cannot work remotely at all (android, ios, `build_runner_cache`), and what to
+check if you try it.
+
 Executor sizing is intentionally left to you: pass your vendor's sizing
 through target-level `exec_properties` or platform properties (for example
 BuildBuddy's `EstimatedCPU`/`EstimatedMemory`). Locally, the actions declare
