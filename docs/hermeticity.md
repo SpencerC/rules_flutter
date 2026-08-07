@@ -139,10 +139,15 @@ Android and iOS builds are **declared non-hermetic** and carry explicit
 execution requirements so Bazel schedules them accordingly. The exact tags set
 in `flutter_actions.bzl`:
 
-- `FlutterBuildAndroid` (apk/appbundle): `no-remote-exec`, `no-sandbox`,
-  `requires-network`, plus `use_default_shell_env = True`.
-- `FlutterBuildIos`: `no-remote-exec`, `no-sandbox`, `requires-darwin`,
-  `requires-network`, plus `use_default_shell_env = True`.
+- `FlutterBuildAndroid` (apk/appbundle): `no-remote-cache`, `no-remote-exec`,
+  `no-sandbox`, `requires-network`, plus `use_default_shell_env = True`.
+- `FlutterBuildIos`: `no-remote-cache`, `no-remote-exec`, `no-sandbox`,
+  `requires-darwin`, `requires-network`, plus `use_default_shell_env = True`.
+
+  `no-remote-cache` follows from the rest of the row: an action that reads the
+  host toolchain and the network has inputs Bazel cannot see, so its key does
+  not identify its output and the result is not safe to share with another
+  machine. See [Remote execution](#remote-execution).
 - Everything else (`FlutterBuild` for web and desktop targets,
   `FlutterPrepareDeps`, `SetupFlutterWorkspace`, tests): no special execution
   requirements; they run under Bazel's default sandboxing.
@@ -251,8 +256,8 @@ The rules therefore default these actions — and the `flutter_test` /
 split by output shape:
 
 - Small, expensive, high-value results stay **remotely cached**: staged pub
-  packages, `flutter build` outputs, `dart_proto_library` compiles, golden
-  renders (`flutter_goldens`), and test results.
+  packages, web/desktop `flutter build` outputs, `dart_proto_library`
+  compiles, golden renders (`flutter_goldens`), and test results.
 - The **large tree artifacts** — the assembled pub cache (multi-GB), the
   prepared workspace + `.dart_tool` (invalidated by every source edit), the
   workspace seed, and the per-target overlay workspaces — additionally carry
@@ -267,8 +272,20 @@ split by output shape:
   build --//flutter:remote_cache_trees
   ```
 
-Android and iOS builds are additionally `no-sandbox`/`requires-network` (see
-the per-target table above) and are not affected by this section.
+Android and iOS builds are `no-sandbox`/`requires-network` (see the per-target
+table above), so the split above does not apply to them: they carry
+`no-remote-cache` **unconditionally**, and neither
+`//flutter:remote_cache_trees` nor `//flutter:allow_remote_execution` lifts
+it. Their result depends on the host Gradle/Xcode toolchains, the Gradle user
+home, and whatever the network serves — none of which is an action input, so
+the action key does not describe the output. Sharing those results across
+machines would hand one host's build to another under a key that claims they
+are the same.
+
+The same reasoning applies to `//flutter:build_runner_cache`: pointing it at
+an absolute host directory makes the preparation action read state from
+outside its inputs, so that action drops to `no-remote-cache`/`no-remote-exec`
+regardless of the other flags. The default (empty) leaves it fully shareable.
 
 On a well-resourced RBE fleet you can opt back into remote execution:
 

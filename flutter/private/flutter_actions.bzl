@@ -1463,7 +1463,11 @@ echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
         ),
         mnemonic = "FlutterPrepareDeps",
         progress_message = "Preparing Flutter dependencies for %s" % ctx.label.name,
-        execution_requirements = tree_output_execution_requirements(allow_remote_exec, remote_cache_trees),
+        execution_requirements = tree_output_execution_requirements(
+            allow_remote_exec,
+            remote_cache_trees,
+            host_bound = use_build_runner_cache,
+        ),
         resource_set = heavy_action_resource_set,
         # The cache opt-in needs the persistent directory reachable from the
         # action. It is an out-of-sandbox path (the consumer also passes
@@ -1490,7 +1494,38 @@ def heavy_action_execution_requirements(allow_remote_exec):
         return None
     return {"no-remote-exec": "1"}
 
-def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees):
+def host_bound_action_execution_requirements(extra = {}):
+    """Execution requirements for actions whose result depends on host state.
+
+    The android and ios builds shell out to the host Gradle/Xcode toolchains
+    through unsandboxed symlink trees and fetch their own dependencies over
+    the network. None of that is an action input, so the action key does not
+    describe the result: two machines with different Xcode versions, different
+    Gradle user homes, or a different view of Maven Central produce different
+    outputs under the *same* key. Uploading those to a cache shared with other
+    machines serves one host's build to another, which is why these carry
+    no-remote-cache on top of the usual no-remote-exec.
+
+    Unconditional by design — neither //flutter:allow_remote_execution nor
+    //flutter:remote_cache_trees lifts it, because the restriction is about
+    what the action reads, not about how big or how hot its outputs are.
+
+    Args:
+        extra: Additional requirements to merge in (e.g. requires-darwin).
+
+    Returns:
+        An execution_requirements dict.
+    """
+    reqs = {
+        "no-remote-cache": "1",
+        "no-remote-exec": "1",
+        "no-sandbox": "1",
+        "requires-network": "1",
+    }
+    reqs.update(extra)
+    return reqs
+
+def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees, host_bound = False):
     """Execution requirements for actions producing large tree artifacts.
 
     The assembled pub cache (multi-GB) and the prepared/overlay workspace
@@ -1511,10 +1546,18 @@ def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees):
             Ignored under allow_remote_exec: remotely executed actions must
             store their outputs in the remote CAS, so suppressing the cache
             there would only force constant re-execution.
+        host_bound: Whether this instance of the action reads host state that
+            is not among its inputs — currently only the
+            //flutter:build_runner_cache opt-in, which hands the action an
+            absolute directory outside the sandbox and lets it inherit the
+            client shell env. That makes the result unshareable no matter what
+            the two flags above say, so it forces both restrictions on.
 
     Returns:
         An execution_requirements dict, or None when nothing is restricted.
     """
+    if host_bound:
+        return {"no-remote-cache": "1", "no-remote-exec": "1"}
     reqs = {}
     if not allow_remote_exec:
         reqs["no-remote-exec"] = "1"
@@ -1964,28 +2007,20 @@ SCRIPT_COMPLETED=1
     use_default_shell_env = False
     mnemonic = "FlutterBuild"
     if target in ANDROID_TARGETS:
-        # Gradle downloads its distribution and Maven dependencies; keep the
-        # action off remote executors and let RULES_FLUTTER_GRADLE_USER_HOME
-        # (an --action_env opt-in) reach the script.
-        execution_requirements = {
-            # The host-wrapped SDK/NDK symlink trees cannot be staged into a
-            # sandbox, and Gradle needs network for its distribution/Maven
-            # dependencies.
-            "no-remote-exec": "1",
-            "no-sandbox": "1",
-            "requires-network": "1",
-        }
+        # The host-wrapped SDK/NDK symlink trees cannot be staged into a
+        # sandbox, and Gradle downloads its distribution and Maven
+        # dependencies — none of which is an input, so the result is not
+        # shareable. RULES_FLUTTER_GRADLE_USER_HOME (an --action_env opt-in)
+        # reaches the script via the inherited shell env.
+        execution_requirements = host_bound_action_execution_requirements()
         use_default_shell_env = True
         mnemonic = "FlutterBuildAndroid"
     elif target == "ios":
         # Host Xcode + CocoaPods; pod install fetches specs and binary pods
         # over the network.
-        execution_requirements = {
-            "no-remote-exec": "1",
-            "no-sandbox": "1",
+        execution_requirements = host_bound_action_execution_requirements({
             "requires-darwin": "1",
-            "requires-network": "1",
-        }
+        })
         use_default_shell_env = True
         mnemonic = "FlutterBuildIos"
 

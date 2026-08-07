@@ -5,6 +5,7 @@ load(
     "//flutter/private:flutter_actions.bzl",
     "heavy_action_execution_requirements",
     "heavy_action_resource_set",
+    "host_bound_action_execution_requirements",
     "tree_output_execution_requirements",
 )
 
@@ -53,11 +54,70 @@ def _tree_output_posture_test_impl(ctx):
     # remote_cache_trees is ignored there.
     asserts.equals(env, None, tree_output_execution_requirements(True, False))
     asserts.equals(env, None, tree_output_execution_requirements(True, True))
+
+    # host_bound wins over both flags. The //flutter:build_runner_cache
+    # opt-in hands the action an absolute path outside the sandbox and lets
+    # it inherit the client env, so its result describes one machine and must
+    # not reach a shared cache — nor a remote executor that cannot see the
+    # directory at all.
+    for allow_remote_exec in [False, True]:
+        for remote_cache_trees in [False, True]:
+            asserts.equals(
+                env,
+                {"no-remote-cache": "1", "no-remote-exec": "1"},
+                tree_output_execution_requirements(
+                    allow_remote_exec,
+                    remote_cache_trees,
+                    host_bound = True,
+                ),
+                "build_runner_cache must stay unshareable (allow_remote_exec=%s, remote_cache_trees=%s)" % (
+                    allow_remote_exec,
+                    remote_cache_trees,
+                ),
+            )
+    return unittest.end(env)
+
+def _host_bound_posture_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # The android/ios builds read host toolchains and the network, neither of
+    # which is an input. Their results must never be uploaded to a cache
+    # shared with a machine holding a different Xcode/Gradle/Maven view.
+    asserts.equals(
+        env,
+        {
+            "no-remote-cache": "1",
+            "no-remote-exec": "1",
+            "no-sandbox": "1",
+            "requires-network": "1",
+        },
+        host_bound_action_execution_requirements(),
+    )
+
+    # Extra requirements merge in without dropping any of the restrictions.
+    ios = host_bound_action_execution_requirements({"requires-darwin": "1"})
+    asserts.equals(env, "1", ios["requires-darwin"])
+    asserts.equals(env, "1", ios["no-remote-cache"])
+    asserts.equals(env, "1", ios["no-remote-exec"])
+
+    # The default argument must not accumulate across calls.
+    asserts.false(
+        env,
+        "requires-darwin" in host_bound_action_execution_requirements(),
+        "the shared default dict leaked a caller's extra requirement",
+    )
     return unittest.end(env)
 
 _default_posture_test = unittest.make(_default_posture_test_impl)
 _resource_set_test = unittest.make(_resource_set_test_impl)
 _tree_output_posture_test = unittest.make(_tree_output_posture_test_impl)
+_host_bound_posture_test = unittest.make(_host_bound_posture_test_impl)
 
 def exec_posture_test_suite(name):
-    unittest.suite(name, _default_posture_test, _resource_set_test, _tree_output_posture_test)
+    unittest.suite(
+        name,
+        _default_posture_test,
+        _resource_set_test,
+        _tree_output_posture_test,
+        _host_bound_posture_test,
+    )
