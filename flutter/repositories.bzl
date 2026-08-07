@@ -422,6 +422,7 @@ def _resolve_integrity(repository_ctx):
     platform — this runs lazily per-platform, so cross-OS repos that are never
     fetched never trip on it.
     """
+
     # Platforms that reuse another platform's archive verify against that
     # archive's integrity — it is literally the same download.
     platform = _archive_platform(repository_ctx.attr.platform)
