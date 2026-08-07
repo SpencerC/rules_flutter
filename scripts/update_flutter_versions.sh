@@ -30,6 +30,17 @@ URLS=(
     "https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json"
 )
 
+# One entry per rules_flutter platform: name|index into URLS|archive path.
+# Not one per URL — releases_macos.json publishes both the x64 archive and the
+# native arm64 one (flutter_macos_arm64_*), and linux_arm64 has no archive of
+# its own at all (it re-architects the x64 tarball, so it takes that hash).
+PLATFORM_SPECS=(
+    "macos|0|stable/macos/flutter_macos_{version}-stable.zip"
+    "macos_arm64|0|stable/macos/flutter_macos_arm64_{version}-stable.zip"
+    "linux|1|stable/linux/flutter_linux_{version}-stable.tar.xz"
+    "windows|2|stable/windows/flutter_windows_{version}-stable.zip"
+)
+
 # Platform mapping from Flutter's naming to our internal naming
 # Note: Using simple approach since associative arrays may not be available in all shells
 
@@ -216,28 +227,14 @@ for version in "${SUPPORTED_VERSIONS[@]}"; do
     info "Processing Flutter $version..."
     echo "    \"$version\": {" >> flutter/private/versions.bzl
     
-    # Extract hashes for this version from each platform
-    for i in "${!URLS[@]}"; do
-        platform_file="${TEMP_FILES[$i]}"
-        platform_name=""
-        archive_path=""
-        
-        # Determine platform name from URL
-        case "${URLS[$i]}" in
-            *macos*)
-                platform_name="macos"
-                archive_path="stable/macos/flutter_macos_${version}-stable.zip"
-                ;;
-            *linux*)
-                platform_name="linux"
-                archive_path="stable/linux/flutter_linux_${version}-stable.tar.xz"
-                ;;
-            *windows*)
-                platform_name="windows"
-                archive_path="stable/windows/flutter_windows_${version}-stable.zip"
-                ;;
-        esac
-        
+    # Extract hashes for this version from each platform. Platforms are listed
+    # separately from URLS because they are not one-to-one: releases_macos.json
+    # carries both the x64 and the arm64 archive.
+    for spec in "${PLATFORM_SPECS[@]}"; do
+        IFS='|' read -r platform_name url_index archive_template <<< "$spec"
+        platform_file="${TEMP_FILES[$url_index]}"
+        archive_path="${archive_template//\{version\}/$version}"
+
         # Extract SHA-256 hash for this version and platform (stable channel only)
         sha256_hash=$(jq -r ".releases[] | select(.version == \"$version\" and .channel == \"stable\" and (\"${archive_path}\" == \"\" or .archive == \"${archive_path}\")) | .sha256" "$platform_file" 2>/dev/null | head -1)
         

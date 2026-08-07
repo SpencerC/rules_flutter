@@ -13,12 +13,14 @@ def _is_arm64(repository_ctx):
 def _host_platform(repository_ctx):
     """Normalize the Bazel host OS/CPU to a Flutter platform suffix.
 
-    Only Linux distinguishes architectures: the macOS archive is a universal
-    binary and Flutter ships no Windows-on-ARM release.
+    Linux and macOS distinguish architectures; Flutter ships no Windows-on-ARM
+    release. The macOS archive is *not* a universal binary — Flutter publishes
+    flutter_macos_<v> and flutter_macos_arm64_<v> side by side, and taking the
+    x64 one on Apple silicon runs the whole toolchain under Rosetta.
     """
     lower_name = repository_ctx.os.name.lower()
     if lower_name.startswith("mac"):
-        return "macos"
+        return "macos_arm64" if _is_arm64(repository_ctx) else "macos"
     if lower_name.startswith("linux"):
         return "linux_arm64" if _is_arm64(repository_ctx) else "linux"
     if lower_name.startswith("windows"):

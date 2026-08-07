@@ -41,7 +41,7 @@ _PRECACHE_SENTINELS = {
     "android": "artifacts/engine/android-arm64-release",
     "ios": "artifacts/engine/ios-release",
     "linux": "artifacts/engine/linux-{arch}-release",
-    "macos": "artifacts/engine/darwin-x64-release",
+    "macos": "artifacts/engine/darwin-{arch}-release",
     "web": "flutter_web_sdk",
     "windows": "artifacts/engine/windows-x64-release",
 }
@@ -58,7 +58,24 @@ _ARCHIVE_ALIASES = {
 # Flutter's own arch suffix for each platform (see bin/internal/update_dart_sdk.sh).
 _PLATFORM_ARCH = {
     "linux_arm64": "arm64",
+    "macos_arm64": "arm64",
 }
+
+# The release directory a platform's archive is published under, when it
+# differs from the platform name. macOS ships two native archives from one
+# directory — flutter_macos_<v> and flutter_macos_arm64_<v> — so unlike
+# linux_arm64 this is a real archive of its own, not a re-architected x64 one.
+_RELEASE_DIRS = {
+    "macos_arm64": "macos",
+}
+
+# Release directories whose archives are zips; everything else is a tar.xz.
+_ZIP_RELEASE_DIRS = ["macos", "windows"]
+
+def _release_dir(platform):
+    """GCS release directory holding this platform's archive."""
+    archive_platform = _ARCHIVE_ALIASES.get(platform, platform)
+    return _RELEASE_DIRS.get(archive_platform, archive_platform)
 
 def _archive_platform(platform):
     """Release-archive platform whose tarball this platform downloads."""
@@ -134,16 +151,20 @@ def _host_is_os(repository_ctx, os_family):
     return os_name.startswith(os_family)
 
 def _host_matches_platform(repository_ctx, platform):
-    if platform == "macos":
-        return _host_is_os(repository_ctx, "macos")
-    if not _host_is_os(repository_ctx, _archive_platform(platform)):
+    if not _host_is_os(repository_ctx, _release_dir(platform)):
         return False
 
-    # Linux distinguishes architectures: an arm64 SDK repo can only be
+    # Linux and macOS distinguish architectures: an arm64 SDK repo can only be
     # completed on an arm64 host (the fetch-time precache below runs the
     # launcher, which downloads native artifacts for the machine it is on),
     # and the x64 repo must not claim an arm64 host.
-    if _archive_platform(platform) == "linux":
+    #
+    # macOS x64 is the one case where the mismatch is not fatal — Rosetta runs
+    # the x64 tool on Apple silicon — but claiming a match would still cache a
+    # repository whose bin/cache holds the wrong architecture's engine under a
+    # key that does not mention it. Treat it like Linux and let toolchain
+    # resolution pick macos_arm64 instead.
+    if _release_dir(platform) in ["linux", "macos"]:
         return _host_is_arm64(repository_ctx) == (_platform_arch(platform) == "arm64")
     return True
 
@@ -527,8 +548,14 @@ def _flutter_repo_impl(repository_ctx):
     # architecture's and are re-architected below.
     platform = repository_ctx.attr.platform
     archive_platform = _archive_platform(platform)
-    extension = "zip" if archive_platform == "windows" else ("zip" if archive_platform == "macos" else "tar.xz")
-    url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/{0}/flutter_{0}_{1}-stable.{2}".format(
+    release_dir = _release_dir(platform)
+    extension = "zip" if release_dir in _ZIP_RELEASE_DIRS else "tar.xz"
+
+    # The directory and the file's own slug differ for platforms whose archive
+    # is published beside a sibling's: macos_arm64 lives in stable/macos/ as
+    # flutter_macos_arm64_<version>-stable.zip.
+    url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/{0}/flutter_{1}_{2}-stable.{3}".format(
+        release_dir,
         archive_platform,
         repository_ctx.attr.flutter_version,
         extension,

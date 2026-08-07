@@ -23,6 +23,18 @@ PLATFORMS = {
     "macos": struct(
         compatible_with = [
             "@platforms//os:macos",
+            "@platforms//cpu:x86_64",
+        ],
+    ),
+    # Flutter publishes a native macos-arm64 archive (flutter_macos_arm64_*)
+    # in the same release directory as the x64 one, so unlike linux_arm64 this
+    # needs no re-architecting. Until it was registered, `macos` carried no cpu
+    # constraint and Apple silicon resolved to the x64 SDK — which works only
+    # through Rosetta, and builds an x64 engine on an arm64 machine.
+    "macos_arm64": struct(
+        compatible_with = [
+            "@platforms//os:macos",
+            "@platforms//cpu:arm64",
         ],
     ),
     "linux": struct(
