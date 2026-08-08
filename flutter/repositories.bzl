@@ -91,7 +91,13 @@ def _sentinel_path(group, platform):
 # The tail of bin/internal/update_engine_version.sh that unconditionally
 # rewrites engine.stamp/engine.realm on every launcher invocation. Replaced at
 # fetch time so `flutter` never writes into the Bazel external repository.
-_ENGINE_VERSION_WRITE_ORIGINAL = """# Write the engine version out so downstream tools know what to look for.
+#
+# Upstream has shipped more than one spelling of this tail, so each supported
+# variant is listed with its replacement and the first match wins.
+_ENGINE_VERSION_WRITE_VARIANTS = [
+    # Flutter <= 3.43: plain, non-atomic writes.
+    (
+        """# Write the engine version out so downstream tools know what to look for.
 echo $ENGINE_VERSION >"$FLUTTER_ROOT/bin/cache/engine.stamp"
 
 # The realm on CI is passed in.
@@ -99,9 +105,8 @@ if [ -n "${FLUTTER_REALM}" ]; then
   echo $FLUTTER_REALM >"$FLUTTER_ROOT/bin/cache/engine.realm"
 else
   echo "" >"$FLUTTER_ROOT/bin/cache/engine.realm"
-fi"""
-
-_ENGINE_VERSION_WRITE_PATCHED = """# Write the engine version out so downstream tools know what to look for.
+fi""",
+        """# Write the engine version out so downstream tools know what to look for.
 # Patched by rules_flutter: skip writes when the content is already correct so
 # launcher invocations never mutate the Bazel external repository.
 if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.stamp" 2>/dev/null)" != "$ENGINE_VERSION" ]; then
@@ -112,7 +117,45 @@ fi
 FLUTTER_REALM="${FLUTTER_REALM:-}"
 if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.realm" 2>/dev/null)" != "$FLUTTER_REALM" ]; then
   echo $FLUTTER_REALM >"$FLUTTER_ROOT/bin/cache/engine.realm"
-fi"""
+fi""",
+    ),
+    # Flutter >= 3.44: the stamp write became a temp-file + atomic mv, guarded
+    # by an EXIT trap. The guarded form keeps the same atomicity on the write
+    # path it still takes.
+    (
+        """# Write the engine version out so downstream tools know what to look for.
+# Use a temporary file and atomic mv to prevent race conditions during parallel flutter executions.
+pid=$$
+es_tmp="$FLUTTER_ROOT/bin/cache/engine.stamp.tmp.$pid"
+trap 'rm -f "$es_tmp"' EXIT
+echo "$ENGINE_VERSION" >"$es_tmp" && mv "$es_tmp" "$FLUTTER_ROOT/bin/cache/engine.stamp"
+trap - EXIT
+
+# The realm on CI is passed in.
+if [ -n "${FLUTTER_REALM}" ]; then
+  echo "$FLUTTER_REALM" >"$FLUTTER_ROOT/bin/cache/engine.realm"
+else
+  echo "" >"$FLUTTER_ROOT/bin/cache/engine.realm"
+fi""",
+        """# Write the engine version out so downstream tools know what to look for.
+# Patched by rules_flutter: skip writes when the content is already correct so
+# launcher invocations never mutate the Bazel external repository. The write
+# path keeps upstream's temp-file + atomic mv.
+if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.stamp" 2>/dev/null)" != "$ENGINE_VERSION" ]; then
+  pid=$$
+  es_tmp="$FLUTTER_ROOT/bin/cache/engine.stamp.tmp.$pid"
+  trap 'rm -f "$es_tmp"' EXIT
+  echo "$ENGINE_VERSION" >"$es_tmp" && mv "$es_tmp" "$FLUTTER_ROOT/bin/cache/engine.stamp"
+  trap - EXIT
+fi
+
+# The realm on CI is passed in.
+FLUTTER_REALM="${FLUTTER_REALM:-}"
+if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.realm" 2>/dev/null)" != "$FLUTTER_REALM" ]; then
+  echo "$FLUTTER_REALM" >"$FLUTTER_ROOT/bin/cache/engine.realm"
+fi""",
+    ),
+]
 
 def _patch_engine_version_script(repository_ctx):
     """Make the launcher's engine-version refresh write-free when unchanged."""
@@ -120,16 +163,25 @@ def _patch_engine_version_script(repository_ctx):
     if not repository_ctx.path(script_path).exists:
         return
     content = repository_ctx.read(script_path)
-    if _ENGINE_VERSION_WRITE_ORIGINAL not in content:
+
+    original = None
+    patched = None
+    for candidate_original, candidate_patched in _ENGINE_VERSION_WRITE_VARIANTS:
+        if candidate_original in content:
+            original = candidate_original
+            patched = candidate_patched
+            break
+
+    if original == None:
         # Layout changed upstream; fail loudly rather than silently shipping a
         # mutating launcher. Update the patch alongside new Flutter versions.
         fail("rules_flutter: unable to patch {} for Flutter {}: unexpected script content. ".format(
             script_path,
             repository_ctx.attr.flutter_version,
-        ) + "Update _ENGINE_VERSION_WRITE_ORIGINAL in flutter/repositories.bzl.")
+        ) + "Add the new tail to _ENGINE_VERSION_WRITE_VARIANTS in flutter/repositories.bzl.")
     repository_ctx.file(
         script_path,
-        content.replace(_ENGINE_VERSION_WRITE_ORIGINAL, _ENGINE_VERSION_WRITE_PATCHED),
+        content.replace(original, patched),
         executable = True,
         legacy_utf8 = False,
     )
