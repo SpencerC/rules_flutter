@@ -240,12 +240,24 @@ the mirror is actually complete. With it on, the action:
 
 Note the last one has teeth: with `use_default_shell_env` off the action gets
 Bazel's minimal `PATH`, not yours. `JAVA_HOME` is still set explicitly from the
-java runtime toolchain, and the action's own helpers (`unzip`, `python3`) live in
-the standard directories — but anything else your Gradle build shells out to
-(`cargo` for a Rust plugin, say) has to be forwarded with `--action_env=PATH` or
-declared properly. That is the point of the flag rather than a side effect: an
-action that quietly reads whatever is on the developer's `PATH` is exactly the
-kind of undeclared input this is meant to surface.
+java runtime toolchain and the action's own helpers (`unzip`, `python3`) live in
+the standard directories, but anything else your Gradle build shells out to is
+now missing. A Flutter plugin that compiles Rust in a `preBuild` task fails with:
+
+```
+Execution failed for task ':my_plugin:buildRustArm64'.
+> A problem occurred starting process 'command 'cargo''
+```
+
+**`--action_env=PATH` does not fix this.** `--action_env` populates the *default*
+shell environment, and the whole point of this path is that the action no longer
+uses it. The options are to put the directory in the target's own `env`
+attribute, which is part of the action key and therefore honest about the
+dependency, or to declare the tool properly as an input.
+
+This is the flag working, not a defect: an action that silently reads whatever
+happens to be on the developer's `PATH` is exactly the undeclared input it exists
+to surface.
 
 **Why an init script and not `dependencyResolutionManagement`.** It is the only
 hook that reaches everything: the Flutter SDK's gradle directory arrives via

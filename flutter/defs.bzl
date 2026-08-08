@@ -1389,6 +1389,48 @@ def _tree_root_path(files, attr_name, label):
         first.path,
     ))
 
+def _vendored_root_path(files, attr_name, label):
+    """Return the directory a vendored filegroup is rooted at.
+
+    Distinct from _tree_root_path, which resolves SDK/NDK *path references*: that
+    one understands a single directory artifact or an external repository and
+    nothing else. A vendored Maven repository is neither — it is thousands of
+    ordinary source files in the consumer's own workspace, declared as real
+    action inputs — so its root is their longest common directory.
+
+    Args:
+        files: The resolved files of the attribute.
+        attr_name: Attribute name, for error messages.
+        label: The target label, for error messages.
+
+    Returns:
+        The common directory path, relative to the exec root.
+    """
+    if not files:
+        fail("flutter_app '{}': attribute '{}' resolved to no files. ".format(label, attr_name) +
+             "A vendored mirror is usually gitignored and restored by a script; " +
+             "check that it exists before building.")
+    if len(files) == 1 and files[0].is_directory:
+        return files[0].path
+
+    common = files[0].dirname.split("/")
+    for f in files:
+        parts = f.dirname.split("/")
+        matched = 0
+        for i in range(min(len(common), len(parts))):
+            if common[i] != parts[i]:
+                break
+            matched = i + 1
+        common = common[:matched]
+        if not common:
+            fail("flutter_app '{}': files of '{}' share no common directory ({} vs {})".format(
+                label,
+                attr_name,
+                files[0].dirname,
+                f.dirname,
+            ))
+    return "/".join(common)
+
 def _android_environment(ctx):
     """Assemble the Android build environment for apk/appbundle targets.
 
@@ -1432,36 +1474,41 @@ def _android_environment(ctx):
     distribution_path = None
     engine_repo_path = None
 
-    if ctx.attr.android_maven_repo:
-        maven_files = ctx.attr.android_maven_repo[DefaultInfo].files
-        maven_repo_path = _tree_root_path(maven_files.to_list(), "android_maven_repo", ctx.label)
-        transitive.append(maven_files)
-
-    if ctx.attr.android_gradle_init_script:
-        init_script = ctx.file.android_gradle_init_script
-        init_script_path = init_script.path
-        transitive.append(depset([init_script]))
-
-    if ctx.attr.android_gradle_distribution:
-        distribution = ctx.file.android_gradle_distribution
-        distribution_path = distribution.path
-        transitive.append(depset([distribution]))
-
-    if ctx.attr.android_flutter_engine_repo:
-        engine_files = ctx.attr.android_flutter_engine_repo[DefaultInfo].files
-        engine_repo_path = _tree_root_path(engine_files.to_list(), "android_flutter_engine_repo", ctx.label)
-        transitive.append(engine_files)
-
-    # Fail at analysis rather than let the build discover it: a mirror nothing
-    # points the repositories at is dead weight, and offline mode without one is
-    # a build that resolves nothing.
+    # Only pulled in when the flag is on. Declaring the attributes has to stay
+    # free: a vendored mirror is tens of thousands of files, and an online build
+    # that ignores them should not pay to hash them.
     if offline:
-        if maven_repo_path == None:
+        if ctx.attr.android_maven_repo:
+            maven_files = ctx.attr.android_maven_repo[DefaultInfo].files
+            maven_repo_path = _vendored_root_path(maven_files.to_list(), "android_maven_repo", ctx.label)
+            transitive.append(maven_files)
+
+        if ctx.attr.android_gradle_init_script:
+            init_script = ctx.file.android_gradle_init_script
+            init_script_path = init_script.path
+            transitive.append(depset([init_script]))
+
+        if ctx.attr.android_gradle_distribution:
+            distribution = ctx.file.android_gradle_distribution
+            distribution_path = distribution.path
+            transitive.append(depset([distribution]))
+
+        if ctx.attr.android_flutter_engine_repo:
+            engine_files = ctx.attr.android_flutter_engine_repo[DefaultInfo].files
+            engine_repo_path = _vendored_root_path(engine_files.to_list(), "android_flutter_engine_repo", ctx.label)
+            transitive.append(engine_files)
+
+    # Checked against the attributes rather than the paths derived above, since
+    # those are only populated on the offline path -- the pairing rule still has
+    # to hold when the flag is off, or turning it on later fails for a reason
+    # that has nothing to do with the flag.
+    if offline:
+        if not ctx.attr.android_maven_repo:
             fail("flutter_app '{}': --//flutter:android_gradle_offline needs the android_maven_repo attribute.".format(ctx.label))
-        if init_script_path == None:
+        if not ctx.attr.android_gradle_init_script:
             fail("flutter_app '{}': --//flutter:android_gradle_offline needs the android_gradle_init_script attribute ".format(ctx.label) +
                  "(a mirror is unreachable unless something retargets the build's repository URLs at it).")
-    elif maven_repo_path != None and init_script_path == None:
+    elif ctx.attr.android_maven_repo and not ctx.attr.android_gradle_init_script:
         fail("flutter_app '{}': android_maven_repo needs android_gradle_init_script alongside it.".format(ctx.label))
 
     return struct(
