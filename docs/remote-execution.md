@@ -37,6 +37,15 @@ been recorded. Treat the sections below as an audit, not a support statement.
   RBE fleet would have to provide a real Android SDK/NDK and Xcode image, at
   which point the tags are wrong for that fleet specifically — there is no
   general fix, only a per-fleet one.
+
+  `--//flutter:android_gradle_offline` removes one leg of that for Android: with
+  the Maven closure, the Gradle distribution and the init script declared as
+  inputs, the action no longer needs the network or the client shell
+  environment, so `requires-network` and `use_default_shell_env` drop. It does
+  **not** make Android remotely executable or remote-cacheable. The SDK is still
+  a path reference resolved through rules_android's symlink wrapper to a host
+  install, so `no-sandbox`, `no-remote-cache` and `no-remote-exec` all stay. See
+  [Android: offline Gradle](hermeticity.md#android-offline-gradle).
 - **`//flutter:build_runner_cache` is incompatible by construction.** It hands
   the action an absolute host directory that an executor cannot see. Also
   tagged unconditionally.

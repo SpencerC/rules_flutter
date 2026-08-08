@@ -1599,7 +1599,85 @@ def heavy_action_execution_requirements(allow_remote_exec):
         return None
     return {"no-remote-exec": "1"}
 
-def host_bound_action_execution_requirements(extra = {}):
+def _android_offline_gradle_env(android):
+    """Shell that points Gradle at the declared mirror and distribution.
+
+    Returns the empty string unless --//flutter:android_gradle_offline is set,
+    so declaring the attributes is not by itself a behaviour change: a consumer
+    can add them, keep building exactly as before, and flip the flag when the
+    mirror is actually complete.
+
+    Args:
+        android: the struct from _android_environment.
+
+    Returns:
+        Shell source to append to the Android environment setup.
+    """
+    if not android.offline:
+        return ""
+
+    lines = ["", "# --- offline Gradle (rules_flutter) ---"]
+
+    # The init script is what makes the mirror reachable at all: it is the only
+    # hook that reaches the Flutter SDK's composite build and the pub-cache
+    # plugins' own buildscript repositories.
+    if android.init_script_path:
+        lines.append('mkdir -p "$GRADLE_USER_HOME/init.d"')
+        lines.append('cp "$ORIGINAL_PWD/{}" "$GRADLE_USER_HOME/init.d/"'.format(android.init_script_path))
+
+    lines.append('export RULES_FLUTTER_MAVEN_MIRROR="$ORIGINAL_PWD/{}"'.format(android.maven_repo_path))
+
+    if android.engine_repo_path:
+        lines.append('export FLUTTER_STORAGE_BASE_URL="file://$ORIGINAL_PWD/{}"'.format(android.engine_repo_path))
+
+    # Pre-extract the distribution where the wrapper looks for it, so it never
+    # reaches services.gradle.org. The layout and the `.ok` sentinel are the
+    # wrapper's own; the directory name is an MD5 of the distribution URL read as
+    # an unsigned BigInteger and rendered in base 36
+    # (org.gradle.wrapper.PathAssembler#getHash).
+    #
+    # The URL is read out of the project's gradle-wrapper.properties rather than
+    # taken as an attribute, because it is that file the wrapper will consult --
+    # deriving the name from anything else risks seeding a directory the wrapper
+    # ignores, and a silent download instead of a loud failure.
+    if android.distribution_path:
+        # Interpolated on its own line: the block below is a plain literal
+        # because it is full of ${...} parameter expansions that .format() would
+        # read as replacement fields.
+        lines.append('RULES_FLUTTER_DIST_SRC="$ORIGINAL_PWD/{}"'.format(android.distribution_path))
+        lines.append("""
+RULES_FLUTTER_WRAPPER_PROPERTIES="android/gradle/wrapper/gradle-wrapper.properties"
+if [ -f "$RULES_FLUTTER_WRAPPER_PROPERTIES" ]; then
+    RULES_FLUTTER_PYTHON="$(command -v python3 || command -v python || true)"
+    if [ -z "$RULES_FLUTTER_PYTHON" ]; then
+        echo "✗ FATAL ERROR: python3 is required to seed the Gradle distribution." >&2
+        exit 1
+    fi
+    RULES_FLUTTER_DIST_URL="$(sed -n 's/^distributionUrl=//p' "$RULES_FLUTTER_WRAPPER_PROPERTIES" | sed 's/\\\\:/:/g')"
+    RULES_FLUTTER_DIST_ZIP="$(basename "$RULES_FLUTTER_DIST_URL")"
+    RULES_FLUTTER_DIST_HASH="$(printf '%s' "$RULES_FLUTTER_DIST_URL" | md5sum | cut -d' ' -f1 | "$RULES_FLUTTER_PYTHON" -c '
+import sys
+h = int(sys.stdin.read().strip(), 16)
+digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+out = ""
+while h:
+    out = digits[h % 36] + out
+    h //= 36
+print(out or "0")
+')"
+    RULES_FLUTTER_DIST_DIR="$GRADLE_USER_HOME/wrapper/dists/${RULES_FLUTTER_DIST_ZIP%.zip}/$RULES_FLUTTER_DIST_HASH"
+    if [ ! -f "$RULES_FLUTTER_DIST_DIR/$RULES_FLUTTER_DIST_ZIP.ok" ]; then
+        mkdir -p "$RULES_FLUTTER_DIST_DIR"
+        cp "$RULES_FLUTTER_DIST_SRC" "$RULES_FLUTTER_DIST_DIR/$RULES_FLUTTER_DIST_ZIP"
+        (cd "$RULES_FLUTTER_DIST_DIR" && unzip -q -o "$RULES_FLUTTER_DIST_ZIP")
+        touch "$RULES_FLUTTER_DIST_DIR/$RULES_FLUTTER_DIST_ZIP.ok"
+    fi
+fi
+""")
+
+    return "\n".join(lines) + "\n"
+
+def host_bound_action_execution_requirements(extra = {}, dependencies_declared = False):
     """Execution requirements for actions whose result depends on host state.
 
     The android and ios builds shell out to the host Gradle/Xcode toolchains
@@ -1611,12 +1689,26 @@ def host_bound_action_execution_requirements(extra = {}):
     machines serves one host's build to another, which is why these carry
     no-remote-cache on top of the usual no-remote-exec.
 
-    Unconditional by design — neither //flutter:allow_remote_execution nor
-    //flutter:remote_cache_trees lifts it, because the restriction is about
-    what the action reads, not about how big or how hot its outputs are.
+    Two independent things are wrong here, and only one of them is fixable
+    today:
+
+    * The action fetches its own dependencies. Declaring the Maven closure and
+      the Gradle distribution as inputs and resolving offline fixes this, and
+      `dependencies_declared` drops requires-network when it holds.
+    * The action reads a host toolchain that is not an input at all. The
+      Android SDK arrives as a *path* resolved through rules_android's symlink
+      wrapper to a host installation; Xcode is simply assumed. Nothing about
+      vendoring Maven changes that, so no-sandbox and no-remote-cache stay
+      regardless — lifting them needs a declared, symlink-free SDK.
+
+    no-remote-exec is unconditional: these actions are host-bound by
+    construction, so neither //flutter:allow_remote_execution nor
+    //flutter:remote_cache_trees lifts it.
 
     Args:
         extra: Additional requirements to merge in (e.g. requires-darwin).
+        dependencies_declared: Whether everything the action would otherwise
+            fetch is a declared input and it has been told to resolve offline.
 
     Returns:
         An execution_requirements dict.
@@ -1625,8 +1717,9 @@ def host_bound_action_execution_requirements(extra = {}):
         "no-remote-cache": "1",
         "no-remote-exec": "1",
         "no-sandbox": "1",
-        "requires-network": "1",
     }
+    if not dependencies_declared:
+        reqs["requires-network"] = "1"
     reqs.update(extra)
     return reqs
 
@@ -1866,6 +1959,8 @@ fi
     echo "✓ androidTest instrumentation APK copied"
 """
 
+    # (see _android_offline_gradle_env above for the offline Gradle setup)
+
     # iOS keeps the caller's HOME (when the build passes it through, e.g.
     # --action_env=HOME) so CocoaPods spec/pod caches persist across builds;
     # under --incompatible_strict_action_env HOME is absent, so fall back to a
@@ -1890,11 +1985,16 @@ fi
         ])
 
         # Executed after the mutable workspace copy exists. Gradle needs a
-        # writable home; RULES_FLUTTER_GRADLE_USER_HOME (via --action_env plus
-        # --sandbox_writable_path) opts into a persistent cache so warm builds
-        # skip the distribution/Maven downloads.
-        android_gradle_env = """
-export GRADLE_USER_HOME="${RULES_FLUTTER_GRADLE_USER_HOME:-$BUILD_WORKSPACE_TMP/.gradle_home}"
+        # writable home; //flutter:gradle_user_home points it at a persistent one
+        # so warm builds skip the distribution/Maven downloads. The default is
+        # under the action's own temp directory, which is removed on exit -- so
+        # by default every Bazel android build is a cold Gradle.
+        if android.gradle_user_home:
+            gradle_home_export = 'export GRADLE_USER_HOME="{}"'.format(android.gradle_user_home)
+        else:
+            gradle_home_export = 'export GRADLE_USER_HOME="$BUILD_WORKSPACE_TMP/.gradle_home"'
+
+        android_gradle_env = gradle_home_export + """
 mkdir -p "$GRADLE_USER_HOME"
 export GRADLE_OPTS="-Dorg.gradle.daemon=false ${GRADLE_OPTS:-}"
 # rules_android's repository wraps the host SDK with symlinks and omits some
@@ -1912,8 +2012,18 @@ fi
 mkdir -p android
 printf 'sdk.dir=%s\\nflutter.sdk=%s\\n' "$ANDROID_HOME" "$FLUTTER_ROOT" > android/local.properties
 """
+
+        # Keep aapt2 and lint out of the real ~/.android: it holds a per-machine
+        # debug keystore and an analytics/AVD cache, none of it an input.
+        android_gradle_env += """
+export ANDROID_USER_HOME="$GRADLE_USER_HOME/.android"
+mkdir -p "$ANDROID_USER_HOME"
+"""
+
         if android.ndk_path:
-            android_gradle_env = "RULES_FLUTTER_NDK_DIR=\"$ORIGINAL_PWD/" + android.ndk_path + "\"\n" + android_gradle_env
+            android_gradle_env += 'export ANDROID_NDK_ROOT="$ORIGINAL_PWD/{}"\n'.format(android.ndk_path)
+
+        android_gradle_env += _android_offline_gradle_env(android)
     else:
         android_env_exports = "export ANDROID_HOME=\"\"\nexport ANDROID_SDK_ROOT=\"\""
 
@@ -2113,12 +2223,20 @@ SCRIPT_COMPLETED=1
     mnemonic = "FlutterBuild"
     if target in ANDROID_TARGETS:
         # The host-wrapped SDK/NDK symlink trees cannot be staged into a
-        # sandbox, and Gradle downloads its distribution and Maven
-        # dependencies — none of which is an input, so the result is not
-        # shareable. RULES_FLUTTER_GRADLE_USER_HOME (an --action_env opt-in)
-        # reaches the script via the inherited shell env.
-        execution_requirements = host_bound_action_execution_requirements()
-        use_default_shell_env = True
+        # sandbox and the host toolchain behind them is not an input, so the
+        # result stays unshareable regardless.
+        #
+        # What the mirror does change is the network: with the Maven closure,
+        # the Gradle distribution and the init script declared as inputs, and
+        # the init script forcing offline resolution, the action has nothing
+        # left to fetch. It also has nothing left to inherit — GRADLE_USER_HOME
+        # comes from a flag rather than --action_env — so it stops taking the
+        # client shell environment too.
+        offline = android != None and android.offline
+        execution_requirements = host_bound_action_execution_requirements(
+            dependencies_declared = offline,
+        )
+        use_default_shell_env = not offline
         mnemonic = "FlutterBuildAndroid"
     elif target == "ios":
         # Host Xcode + CocoaPods; pod install fetches specs and binary pods

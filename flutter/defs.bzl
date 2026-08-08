@@ -74,6 +74,26 @@ def _build_runner_cache(ctx):
 def _remote_cache_trees(ctx):
     return ctx.attr._remote_cache_trees[BuildSettingInfo].value
 
+# Hidden attrs for the Android offline build settings:
+# //flutter:android_gradle_offline (resolve Gradle against the declared mirror)
+# and //flutter:gradle_user_home (where GRADLE_USER_HOME lives).
+ANDROID_OFFLINE_ATTR = {
+    "_android_gradle_offline": attr.label(
+        default = Label("//flutter:android_gradle_offline"),
+        providers = [BuildSettingInfo],
+    ),
+    "_gradle_user_home": attr.label(
+        default = Label("//flutter:gradle_user_home"),
+        providers = [BuildSettingInfo],
+    ),
+}
+
+def _android_gradle_offline(ctx):
+    return ctx.attr._android_gradle_offline[BuildSettingInfo].value
+
+def _gradle_user_home(ctx):
+    return ctx.attr._gradle_user_home[BuildSettingInfo].value
+
 def _resolve_flutter_toolchain(ctx):
     """Return (toolchain, flutter_bin File) for the resolved Flutter toolchain.
 
@@ -1401,10 +1421,59 @@ def _android_environment(ctx):
     java_runtime = java_toolchain.java_runtime
     transitive.append(java_runtime.files)
 
+    # Everything below, in contrast to the SDK/NDK above, is a *declared input*:
+    # ordinary files with no symlinks out of the build tree, so they can be added
+    # to the action's inputs rather than referenced by path. That is the whole
+    # point -- an action whose Maven closure and Gradle distribution are inputs
+    # has no reason to reach the network, and can drop requires-network.
+    offline = _android_gradle_offline(ctx)
+    maven_repo_path = None
+    init_script_path = None
+    distribution_path = None
+    engine_repo_path = None
+
+    if ctx.attr.android_maven_repo:
+        maven_files = ctx.attr.android_maven_repo[DefaultInfo].files
+        maven_repo_path = _tree_root_path(maven_files.to_list(), "android_maven_repo", ctx.label)
+        transitive.append(maven_files)
+
+    if ctx.attr.android_gradle_init_script:
+        init_script = ctx.file.android_gradle_init_script
+        init_script_path = init_script.path
+        transitive.append(depset([init_script]))
+
+    if ctx.attr.android_gradle_distribution:
+        distribution = ctx.file.android_gradle_distribution
+        distribution_path = distribution.path
+        transitive.append(depset([distribution]))
+
+    if ctx.attr.android_flutter_engine_repo:
+        engine_files = ctx.attr.android_flutter_engine_repo[DefaultInfo].files
+        engine_repo_path = _tree_root_path(engine_files.to_list(), "android_flutter_engine_repo", ctx.label)
+        transitive.append(engine_files)
+
+    # Fail at analysis rather than let the build discover it: a mirror nothing
+    # points the repositories at is dead weight, and offline mode without one is
+    # a build that resolves nothing.
+    if offline:
+        if maven_repo_path == None:
+            fail("flutter_app '{}': --//flutter:android_gradle_offline needs the android_maven_repo attribute.".format(ctx.label))
+        if init_script_path == None:
+            fail("flutter_app '{}': --//flutter:android_gradle_offline needs the android_gradle_init_script attribute ".format(ctx.label) +
+                 "(a mirror is unreachable unless something retargets the build's repository URLs at it).")
+    elif maven_repo_path != None and init_script_path == None:
+        fail("flutter_app '{}': android_maven_repo needs android_gradle_init_script alongside it.".format(ctx.label))
+
     return struct(
         sdk_path = sdk_path,
         ndk_path = ndk_path,
         java_home = java_runtime.java_home,
+        offline = offline,
+        gradle_user_home = _gradle_user_home(ctx),
+        maven_repo_path = maven_repo_path,
+        init_script_path = init_script_path,
+        distribution_path = distribution_path,
+        engine_repo_path = engine_repo_path,
         files = depset(transitive = transitive),
     )
 
@@ -1604,7 +1673,56 @@ version code via --//app:android_build_number=N.""",
 rules_android_ndk's `@androidndk` (wrapping ANDROID_NDK_HOME); written to
 local.properties as ndk.dir.""",
         ),
-    } | ALLOW_REMOTE_EXECUTION_ATTR,
+        "android_maven_repo": attr.label(
+            allow_files = True,
+            doc = """Optional vendored Maven repository for apk/appbundle targets:
+a directory laid out as `<host>/<maven2 path>`, mirroring the upstreams the build
+would otherwise reach (dl.google.com, repo.maven.apache.org, plugins.gradle.org,
+storage.googleapis.com/download.flutter.io).
+
+Unlike `android_sdk`, this is a real declared input -- its files join the action's
+inputs rather than being passed as a path reference -- which is what lets the
+android action drop `requires-network`. It does *not* make the action sandboxable
+or remote-cacheable; the SDK is still a path reference behind rules_android's
+symlink wrapper.
+
+Needs `android_gradle_init_script` alongside it: a mirror is only reachable if
+something retargets the build's repository URLs at it.""",
+        ),
+        "android_gradle_init_script": attr.label(
+            allow_single_file = True,
+            doc = """Optional Gradle init script, copied into the action-local
+`GRADLE_USER_HOME/init.d/` before the build.
+
+An init script is the only hook that reaches every repository in a Flutter
+Android build: the Flutter SDK's gradle directory arrives via `includeBuild`, so
+it is a composite build with its own settings file, and each pub-cache plugin
+declares its own `buildscript { repositories { ... } }` that
+`dependencyResolutionManagement` cannot touch.
+
+Gets `RULES_FLUTTER_MAVEN_MIRROR` in the environment when `android_maven_repo`
+is also set.""",
+        ),
+        "android_gradle_distribution": attr.label(
+            allow_single_file = [".zip"],
+            doc = """Optional Gradle distribution zip, pre-extracted into the
+action-local `GRADLE_USER_HOME/wrapper/dists/` so the wrapper never reaches
+services.gradle.org. Must match the `distributionUrl` in the project's
+gradle-wrapper.properties: the wrapper names its unpack directory after an MD5 of
+that URL, so a mismatch means it quietly downloads instead of using this.""",
+        ),
+        "android_flutter_engine_repo": attr.label(
+            allow_files = True,
+            doc = """Optional vendored copy of the Flutter engine Maven repository
+(`io.flutter:flutter_embedding_<mode>` and `io.flutter:<arch>_<mode>` at
+`1.0.0-<engine revision>`), exported as `FLUTTER_STORAGE_BASE_URL`.
+
+Usually unnecessary: FlutterPlugin adds the engine repository as an ordinary
+project repository, so an init script that retargets repository URLs already
+covers it. Here for builds that would rather point the Flutter tool itself at a
+local mirror.""",
+        ),
+    } | ALLOW_REMOTE_EXECUTION_ATTR | ANDROID_OFFLINE_ATTR,
     executable = True,
     toolchains = [
         "//flutter:toolchain_type",
@@ -1766,7 +1884,23 @@ def _to_label_list(value):
         return value
     return [value]
 
-_PLATFORM_SPEC_KEYS = ["srcs", "dart_defines", "build_args", "mode", "env", "android_sdk", "android_ndk", "android_test", "build_name", "build_number", "tags"]
+_PLATFORM_SPEC_KEYS = [
+    "srcs",
+    "dart_defines",
+    "build_args",
+    "mode",
+    "env",
+    "android_sdk",
+    "android_ndk",
+    "android_test",
+    "android_maven_repo",
+    "android_gradle_init_script",
+    "android_gradle_distribution",
+    "android_flutter_engine_repo",
+    "build_name",
+    "build_number",
+    "tags",
+]
 
 def _normalize_platform_spec(platform, value):
     """Normalize a flutter_app platform argument to a dict spec.
@@ -1816,6 +1950,10 @@ def flutter_app(
         env = None,
         android_sdk = None,
         android_ndk = None,
+        android_maven_repo = None,
+        android_gradle_init_script = None,
+        android_gradle_distribution = None,
+        android_flutter_engine_repo = None,
         create_dev_target = True,
         dev_run_args = None,
         web = None,
@@ -1831,7 +1969,9 @@ def flutter_app(
     either labels for files that should be overlaid into the Flutter workspace when
     building for that platform, or a dict spec with any of the keys `srcs`,
     `dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, `android_ndk`,
-    `android_test`, `build_name`, `build_number`, and `tags` to customize that
+    `android_test`, `android_maven_repo`, `android_gradle_init_script`,
+    `android_gradle_distribution`, `android_flutter_engine_repo`, `build_name`,
+    `build_number`, and `tags` to customize that
     platform's build. A target is emitted only when the corresponding attribute
     is provided. Spec `tags` extend the macro-level `tags` (e.g. to mark only
     the mobile platforms `manual`).
@@ -1856,6 +1996,17 @@ def flutter_app(
         rules_android's `@androidsdk//:sdk_path`).
       android_ndk: Optional Android NDK directory (e.g. from
         rules_android_ndk's `@androidndk`).
+      android_maven_repo: Optional vendored Maven repository, declared as an
+        action input so the android build can resolve offline. Needs
+        android_gradle_init_script alongside it.
+      android_gradle_init_script: Optional Gradle init script copied into the
+        action-local GRADLE_USER_HOME/init.d/ -- the only hook that reaches the
+        Flutter composite build and the pub-cache plugins' buildscript
+        repositories.
+      android_gradle_distribution: Optional Gradle distribution zip, pre-extracted
+        so the wrapper never fetches from services.gradle.org.
+      android_flutter_engine_repo: Optional vendored Flutter engine Maven
+        repository, exported as FLUTTER_STORAGE_BASE_URL.
       create_dev_target: Whether to emit a runnable `{name}.dev` helper (when
         `web` is configured) that runs `flutter run -d web-server` in the
         source workspace with the hermetic SDK and the web dart_defines.
@@ -1923,6 +2074,15 @@ def flutter_app(
         platform_android_ndk = spec.get("android_ndk", android_ndk)
         if platform_android_ndk != None:
             rule_args["android_ndk"] = platform_android_ndk
+        for key, common in [
+            ("android_maven_repo", android_maven_repo),
+            ("android_gradle_init_script", android_gradle_init_script),
+            ("android_gradle_distribution", android_gradle_distribution),
+            ("android_flutter_engine_repo", android_flutter_engine_repo),
+        ]:
+            value = spec.get(key, common)
+            if value != None:
+                rule_args[key] = value
 
         for passthrough in ["android_test", "build_name", "build_number"]:
             if spec.get(passthrough) != None:

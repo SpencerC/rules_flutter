@@ -141,6 +141,9 @@ in `flutter_actions.bzl`:
 
 - `FlutterBuildAndroid` (apk/appbundle): `no-remote-cache`, `no-remote-exec`,
   `no-sandbox`, `requires-network`, plus `use_default_shell_env = True`.
+  Under `--//flutter:android_gradle_offline` (see
+  [Android: offline Gradle](#android-offline-gradle)) `requires-network` and
+  `use_default_shell_env` both drop; the other two do not.
 - `FlutterBuildIos`: `no-remote-cache`, `no-remote-exec`, `no-sandbox`,
   `requires-darwin`, `requires-network`, plus `use_default_shell_env = True`.
 
@@ -182,7 +185,7 @@ cold build re-downloads the Gradle distribution and Maven dependencies. Opt
 into persistence in `.bazelrc`:
 
 ```
-build --action_env=RULES_FLUTTER_GRADLE_USER_HOME=/home/me/.cache/rules_flutter_gradle
+build --//flutter:gradle_user_home=/home/me/.cache/rules_flutter_gradle
 build --sandbox_writable_path=/home/me/.cache/rules_flutter_gradle
 ```
 
@@ -190,6 +193,76 @@ The Android action itself runs `no-sandbox`, so the `--sandbox_writable_path`
 line is there to keep the directory usable if you tighten sandboxing later; it
 is harmless otherwise. Gradle daemons are disabled inside the action
 (`-Dorg.gradle.daemon=false`).
+
+This used to be `--action_env=RULES_FLUTTER_GRADLE_USER_HOME`, which forced the
+action to inherit the client shell environment in order to receive it. As a
+build setting it is part of the action key instead, which is what lets the
+offline path below drop `use_default_shell_env`.
+
+### Android: offline Gradle
+
+Gradle's dependencies can be made declared inputs rather than mid-action
+downloads. Vendor the Maven closure into a `file://` mirror, point the build at
+it with an init script, and set:
+
+```
+build --//flutter:android_gradle_offline
+```
+
+on a `flutter_app` that declares:
+
+```starlark
+flutter_app(
+    name = "app",
+    apk = {
+        "android_sdk": "@androidsdk//:sdk_path",
+        "android_maven_repo": "//android:maven_mirror",
+        "android_gradle_init_script": "//android:gradle/init.d/hermetic.init.gradle.kts",
+        "android_gradle_distribution": "//android:gradle-8.14.4-all.zip",
+    },
+    ...
+)
+```
+
+The attributes alone change nothing; the flag is what turns the environment on,
+so a consumer can declare them, keep building as before, and flip the flag once
+the mirror is actually complete. With it on, the action:
+
+- copies the init script into `GRADLE_USER_HOME/init.d/`,
+- exports `RULES_FLUTTER_MAVEN_MIRROR` at the vendored repository,
+- pre-extracts the distribution into `wrapper/dists/<name>/<hash>/` with the
+  wrapper's `.ok` sentinel, deriving `<hash>` the way the wrapper does (MD5 of
+  the `distributionUrl` in your `gradle-wrapper.properties`, read as an unsigned
+  BigInteger in base 36) so the wrapper finds it instead of downloading,
+- points `ANDROID_USER_HOME` at scratch so aapt2 and lint stop consulting
+  `~/.android`,
+- drops `requires-network` and stops inheriting the client shell environment.
+
+Note the last one has teeth: with `use_default_shell_env` off the action gets
+Bazel's minimal `PATH`, not yours. `JAVA_HOME` is still set explicitly from the
+java runtime toolchain, and the action's own helpers (`unzip`, `python3`) live in
+the standard directories — but anything else your Gradle build shells out to
+(`cargo` for a Rust plugin, say) has to be forwarded with `--action_env=PATH` or
+declared properly. That is the point of the flag rather than a side effect: an
+action that quietly reads whatever is on the developer's `PATH` is exactly the
+kind of undeclared input this is meant to surface.
+
+**Why an init script and not `dependencyResolutionManagement`.** It is the only
+hook that reaches everything: the Flutter SDK's gradle directory arrives via
+`includeBuild`, so it is a composite build with its own settings file, and each
+pub-cache plugin declares its own `buildscript { repositories { ... } }` that
+settings-level configuration cannot touch. `FAIL_ON_PROJECT_REPOS` is not an
+option either — `FlutterPlugin` unconditionally adds the engine repository as a
+project repository after settings evaluation. A script hooked on
+`RepositoryHandler.all {}` from `beforeSettings` and `allprojects` covers all of
+it.
+
+**What this does not buy.** `no-sandbox` and `no-remote-cache` stay. The Android
+SDK still reaches the action as a *path* resolved through rules_android's
+symlink wrapper to a host installation that is not an input at all, so the action
+key still fails to describe the result and sharing it between machines would
+still be wrong. Lifting those needs a declared, symlink-free SDK — a separate
+piece of work.
 
 ### iOS: persistent CocoaPods caches
 

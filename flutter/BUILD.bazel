@@ -55,6 +55,36 @@ string_flag(
     visibility = ["//visibility:public"],
 )
 
+# Build Android with Gradle offline, against the vendored Maven repository and
+# Gradle distribution declared on flutter_app (android_maven_repo,
+# android_gradle_init_script, android_gradle_distribution):
+#   build --//flutter:android_gradle_offline
+# Those files become real action inputs, which is what lets the android action
+# drop requires-network. It stays no-sandbox and no-remote-cache regardless: the
+# Android SDK is still a path reference resolved through rules_android's symlink
+# wrapper to a host installation that is not an input at all.
+bool_flag(
+    name = "android_gradle_offline",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+# Absolute path to use as GRADLE_USER_HOME for android/ios builds:
+#   build --//flutter:gradle_user_home=/abs/path
+#   build --sandbox_writable_path=/abs/path
+# Empty (the default) puts it under the action's own temp directory, which is
+# removed on exit -- so every Bazel android build is a cold Gradle, re-extracting
+# the distribution and re-resolving the whole Maven closure.
+#
+# Supersedes RULES_FLUTTER_GRADLE_USER_HOME, which had to arrive via --action_env
+# and therefore forced the action to inherit the client shell environment. As a
+# flag it is part of the action key instead.
+string_flag(
+    name = "gradle_user_home",
+    build_setting_default = "",
+    visibility = ["//visibility:public"],
+)
+
 # This is the target rule authors should put in their "toolchains"
 # attribute in order to get a runtime for the correct platform.
 # See https://docs.bazel.build/versions/main/toolchains.html#writing-rules-that-use-toolchains

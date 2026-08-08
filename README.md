@@ -632,8 +632,14 @@ Notes:
   Opt into a persistent cache so warm builds skip the downloads:
 
   ```
-  build --action_env=RULES_FLUTTER_GRADLE_USER_HOME=/path/to/gradle-cache
+  build --//flutter:gradle_user_home=/path/to/gradle-cache
   ```
+
+  To go further and remove the downloads entirely, vendor the Maven closure and
+  build offline — see
+  [Android: offline Gradle](docs/hermeticity.md#android-offline-gradle). That
+  drops `requires-network` from the action, though not `no-sandbox` or
+  `no-remote-cache`.
 
 - **Firebase Test Lab:** `android_test = True` (apk only) additionally runs
   Gradle's `app:assembleAndroidTest` after the Flutter build and copies the

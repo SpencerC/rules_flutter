@@ -1,5 +1,11 @@
 load("//flutter:defs.bzl", "flutter_app", "flutter_library")
-load(":defs_analysis_test.bzl", "build_command_test", "embed_guard_test")
+load(
+    ":defs_analysis_test.bzl",
+    "android_offline_test",
+    "android_online_test",
+    "build_command_test",
+    "embed_guard_test",
+)
 
 # Fixture targets are analysis-only: the analysis tests inspect their action
 # graphs without executing them. Tagged manual so wildcard builds skip them.
@@ -99,6 +105,55 @@ build_command_test(
     target_under_test = ":fixture_android_app.apk",
 )
 
+# The offline fixture points every android_* attribute at analysis-only
+# stand-ins, the same trick android_sdk uses above: the tests read the action
+# graph without executing it, so the files only have to exist and be resolvable.
+flutter_app(
+    name = "fixture_android_offline_app",
+    apk = {
+        "srcs": [],
+        "mode": "debug",
+        "android_sdk": "@bazel_skylib//:LICENSE",
+        "android_maven_repo": "@bazel_skylib//:LICENSE",
+        "android_gradle_init_script": "hermetic.init.gradle.kts",
+        "android_gradle_distribution": "gradle-fixture.zip",
+    },
+    embed = [":fixture_lib"],
+    tags = ["manual"],
+)
+
+# With the closure declared and offline resolution on, the action has nothing
+# left to fetch -- so requires-network goes. Everything else stays: the Android
+# SDK is still a path reference to a host install, which is what no-sandbox and
+# no-remote-cache are actually about.
+# (The execution requirements themselves are asserted directly in
+# //flutter/tests:exec_posture_test -- analysistest's Action exposes argv,
+# inputs and env, but not execution_requirements.)
+android_offline_test(
+    name = "android_offline_apk_test",
+    expected_inputs = [
+        "hermetic.init.gradle.kts",
+        "gradle-fixture.zip",
+    ],
+    expected_substrings = [
+        "RULES_FLUTTER_MAVEN_MIRROR",
+        "GRADLE_USER_HOME/init.d",
+        "ANDROID_USER_HOME",
+    ],
+    target_under_test = ":fixture_android_offline_app.apk",
+)
+
+# The same target without --//flutter:android_gradle_offline keeps the old
+# posture, so declaring the attributes is not by itself a behaviour change.
+android_online_test(
+    name = "android_online_apk_test",
+    absent_substrings = [
+        "RULES_FLUTTER_MAVEN_MIRROR",
+        "GRADLE_USER_HOME/init.d",
+    ],
+    target_under_test = ":fixture_android_offline_app.apk",
+)
+
 # Mirrors a generated package repository target: its cache holds only its
 # own payload, so embedding it must be rejected at analysis time.
 flutter_library(
@@ -125,6 +180,8 @@ test_suite(
     name = "analysis_tests",
     tests = [
         ":android_default_apk_test",
+        ":android_offline_apk_test",
+        ":android_online_apk_test",
         ":android_test_apk_test",
         ":build_command_customization_test",
         ":build_command_defaults_test",

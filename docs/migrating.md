@@ -419,7 +419,7 @@ And in `.bazelrc`:
 ```
 common --repo_env=ANDROID_HOME
 # Optional: persistent Gradle cache so warm builds skip distribution/Maven downloads.
-build --action_env=RULES_FLUTTER_GRADLE_USER_HOME=/path/to/gradle-cache
+build --//flutter:gradle_user_home=/path/to/gradle-cache
 ```
 
 Host prerequisites:

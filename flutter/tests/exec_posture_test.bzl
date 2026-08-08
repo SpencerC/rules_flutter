@@ -83,22 +83,57 @@ def _host_bound_posture_test_impl(ctx):
     # The android/ios builds read host toolchains and the network, neither of
     # which is an input. Their results must never be uploaded to a cache
     # shared with a machine holding a different Xcode/Gradle/Maven view.
-    asserts.equals(
-        env,
-        {
-            "no-remote-cache": "1",
-            "no-remote-exec": "1",
-            "no-sandbox": "1",
-            "requires-network": "1",
-        },
-        host_bound_action_execution_requirements(),
-    )
+    #
+    # dependencies_declared covers the network half only: with the Maven closure
+    # and the Gradle distribution declared as inputs there is nothing left to
+    # fetch, but the Android SDK is still a path reference to a host install, so
+    # no-sandbox and no-remote-cache do not move.
+    for dependencies_declared, expected in [
+        (
+            False,
+            {
+                "no-remote-cache": "1",
+                "no-remote-exec": "1",
+                "no-sandbox": "1",
+                "requires-network": "1",
+            },
+        ),
+        (
+            True,
+            {
+                "no-remote-cache": "1",
+                "no-remote-exec": "1",
+                "no-sandbox": "1",
+            },
+        ),
+    ]:
+        asserts.equals(
+            env,
+            expected,
+            host_bound_action_execution_requirements(
+                dependencies_declared = dependencies_declared,
+            ),
+            "dependencies_declared = {}".format(dependencies_declared),
+        )
 
     # Extra requirements merge in without dropping any of the restrictions.
     ios = host_bound_action_execution_requirements({"requires-darwin": "1"})
     asserts.equals(env, "1", ios["requires-darwin"])
     asserts.equals(env, "1", ios["no-remote-cache"])
     asserts.equals(env, "1", ios["no-remote-exec"])
+    asserts.equals(env, "1", ios["requires-network"])
+
+    # Declaring the dependencies must not disturb a caller's extras.
+    offline_ios = host_bound_action_execution_requirements(
+        {"requires-darwin": "1"},
+        dependencies_declared = True,
+    )
+    asserts.equals(env, "1", offline_ios["requires-darwin"])
+    asserts.false(
+        env,
+        "requires-network" in offline_ios,
+        "requires-network survived dependencies_declared",
+    )
 
     # The default argument must not accumulate across calls.
     asserts.false(
