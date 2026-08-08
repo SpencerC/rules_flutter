@@ -306,15 +306,26 @@ for entry in data.get("packages", []):
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "packages", name)
         add_package(name, root_path)
     elif source == "path":
-        path_value = ""
-        if isinstance(description, str):
-            path_value = description
-        elif isinstance(description, dict):
-            path_value = description.get("path") or ""
-        if not path_value:
-            path_value = path_dep_locations.get(name) or ""
-        if path_value:
-            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
+        # A path dependency lives outside the depending package's directory, so
+        # it cannot be staged inside that package's prepared workspace tree.
+        # The depended-on flutter_library republishes its workspace into the
+        # assembled cache at path/<name>/ instead
+        # (flutter_stage_path_package_action). Prefer that staged copy, and
+        # fall back to resolving against the source tree for workspaces that
+        # were not staged by Bazel.
+        staged_root = os.path.join(cache_root, "path", name)
+        if os.path.isdir(staged_root):
+            add_package(name, staged_root)
+        else:
+            path_value = ""
+            if isinstance(description, str):
+                path_value = description
+            elif isinstance(description, dict):
+                path_value = description.get("path") or ""
+            if not path_value:
+                path_value = path_dep_locations.get(name) or ""
+            if path_value:
+                add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
 
 config = dict()
 config["configVersion"] = 2
@@ -615,6 +626,89 @@ echo "=== Pub cache assembly complete ==="
     )
 
     return assembled_cache
+
+def flutter_stage_path_package_action(
+        ctx,
+        workspace,
+        pubspec,
+        allow_remote_exec = False,
+        remote_cache_trees = False):
+    """Stage a local flutter_library's workspace as a pub-cache `path/` entry.
+
+    A pubspec `path:` dependency points outside the depending package's
+    directory, so it cannot be staged inside that package's prepared workspace
+    tree. Instead the depended-on library republishes its own workspace in
+    pub-cache shape at `path/<package name>/`, which rides the existing
+    transitive_pub_caches depset into every consumer's assembled cache. The
+    package_config generator resolves `source == "path"` entries there.
+
+    Args:
+        ctx: The rule context (of the depended-on library).
+        workspace: That library's prepared workspace tree artifact.
+        pubspec: That library's pubspec.yaml, read for the package name.
+        allow_remote_exec: Whether //flutter:allow_remote_execution is set.
+        remote_cache_trees: Whether //flutter:remote_cache_trees is set.
+
+    Returns:
+        A pub-cache-shaped tree artifact containing `path/<name>/`.
+    """
+    staged = ctx.actions.declare_directory(ctx.label.name + "_path_pub_cache")
+
+    script_content = """#!/bin/bash
+set -euo pipefail
+
+STAGED="{staged}"
+WORKSPACE="{workspace}"
+PUBSPEC="{pubspec}"
+
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
+if [ -z "$PYTHON_BIN" ]; then
+    echo "✗ FATAL ERROR: python interpreter not found on PATH" >&2
+    exit 1
+fi
+
+NAME="$(PUBSPEC_PATH="$PUBSPEC" "$PYTHON_BIN" <<'PY'
+import os
+name = ""
+with open(os.environ["PUBSPEC_PATH"], "r", encoding="utf-8") as fh:
+    for line in fh:
+        s = line.strip()
+        if s.startswith("#"):
+            continue
+        if s.startswith("name:"):
+            name = s.split(":", 1)[1].strip().strip("'").strip('"')
+            break
+print(name)
+PY
+)"
+if [ -z "$NAME" ]; then
+    echo "✗ could not read package name from $PUBSPEC" >&2
+    exit 1
+fi
+
+rm -rf "$STAGED"
+mkdir -p "$STAGED/path/$NAME"
+if command -v rsync >/dev/null 2>&1; then
+    rsync -aL "$WORKSPACE/" "$STAGED/path/$NAME/"
+else
+    cp -RL "$WORKSPACE/." "$STAGED/path/$NAME/"
+fi
+""".format(
+        staged = staged.path,
+        workspace = workspace.path,
+        pubspec = pubspec.path,
+    )
+
+    ctx.actions.run_shell(
+        inputs = [workspace, pubspec],
+        outputs = [staged],
+        command = script_content,
+        mnemonic = "FlutterStagePathPackage",
+        progress_message = "Staging path package %s" % ctx.label.name,
+        execution_requirements = tree_output_execution_requirements(allow_remote_exec, remote_cache_trees),
+    )
+
+    return staged
 
 def flutter_stage_pub_package_action(ctx, payload_files, allow_remote_exec = False):
     """Stage a hosted pub package's own payload into a single pub cache tree.
@@ -1221,15 +1315,26 @@ for entry in data.get("packages", []):
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "packages", name)
         add_package(name, root_path)
     elif source == "path":
-        path_value = ""
-        if isinstance(description, str):
-            path_value = description
-        elif isinstance(description, dict):
-            path_value = description.get("path") or ""
-        if not path_value:
-            path_value = path_dep_locations.get(name) or ""
-        if path_value:
-            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
+        # A path dependency lives outside the depending package's directory, so
+        # it cannot be staged inside that package's prepared workspace tree.
+        # The depended-on flutter_library republishes its workspace into the
+        # assembled cache at path/<name>/ instead
+        # (flutter_stage_path_package_action). Prefer that staged copy, and
+        # fall back to resolving against the source tree for workspaces that
+        # were not staged by Bazel.
+        staged_root = os.path.join(cache_root, "path", name)
+        if os.path.isdir(staged_root):
+            add_package(name, staged_root)
+        else:
+            path_value = ""
+            if isinstance(description, str):
+                path_value = description
+            elif isinstance(description, dict):
+                path_value = description.get("path") or ""
+            if not path_value:
+                path_value = path_dep_locations.get(name) or ""
+            if path_value:
+                add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
 
 config = dict()
 config["configVersion"] = 2

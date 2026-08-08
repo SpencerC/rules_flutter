@@ -11,6 +11,7 @@ load(
     "flutter_assemble_pub_cache_action",
     "flutter_build_action",
     "flutter_pub_get_action",
+    "flutter_stage_path_package_action",
     "flutter_stage_pub_package_action",
     "tree_output_execution_requirements",
 )
@@ -1022,6 +1023,18 @@ def _flutter_library_impl(ctx):
         dart_tool_dir,
     ]
 
+    # Republish this library's own workspace in pub-cache shape so a consumer
+    # depending on it through a pubspec `path:` dependency can resolve it: a
+    # path dep lives outside the consumer's package directory and so cannot be
+    # staged inside the consumer's prepared workspace tree.
+    path_pub_cache = flutter_stage_path_package_action(
+        ctx,
+        prepared_workspace,
+        pubspec_file,
+        allow_remote_exec = _allow_remote_exec(ctx),
+        remote_cache_trees = _remote_cache_trees(ctx),
+    )
+
     return [
         DefaultInfo(
             files = depset(output_files + [pubspec_file]),
@@ -1037,7 +1050,7 @@ def _flutter_library_impl(ctx):
             dart_sources = depset(dart_files),
             other_sources = depset(other_files),
             transitive_pub_caches = depset(
-                direct = [pub_cache_dir],
+                direct = [pub_cache_dir, path_pub_cache],
                 transitive = transitive_pub_caches,
             ),
             assembled_cache = ctx.attr.assemble_dep_caches,
