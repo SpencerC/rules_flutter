@@ -7,6 +7,14 @@ it reaches 1.0.
 
 ## [Unreleased]
 
+### Breaking
+
+- Android APK/appbundle builds now require `flutter.android_toolchain(...)`
+  plus a complete per-app `android_maven_repo`. Host SDK, network Gradle, and
+  persistent Gradle-home configuration have been removed. Android actions are
+  sandboxable, remotely cacheable, and remote-execution eligible by default.
+- Raised the Bazel minimum to 8.4.2 and the module compatibility level to 2.
+
 ## [0.2.1] - 2026-07-14
 
 ### Fixed

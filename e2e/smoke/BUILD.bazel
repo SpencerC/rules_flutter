@@ -7,6 +7,8 @@ load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
+exports_files(["hermetic_android_toolchains_export_repositories.patch"])
+
 gazelle_binary(
     name = "gazelle_bin",
     languages = [

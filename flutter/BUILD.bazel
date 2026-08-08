@@ -4,20 +4,18 @@ load("//flutter/private:resolved_toolchain.bzl", "resolved_toolchain")
 
 # For stardoc to reference the files
 exports_files([
+    "android_toolchain.bzl",
     "defs.bzl",
     "extensions.bzl",
 ])
 
 # The CPU-heavy hermetic actions (dependency preparation/codegen and
-# web/desktop flutter builds) and the test rules default to no-remote-exec:
-# default-size remote executors are far too small for them (a prepare that
-# takes ~1 minute on an 8-CPU worker has been observed taking 50+ minutes
-# remotely), while remote CACHING of their results stays enabled. Flip this
-# flag to opt into remote execution on a well-resourced RBE fleet:
-#   build --//flutter:allow_remote_execution
+# web/desktop/Android flutter builds) and test rules are remote-execution
+# eligible by default. Set this false only for an undersized RBE fleet:
+#   build --no//flutter:allow_remote_execution
 bool_flag(
     name = "allow_remote_execution",
-    build_setting_default = False,
+    build_setting_default = True,
     visibility = ["//visibility:public"],
 )
 
@@ -55,41 +53,16 @@ string_flag(
     visibility = ["//visibility:public"],
 )
 
-# Build Android with Gradle offline, against the vendored Maven repository and
-# Gradle distribution declared on flutter_app (android_maven_repo,
-# android_gradle_init_script, android_gradle_distribution):
-#   build --//flutter:android_gradle_offline
-# Those files become real action inputs, which is what lets the android action
-# drop requires-network. It stays no-sandbox and no-remote-cache regardless: the
-# Android SDK is still a path reference resolved through rules_android's symlink
-# wrapper to a host installation that is not an input at all.
-bool_flag(
-    name = "android_gradle_offline",
-    build_setting_default = False,
-    visibility = ["//visibility:public"],
-)
-
-# Absolute path to use as GRADLE_USER_HOME for android/ios builds:
-#   build --//flutter:gradle_user_home=/abs/path
-#   build --sandbox_writable_path=/abs/path
-# Empty (the default) puts it under the action's own temp directory, which is
-# removed on exit -- so every Bazel android build is a cold Gradle, re-extracting
-# the distribution and re-resolving the whole Maven closure.
-#
-# Supersedes RULES_FLUTTER_GRADLE_USER_HOME, which had to arrive via --action_env
-# and therefore forced the action to inherit the client shell environment. As a
-# flag it is part of the action key instead.
-string_flag(
-    name = "gradle_user_home",
-    build_setting_default = "",
-    visibility = ["//visibility:public"],
-)
-
 # This is the target rule authors should put in their "toolchains"
 # attribute in order to get a runtime for the correct platform.
 # See https://docs.bazel.build/versions/main/toolchains.html#writing-rules-that-use-toolchains
 toolchain_type(
     name = "toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+toolchain_type(
+    name = "android_toolchain_type",
     visibility = ["//visibility:public"],
 )
 
@@ -117,10 +90,17 @@ bzl_library(
 )
 
 bzl_library(
+    name = "android_toolchain",
+    srcs = ["android_toolchain.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
     name = "defs",
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        ":android_toolchain",
         ":toolchain",
         "//flutter/private:flutter_actions",
         "@bazel_skylib//lib:paths",
@@ -136,6 +116,10 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         ":repositories",
+        "//flutter/private:android_repositories",
+        "//flutter/private:hermetic_android_ndk_repositories",
+        "//flutter/private:hermetic_android_sdk_repositories",
+        "//flutter/private:hermetic_android_utils",
         "//flutter/private:pub_repository",
         "//flutter/private:version_select",
         "//flutter/private:versions",

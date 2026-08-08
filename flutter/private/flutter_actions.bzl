@@ -1590,92 +1590,34 @@ ANDROID_TARGETS = ["apk", "appbundle"]
 def heavy_action_execution_requirements(allow_remote_exec):
     """Execution requirements for the CPU-heavy hermetic flutter actions.
 
-    The default posture keeps execution local — default-size remote executors
-    are far too small for the flutter tool and build_runner — while remote
-    caching of the results stays enabled. //flutter:allow_remote_execution
-    opts into remote execution for well-resourced RBE fleets.
+    Returns no restriction when allow_remote_exec is true (the default), or a
+    local-execution restriction when a consumer explicitly opts out.
     """
     if allow_remote_exec:
         return None
     return {"no-remote-exec": "1"}
 
 def _android_offline_gradle_env(android):
-    """Shell that points Gradle at the declared mirror and distribution.
-
-    Returns the empty string unless --//flutter:android_gradle_offline is set,
-    so declaring the attributes is not by itself a behaviour change: a consumer
-    can add them, keep building exactly as before, and flip the flag when the
-    mirror is actually complete.
-
-    Args:
-        android: the struct from _android_environment.
-
-    Returns:
-        Shell source to append to the Android environment setup.
-    """
-    if not android.offline:
-        return ""
-
-    lines = ["", "# --- offline Gradle (rules_flutter) ---"]
-
-    # The init script is what makes the mirror reachable at all: it is the only
-    # hook that reaches the Flutter SDK's composite build and the pub-cache
-    # plugins' own buildscript repositories.
-    if android.init_script_path:
-        lines.append('mkdir -p "$GRADLE_USER_HOME/init.d"')
-        lines.append('cp "$ORIGINAL_PWD/{}" "$GRADLE_USER_HOME/init.d/"'.format(android.init_script_path))
-
-    lines.append('export RULES_FLUTTER_MAVEN_MIRROR="$ORIGINAL_PWD/{}"'.format(android.maven_repo_path))
-
-    if android.engine_repo_path:
-        lines.append('export FLUTTER_STORAGE_BASE_URL="file://$ORIGINAL_PWD/{}"'.format(android.engine_repo_path))
-
-    # Pre-extract the distribution where the wrapper looks for it, so it never
-    # reaches services.gradle.org. The layout and the `.ok` sentinel are the
-    # wrapper's own; the directory name is an MD5 of the distribution URL read as
-    # an unsigned BigInteger and rendered in base 36
-    # (org.gradle.wrapper.PathAssembler#getHash).
-    #
-    # The URL is read out of the project's gradle-wrapper.properties rather than
-    # taken as an attribute, because it is that file the wrapper will consult --
-    # deriving the name from anything else risks seeding a directory the wrapper
-    # ignores, and a silent download instead of a loud failure.
-    if android.distribution_path:
-        # Interpolated on its own line: the block below is a plain literal
-        # because it is full of ${...} parameter expansions that .format() would
-        # read as replacement fields.
-        lines.append('RULES_FLUTTER_DIST_SRC="$ORIGINAL_PWD/{}"'.format(android.distribution_path))
-        lines.append("""
+    """Return shell setup for the mandatory offline Gradle build."""
+    return """
+mkdir -p "$GRADLE_USER_HOME/init.d"
+cp "$ORIGINAL_PWD/{init_script}" "$GRADLE_USER_HOME/init.d/rules_flutter.init.gradle.kts"
+export RULES_FLUTTER_MAVEN_MIRROR="$ORIGINAL_PWD/{maven_repo}"
+RULES_FLUTTER_GRADLE="$ORIGINAL_PWD/{gradle_home}/bin/gradle"
 RULES_FLUTTER_WRAPPER_PROPERTIES="android/gradle/wrapper/gradle-wrapper.properties"
-if [ -f "$RULES_FLUTTER_WRAPPER_PROPERTIES" ]; then
-    RULES_FLUTTER_PYTHON="$(command -v python3 || command -v python || true)"
-    if [ -z "$RULES_FLUTTER_PYTHON" ]; then
-        echo "✗ FATAL ERROR: python3 is required to seed the Gradle distribution." >&2
-        exit 1
-    fi
-    RULES_FLUTTER_DIST_URL="$(sed -n 's/^distributionUrl=//p' "$RULES_FLUTTER_WRAPPER_PROPERTIES" | sed 's/\\\\:/:/g')"
-    RULES_FLUTTER_DIST_ZIP="$(basename "$RULES_FLUTTER_DIST_URL")"
-    RULES_FLUTTER_DIST_HASH="$(printf '%s' "$RULES_FLUTTER_DIST_URL" | md5sum | cut -d' ' -f1 | "$RULES_FLUTTER_PYTHON" -c '
-import sys
-h = int(sys.stdin.read().strip(), 16)
-digits = "0123456789abcdefghijklmnopqrstuvwxyz"
-out = ""
-while h:
-    out = digits[h % 36] + out
-    h //= 36
-print(out or "0")
-')"
-    RULES_FLUTTER_DIST_DIR="$GRADLE_USER_HOME/wrapper/dists/${RULES_FLUTTER_DIST_ZIP%.zip}/$RULES_FLUTTER_DIST_HASH"
-    if [ ! -f "$RULES_FLUTTER_DIST_DIR/$RULES_FLUTTER_DIST_ZIP.ok" ]; then
-        mkdir -p "$RULES_FLUTTER_DIST_DIR"
-        cp "$RULES_FLUTTER_DIST_SRC" "$RULES_FLUTTER_DIST_DIR/$RULES_FLUTTER_DIST_ZIP"
-        (cd "$RULES_FLUTTER_DIST_DIR" && unzip -q -o "$RULES_FLUTTER_DIST_ZIP")
-        touch "$RULES_FLUTTER_DIST_DIR/$RULES_FLUTTER_DIST_ZIP.ok"
-    fi
+if [ -f "$RULES_FLUTTER_WRAPPER_PROPERTIES" ] && ! grep -q 'gradle-{gradle_version}-\\(bin\\|all\\)\\.zip' "$RULES_FLUTTER_WRAPPER_PROPERTIES"; then
+    echo "✗ FATAL ERROR: Gradle wrapper does not match declared Gradle {gradle_version}." >&2
+    exit 1
 fi
-""")
-
-    return "\n".join(lines) + "\n"
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$RULES_FLUTTER_GRADLE" > android/gradlew
+chmod +x android/gradlew
+printf '@echo off\r\n"%s" %%*\r\n' "$RULES_FLUTTER_GRADLE" > android/gradlew.bat
+""".format(
+        init_script = android.init_script_path,
+        maven_repo = android.maven_repo_path,
+        gradle_home = android.gradle_home,
+        gradle_version = android.gradle_version,
+    )
 
 def host_bound_action_execution_requirements(extra = {}, dependencies_declared = False):
     """Execution requirements for actions whose result depends on host state.
@@ -1802,10 +1744,8 @@ def flutter_build_action(
         dart_defines: Dict of compile-time --dart-define key/value pairs
         build_args: Extra args appended verbatim to the flutter build command
         env: Extra environment variables exported before invoking flutter
-        android: struct(sdk_path, ndk_path, java_home, files) for apk/appbundle
-            targets — SDK/NDK trees from rules_android / rules_android_ndk and
-            a JAVA_HOME from Bazel's java runtime toolchain. The action is
-            tagged requires-network for Gradle's distribution/Maven downloads
+        android: Hermetic SDK/optional NDK/Gradle/Maven/JDK environment for
+            apk/appbundle targets. Every component is a declared action input.
         android_test: For apk targets, additionally run Gradle's
             app:assembleAndroidTest after the Flutter build and copy the
             instrumentation APK into androidTest/ under the build artifacts
@@ -1974,7 +1914,7 @@ fi
     android_gradle_env = ""
     if target in ANDROID_TARGETS:
         if android == None:
-            fail("flutter_app '{}' target '{}' requires the android_sdk attribute (see flutter_app docs).".format(ctx.label, target))
+            fail("flutter_app '{}' target '{}' requires an Android toolchain.".format(ctx.label, target))
         java_home_export = (
             "export JAVA_HOME=\"{}\"".format(android.java_home) if android.java_home.startswith("/") else "export JAVA_HOME=\"$ORIGINAL_PWD/{}\"".format(android.java_home)
         )
@@ -1984,31 +1924,9 @@ fi
             java_home_export,
         ])
 
-        # Executed after the mutable workspace copy exists. Gradle needs a
-        # writable home; //flutter:gradle_user_home points it at a persistent one
-        # so warm builds skip the distribution/Maven downloads. The default is
-        # under the action's own temp directory, which is removed on exit -- so
-        # by default every Bazel android build is a cold Gradle.
-        if android.gradle_user_home:
-            gradle_home_export = 'export GRADLE_USER_HOME="{}"'.format(android.gradle_user_home)
-        else:
-            gradle_home_export = 'export GRADLE_USER_HOME="$BUILD_WORKSPACE_TMP/.gradle_home"'
-
-        android_gradle_env = gradle_home_export + """
+        android_gradle_env = 'export GRADLE_USER_HOME="$BUILD_WORKSPACE_TMP/.gradle_home"' + """
 mkdir -p "$GRADLE_USER_HOME"
 export GRADLE_OPTS="-Dorg.gradle.daemon=false ${GRADLE_OPTS:-}"
-# rules_android's repository wraps the host SDK with symlinks and omits some
-# directories (ndk/, licenses/). AGP 8 dropped ndk.dir support, so resolve the
-# real host SDK behind the wrapper — SDK-embedded components stay visible.
-if [ -L "$ANDROID_HOME/platforms" ]; then
-    REAL_PLATFORMS="$(readlink "$ANDROID_HOME/platforms")"
-    case "$REAL_PLATFORMS" in
-        /*)
-            export ANDROID_HOME="$(dirname "$REAL_PLATFORMS")"
-            export ANDROID_SDK_ROOT="$ANDROID_HOME"
-            ;;
-    esac
-fi
 mkdir -p android
 printf 'sdk.dir=%s\\nflutter.sdk=%s\\n' "$ANDROID_HOME" "$FLUTTER_ROOT" > android/local.properties
 """
@@ -2222,21 +2140,8 @@ SCRIPT_COMPLETED=1
     use_default_shell_env = False
     mnemonic = "FlutterBuild"
     if target in ANDROID_TARGETS:
-        # The host-wrapped SDK/NDK symlink trees cannot be staged into a
-        # sandbox and the host toolchain behind them is not an input, so the
-        # result stays unshareable regardless.
-        #
-        # What the mirror does change is the network: with the Maven closure,
-        # the Gradle distribution and the init script declared as inputs, and
-        # the init script forcing offline resolution, the action has nothing
-        # left to fetch. It also has nothing left to inherit — GRADLE_USER_HOME
-        # comes from a flag rather than --action_env — so it stops taking the
-        # client shell environment too.
-        offline = android != None and android.offline
-        execution_requirements = host_bound_action_execution_requirements(
-            dependencies_declared = offline,
-        )
-        use_default_shell_env = not offline
+        execution_requirements = heavy_action_execution_requirements(allow_remote_exec)
+        use_default_shell_env = False
         mnemonic = "FlutterBuildAndroid"
     elif target == "ios":
         # Host Xcode + CocoaPods; pod install fetches specs and binary pods

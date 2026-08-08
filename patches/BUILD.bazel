@@ -1,0 +1,1 @@
+exports_files(["hermetic_android_toolchains_export_repositories.patch"])

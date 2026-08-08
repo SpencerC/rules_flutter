@@ -4,11 +4,22 @@ module(
     name = "rules_flutter",
     # Stamped by the release workflow; 0.0.0 on main between releases.
     version = "0.0.0",
-    bazel_compatibility = [">=8.0.0"],
-    compatibility_level = 1,
+    bazel_compatibility = [">=8.4.2"],
+    compatibility_level = 2,
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.4.1")
+bazel_dep(name = "hermetic_android_toolchains", version = "0.0.0")
+archive_override(
+    module_name = "hermetic_android_toolchains",
+    integrity = "sha256-jovdpav966xUgaGTHIv5OMGtWxJMFk8ijbSoGQ6xX2E=",
+    patch_strip = 1,
+    patches = ["//patches:hermetic_android_toolchains_export_repositories.patch"],
+    strip_prefix = "hermetic_android_toolchains-c6a9f203fbe1d4e72ecfc8d6ea47b81c844435ff",
+    urls = ["https://github.com/keith/hermetic_android_toolchains/archive/c6a9f203fbe1d4e72ecfc8d6ea47b81c844435ff.tar.gz"],
+)
+bazel_dep(name = "rules_android", version = "0.7.3")
+bazel_dep(name = "rules_android_ndk", version = "0.1.5")
 
 # Floor for the transitively-resolved apple_support: protobuf's C++ tools are
 # compiled with its wrapped_clang on macOS, and older versions ship a
@@ -43,6 +54,7 @@ use_repo(
 )
 
 register_toolchains("@flutter_toolchains//:all")
+register_toolchains("//flutter/tests/analysis:fixture_android_toolchain")
 
 # These tags must stay non-dev: pub.package-registered repositories keep
 # their fetch-time vendored .pub_cache closure, and the dart_proto_library

@@ -12,8 +12,8 @@ load(
 def _default_posture_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    # The default keeps heavy hermetic actions off remote executors while
-    # leaving remote caching enabled.
+    # Explicit opt-out keeps heavy hermetic actions off remote executors while
+    # leaving remote caching enabled. The build setting defaults to true.
     asserts.equals(
         env,
         {"no-remote-exec": "1"},

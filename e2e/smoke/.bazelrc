@@ -5,3 +5,5 @@ common --repo_env=ANDROID_HOME
 
 # iOS builds keep the host HOME so CocoaPods caches persist across builds.
 build --action_env=HOME
+build --java_runtime_version=remotejdk_17
+build --tool_java_runtime_version=remotejdk_17

@@ -1,8 +1,35 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 exports_files([
+    "android.init.gradle.kts",
     "versions.bzl",
 ])
+
+bzl_library(
+    name = "android_repositories",
+    srcs = ["android_repositories.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+# Upstream does not yet publish bzl_library wrappers for these public files;
+# keep them in the stardoc dependency graph explicitly.
+bzl_library(
+    name = "hermetic_android_ndk_repositories",
+    srcs = ["@hermetic_android_toolchains//ndk:repositories.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)
+
+bzl_library(
+    name = "hermetic_android_sdk_repositories",
+    srcs = ["@hermetic_android_toolchains//sdk:repositories.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)
+
+bzl_library(
+    name = "hermetic_android_utils",
+    srcs = ["@hermetic_android_toolchains//private:utils.bzl"],
+    visibility = ["//flutter:__subpackages__"],
+)
 
 bzl_library(
     name = "pub_repository",

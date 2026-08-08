@@ -109,9 +109,6 @@ _ANDROID_OFFLINE_TEST_ATTRS = {
 android_offline_test = analysistest.make(
     _android_offline_test_impl,
     attrs = _ANDROID_OFFLINE_TEST_ATTRS,
-    config_settings = {
-        str(Label("//flutter:android_gradle_offline")): True,
-    },
 )
 
 android_online_test = analysistest.make(

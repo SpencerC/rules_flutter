@@ -268,8 +268,8 @@ Defines a dart_library target and optional .update/.format helpers.
 load("@rules_flutter//flutter:defs.bzl", "flutter_app")
 
 flutter_app(*, <a href="#flutter_app-name">name</a>, <a href="#flutter_app-embed">embed</a>, <a href="#flutter_app-srcs">srcs</a>, <a href="#flutter_app-visibility">visibility</a>, <a href="#flutter_app-tags">tags</a>, <a href="#flutter_app-testonly">testonly</a>, <a href="#flutter_app-dart_defines">dart_defines</a>, <a href="#flutter_app-build_args">build_args</a>, <a href="#flutter_app-mode">mode</a>, <a href="#flutter_app-env">env</a>,
-            <a href="#flutter_app-android_sdk">android_sdk</a>, <a href="#flutter_app-android_ndk">android_ndk</a>, <a href="#flutter_app-create_dev_target">create_dev_target</a>, <a href="#flutter_app-dev_run_args">dev_run_args</a>, <a href="#flutter_app-web">web</a>, <a href="#flutter_app-apk">apk</a>, <a href="#flutter_app-appbundle">appbundle</a>, <a href="#flutter_app-ios">ios</a>,
-            <a href="#flutter_app-macos">macos</a>, <a href="#flutter_app-linux">linux</a>, <a href="#flutter_app-windows">windows</a>)
+            <a href="#flutter_app-android_maven_repo">android_maven_repo</a>, <a href="#flutter_app-create_dev_target">create_dev_target</a>, <a href="#flutter_app-dev_run_args">dev_run_args</a>, <a href="#flutter_app-web">web</a>, <a href="#flutter_app-apk">apk</a>, <a href="#flutter_app-appbundle">appbundle</a>, <a href="#flutter_app-ios">ios</a>, <a href="#flutter_app-macos">macos</a>,
+            <a href="#flutter_app-linux">linux</a>, <a href="#flutter_app-windows">windows</a>)
 </pre>
 
 Macro that defines flutter_app platform targets.
@@ -277,8 +277,8 @@ Macro that defines flutter_app platform targets.
 Each platform attribute (`web`, `apk`, `ios`, `macos`, `linux`, `windows`) accepts
 either labels for files that should be overlaid into the Flutter workspace when
 building for that platform, or a dict spec with any of the keys `srcs`,
-`dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, `android_ndk`,
-`android_test`, `build_name`, `build_number`, and `tags` to customize that
+`dart_defines`, `build_args`, `mode`, `env`, `android_test`,
+`android_maven_repo`, `build_name`, `build_number`, and `tags` to customize that
 platform's build. A target is emitted only when the corresponding attribute
 is provided. Spec `tags` extend the macro-level `tags` (e.g. to mark only
 the mobile platforms `manual`).
@@ -303,13 +303,12 @@ with platform keys winning, `mode` overrides).
 | <a id="flutter_app-build_args"></a>build_args |  Extra flutter build arguments shared by all platforms.   |  `None` |
 | <a id="flutter_app-mode"></a>mode |  Build mode (release, profile, debug) shared by all platforms.   |  `None` |
 | <a id="flutter_app-env"></a>env |  Extra action environment variables shared by all platforms.   |  `None` |
-| <a id="flutter_app-android_sdk"></a>android_sdk |  Android SDK directory for apk/appbundle targets (e.g. rules_android's `@androidsdk//:sdk_path`).   |  `None` |
-| <a id="flutter_app-android_ndk"></a>android_ndk |  Optional Android NDK directory (e.g. from rules_android_ndk's `@androidndk`).   |  `None` |
+| <a id="flutter_app-android_maven_repo"></a>android_maven_repo |  Vendored Maven/plugin/Flutter-engine closure required by apk and appbundle targets and resolved offline by the built-in init script.   |  `None` |
 | <a id="flutter_app-create_dev_target"></a>create_dev_target |  Whether to emit a runnable `{name}.dev` helper (when `web` is configured) that runs `flutter run -d web-server` in the source workspace with the hermetic SDK and the web dart_defines.   |  `True` |
 | <a id="flutter_app-dev_run_args"></a>dev_run_args |  Extra args forwarded to flutter run by the dev helper.   |  `None` |
 | <a id="flutter_app-web"></a>web |  Files or dict spec for the {name}.web target.   |  `None` |
 | <a id="flutter_app-apk"></a>apk |  Files or dict spec for the {name}.apk target.   |  `None` |
-| <a id="flutter_app-appbundle"></a>appbundle |  Files or dict spec for the {name}.appbundle target (Android App Bundle; requires an Android SDK toolchain, see flutter.android_sdk).   |  `None` |
+| <a id="flutter_app-appbundle"></a>appbundle |  Files or dict spec for the {name}.appbundle target (Android App Bundle; requires a registered flutter.android_toolchain).   |  `None` |
 | <a id="flutter_app-ios"></a>ios |  Files or dict spec for the {name}.ios target.   |  `None` |
 | <a id="flutter_app-macos"></a>macos |  Files or dict spec for the {name}.macos target.   |  `None` |
 | <a id="flutter_app-linux"></a>linux |  Files or dict spec for the {name}.linux target.   |  `None` |
@@ -349,7 +348,7 @@ Wire them into flutter_app, e.g.:
                 "//conditions:default": "debug",
             }),
             "build_number": ":settings_build_number",
-            "android_sdk": "@androidsdk//:sdk_path",
+            "android_maven_repo": "//android:maven_mirror",
         },
         ...
     )

@@ -1,5 +1,10 @@
 # Migrating a script-based Flutter app to rules_flutter
 
+> Compatibility level 2 makes Android hermetic and offline by default. Replace
+> `android_sdk`, `android_ndk`, Gradle distribution/init-script, and Gradle-home
+> configuration with `flutter.android_toolchain(...)`; retain only a complete
+> per-app `android_maven_repo` on APK/appbundle targets.
+
 This guide is a recipe for moving an existing Flutter app — built today with
 `flutter pub get` scripts, `build_runner watch`, ad-hoc protoc invocations, and
 CI images that install the SDK imperatively — onto hermetic Bazel builds with

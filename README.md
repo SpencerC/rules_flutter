@@ -448,14 +448,13 @@ labels, treated as `srcs`) or a dict spec with any of these keys:
 | `build_args`   | Extra arguments appended verbatim to `flutter build`.                                                                                                                      |
 | `mode`         | Build mode: `release` (default), `profile`, or `debug`.                                                                                                                    |
 | `env`          | Extra environment variables exported in the build action.                                                                                                                  |
-| `android_sdk`  | Android SDK directory for `apk`/`appbundle`, typically rules_android's `@androidsdk//:sdk_path`.                                                                           |
-| `android_ndk`  | Optional Android NDK directory.                                                                                                                                            |
+| `android_maven_repo` | Complete vendored Maven/plugin/Flutter-engine closure required by `apk`/`appbundle`.                                                                                |
 | `android_test` | `apk` only: additionally build the instrumentation APK (see [Mobile builds](#mobile-builds)).                                                                              |
 | `build_name`   | Overrides the pubspec version name (`--build-name`).                                                                                                                       |
 | `build_number` | Label of a `string_flag`; its value (when non-empty) is passed as `--build-number`.                                                                                        |
 | `tags`         | Extra tags for this platform's target, added to the macro-level `tags` (e.g. `["manual"]` to keep mobile targets out of wildcard builds on machines without the host SDK). |
 
-`dart_defines`, `build_args`, `mode`, `env`, `android_sdk`, and `android_ndk`
+`dart_defines`, `build_args`, `mode`, and `env`
 can also be set at the macro level, shared by all platforms. Per-platform
 values merge over the shared ones: `build_args` concatenates after the shared
 list, dicts merge with platform keys winning, and `mode` overrides.
@@ -572,22 +571,27 @@ unsigned `Runner.app` from the same `flutter_library` as the web app.
 
 ### Android (apk / appbundle)
 
-`{name}.apk` and `{name}.appbundle` consume the Android SDK through
-rules_android's `@androidsdk` repository, which wraps the host installation
-discovered via `ANDROID_HOME`. `JAVA_HOME` comes from Bazel's hermetic java
-runtime toolchain.
+`{name}.apk` and `{name}.appbundle` are hermetic by default. The module
+extension pins the SDK, build tools, optional NDK, and extracted Gradle
+distribution; the app supplies its complete Maven mirror.
 
 ```starlark
 # MODULE.bazel
-bazel_dep(name = "rules_android", version = "0.6.6")
-
-android_sdk_repo = use_extension("@rules_android//rules/android_sdk_repository:rule.bzl", "android_sdk_repository_extension")
-use_repo(android_sdk_repo, "androidsdk")
+flutter.android_toolchain(
+    sdk_version = "35",
+    build_tools_version = "35.0.0",
+    ndk_version = "r25c",  # optional
+    gradle_distribution_url = "https://services.gradle.org/distributions/gradle-8.7-bin.zip",
+    gradle_distribution_integrity = "sha256-...",
+)
+use_repo(flutter, "android_toolchains")
+register_toolchains("@android_toolchains//:all")
 ```
 
 ```
-# .bazelrc — pass discovery through to repository fetches
-common --repo_env=ANDROID_HOME
+# .bazelrc — after reviewing the licenses
+common --repo_env=ACCEPTED_ANDROID_SDK_LICENSE_VERSION=35
+common --repo_env=ACCEPTED_ANDROID_NDK_LICENSE_VERSION=r25c
 ```
 
 ```starlark
@@ -604,13 +608,13 @@ flutter_app(
     embed = [":lib"],
     apk = {
         "srcs": glob(["android/**"]),
-        "android_sdk": "@androidsdk//:sdk_path",
+        "android_maven_repo": "//android:maven_mirror",
         "build_number": ":android_build_number",
         "android_test": True,
     },
     appbundle = {
         "srcs": glob(["android/**"]),
-        "android_sdk": "@androidsdk//:sdk_path",
+        "android_maven_repo": "//android:maven_mirror",
         "build_number": ":android_build_number",
     },
 )
@@ -623,23 +627,13 @@ bazel build //my_app:app.appbundle --//my_app:android_build_number=42
 
 Notes:
 
-- **NDK:** AGP 8 dropped `ndk.dir` support, so native code requires the NDK
-  _inside_ the SDK at `ndk/<version>` (install it via `sdkmanager`). Do **not**
-  `register_toolchains` from rules_android_ndk — that forces an `@androidndk`
-  fetch for every build, including non-Android ones.
-- **Gradle caching:** `GRADLE_USER_HOME` defaults to per-action scratch, so
-  Gradle re-downloads its distribution and Maven dependencies on cold builds.
-  Opt into a persistent cache so warm builds skip the downloads:
-
-  ```
-  build --//flutter:gradle_user_home=/path/to/gradle-cache
-  ```
-
-  To go further and remove the downloads entirely, vendor the Maven closure and
-  build offline — see
-  [Android: offline Gradle](docs/hermeticity.md#android-offline-gradle). That
-  drops `requires-network` from the action, though not `no-sandbox` or
-  `no-remote-cache`.
+- **Maven closure:** `android_maven_repo` is mandatory and must contain every
+  application dependency, Gradle plugin, and Flutter engine artifact. The
+  built-in init script replaces all repositories and forces Gradle offline;
+  missing artifacts therefore fail immediately.
+- **Execution:** SDK/NDK, JDK, Gradle, Maven, Flutter, pub cache, sources, and
+  helper scripts are declared inputs. Android actions are sandboxable,
+  remotely cacheable, and remote-execution eligible by default.
 
 - **Firebase Test Lab:** `android_test = True` (apk only) additionally runs
   Gradle's `app:assembleAndroidTest` after the Flutter build and copies the

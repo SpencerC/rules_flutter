@@ -1,5 +1,11 @@
 # Hermeticity contract
 
+> **Android contract (compatibility level 2):** APK and appbundle actions are
+> hermetic, sandboxable, remotely cacheable, and offline by default. Declare
+> `flutter.android_toolchain(...)`, register its generated hub, and provide a
+> complete `android_maven_repo`. Host SDK and persistent Gradle-home escape
+> hatches are no longer supported.
+
 This document states exactly which parts of a `rules_flutter` build are
 hermetic, which parts are declared non-hermetic, and why. Everything below is
 grounded in the rule implementations (`flutter/repositories.bzl`,

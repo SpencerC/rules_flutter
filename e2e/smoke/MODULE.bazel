@@ -21,19 +21,20 @@ register_toolchains("@toolchains_protoc_hub//:all")
 
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
 
-# Host Android SDK for the manual mobile example targets in //flutter_app.
-bazel_dep(name = "rules_android", version = "0.6.6", dev_dependency = True)
-
-android_sdk_repo = use_extension(
-    "@rules_android//rules/android_sdk_repository:rule.bzl",
-    "android_sdk_repository_extension",
-    dev_dependency = True,
-)
-use_repo(android_sdk_repo, "androidsdk")
-
 local_path_override(
     module_name = "rules_flutter",
     path = "../..",
+)
+
+# Temporary until hermetic_android_toolchains publishes its first BCR release;
+# keep this identical to the rules_flutter root override.
+archive_override(
+    module_name = "hermetic_android_toolchains",
+    integrity = "sha256-jovdpav966xUgaGTHIv5OMGtWxJMFk8ijbSoGQ6xX2E=",
+    patch_strip = 1,
+    patches = ["//:hermetic_android_toolchains_export_repositories.patch"],
+    strip_prefix = "hermetic_android_toolchains-c6a9f203fbe1d4e72ecfc8d6ea47b81c844435ff",
+    urls = ["https://github.com/keith/hermetic_android_toolchains/archive/c6a9f203fbe1d4e72ecfc8d6ea47b81c844435ff.tar.gz"],
 )
 
 # The Gazelle plugin ships as its own module so plain rules_flutter consumers

@@ -1,5 +1,11 @@
 # Remote execution
 
+Android APK/appbundle actions now have the same hermetic execution posture as
+other heavy Flutter builds: remote execution is allowed by default, and no
+Android action carries `no-sandbox`, `no-remote-cache`, `no-remote-exec`, or
+`requires-network`. Every SDK, Gradle, JDK, Maven, Flutter, pub, source, and
+helper component is a declared input.
+
 `//flutter:allow_remote_execution` drops the `no-remote-exec` tags described in
 [hermeticity.md](hermeticity.md). This document is the audit behind that flag:
 what already works remotely, what does not, and what is untested. It exists

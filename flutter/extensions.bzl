@@ -11,9 +11,12 @@ effectively overriding the default named toolchain due to toolchain resolution p
 """
 
 load("//flutter/private:pub_repository.bzl", "pub_dev_repository")
+load("//flutter/private:android_repositories.bzl", "android_toolchains_repository", "gradle_repository")
 load("//flutter/private:version_select.bzl", "highest_version")
 load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
 load(":repositories.bzl", "flutter_register_toolchains")
+load("@hermetic_android_toolchains//ndk:repositories.bzl", "ANDROID_NDK_LICENSE_ENV", "hermetic_android_ndk_repository")
+load("@hermetic_android_toolchains//sdk:repositories.bzl", "ANDROID_SDK_LICENSE_ENV", "hermetic_android_sdk_repository")
 
 _DEFAULT_NAME = "flutter"
 
@@ -41,6 +44,25 @@ repositories are fetched lazily). When flutter_version is in the built-in
 table this may be omitted. Merged across registrations of the same name.
 """, default = {}),
 })
+
+android_toolchain = tag_class(attrs = {
+    "name": attr.string(default = "android", doc = "Base name for generated Android repositories."),
+    "sdk_version": attr.string(mandatory = True),
+    "build_tools_version": attr.string(mandatory = True),
+    "ndk_version": attr.string(),
+    "gradle_distribution_url": attr.string(mandatory = True),
+    "gradle_distribution_integrity": attr.string(mandatory = True),
+})
+
+def _gradle_version(url):
+    filename = url.rsplit("/", 1)[-1]
+    if not filename.startswith("gradle-") or not filename.endswith(".zip"):
+        fail("gradle_distribution_url must end in gradle-<version>-bin.zip or gradle-<version>-all.zip")
+    stem = filename[len("gradle-"):-len(".zip")]
+    for suffix in ["-bin", "-all"]:
+        if stem.endswith(suffix):
+            return stem[:-len(suffix)]
+    fail("gradle_distribution_url must name a -bin.zip or -all.zip Gradle distribution")
 
 def _toolchain_extension(module_ctx):
     registrations = {}
@@ -100,9 +122,55 @@ def _toolchain_extension(module_ctx):
             register = False,
         )
 
+    android_tags = []
+    for mod in module_ctx.modules:
+        if mod.tags.android_toolchain:
+            if not mod.is_root:
+                fail("flutter.android_toolchain(...) may only be declared by the root module")
+            android_tags.extend(mod.tags.android_toolchain)
+    names = {}
+    for android in android_tags:
+        if android.name in names:
+            fail("flutter.android_toolchain name '{}' was declared more than once".format(android.name))
+        names[android.name] = True
+        sdk_repo = "{}_android_sdk".format(android.name)
+        gradle_repo = "{}_gradle".format(android.name)
+        ndk_repo = ""
+        hermetic_android_sdk_repository(
+            name = sdk_repo,
+            version = android.sdk_version,
+            build_tools_version = android.build_tools_version,
+        )
+        if android.ndk_version:
+            ndk_repo = "{}_android_ndk".format(android.name)
+            hermetic_android_ndk_repository(
+                name = ndk_repo,
+                version = android.ndk_version,
+            )
+        gradle_repository(
+            name = gradle_repo,
+            url = android.gradle_distribution_url,
+            integrity = android.gradle_distribution_integrity,
+            version = _gradle_version(android.gradle_distribution_url),
+        )
+        android_toolchains_repository(
+            name = "{}_toolchains".format(android.name),
+            sdk_repository = sdk_repo,
+            ndk_repository = ndk_repo,
+            gradle_repository = gradle_repo,
+            sdk_version = android.sdk_version,
+            build_tools_version = android.build_tools_version,
+            ndk_version = android.ndk_version,
+            gradle_version = _gradle_version(android.gradle_distribution_url),
+        )
+
 flutter = module_extension(
     implementation = _toolchain_extension,
-    tag_classes = {"toolchain": flutter_toolchain},
+    tag_classes = {
+        "android_toolchain": android_toolchain,
+        "toolchain": flutter_toolchain,
+    },
+    environ = [ANDROID_NDK_LICENSE_ENV, ANDROID_SDK_LICENSE_ENV],
 )
 
 # Pub.dev package management extension

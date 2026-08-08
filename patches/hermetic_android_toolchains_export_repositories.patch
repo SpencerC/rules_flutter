@@ -1,0 +1,25 @@
+diff --git a/ndk/BUILD.bazel b/ndk/BUILD.bazel
+--- a/ndk/BUILD.bazel
++++ b/ndk/BUILD.bazel
+@@ -1,5 +1,6 @@
+ exports_files([
+     "BUILD.androidndk.bazel",
+     "BUILD.ndkredirect.bazel",
++    "repositories.bzl",
+     "versions.json",
+ ])
+diff --git a/sdk/BUILD.bazel b/sdk/BUILD.bazel
+--- a/sdk/BUILD.bazel
++++ b/sdk/BUILD.bazel
+@@ -1,5 +1,6 @@
+ exports_files([
+     "BUILD.androidsdk.tpl",
+     "BUILD.sdkredirect.tpl",
++    "repositories.bzl",
+     "versions.json",
+ ])
+diff --git a/private/BUILD.bazel b/private/BUILD.bazel
+--- a/private/BUILD.bazel
++++ b/private/BUILD.bazel
+@@ -0,0 +1 @@
++exports_files(["utils.bzl"])

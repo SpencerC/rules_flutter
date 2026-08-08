@@ -1,10 +1,26 @@
 load("//flutter:defs.bzl", "flutter_app", "flutter_library")
+load("//flutter:android_toolchain.bzl", "android_toolchain")
 load(
     ":defs_analysis_test.bzl",
     "android_offline_test",
     "android_online_test",
     "build_command_test",
     "embed_guard_test",
+)
+
+android_toolchain(
+    name = "fixture_android",
+    build_tools_version = "35.0.0",
+    gradle = "gradle-fixture.zip",
+    gradle_version = "8.7",
+    sdk = "@bazel_skylib//:LICENSE",
+    sdk_version = "35",
+)
+
+toolchain(
+    name = "fixture_android_toolchain",
+    toolchain = ":fixture_android",
+    toolchain_type = "//flutter:android_toolchain_type",
 )
 
 # Fixture targets are analysis-only: the analysis tests inspect their action
@@ -61,16 +77,13 @@ build_command_test(
     target_under_test = ":fixture_default_app.web",
 )
 
-# The android_sdk labels below are analysis-only stand-ins: the tests inspect
-# the action script without executing it, and _tree_root_path only needs a
-# resolvable external file to derive a root from.
 flutter_app(
     name = "fixture_android_test_app",
     apk = {
         "srcs": [],
         "mode": "debug",
         "android_test": True,
-        "android_sdk": "@bazel_skylib//:LICENSE",
+        "android_maven_repo": "@bazel_skylib//:LICENSE",
     },
     embed = [":fixture_lib"],
     tags = ["manual"],
@@ -80,7 +93,7 @@ flutter_app(
     name = "fixture_android_app",
     apk = {
         "srcs": [],
-        "android_sdk": "@bazel_skylib//:LICENSE",
+        "android_maven_repo": "@bazel_skylib//:LICENSE",
     },
     embed = [":fixture_lib"],
     tags = ["manual"],
@@ -105,18 +118,14 @@ build_command_test(
     target_under_test = ":fixture_android_app.apk",
 )
 
-# The offline fixture points every android_* attribute at analysis-only
-# stand-ins, the same trick android_sdk uses above: the tests read the action
-# graph without executing it, so the files only have to exist and be resolvable.
+# The fixture uses analysis-only Maven and toolchain stand-ins; the tests read
+# the action graph without executing it.
 flutter_app(
     name = "fixture_android_offline_app",
     apk = {
         "srcs": [],
         "mode": "debug",
-        "android_sdk": "@bazel_skylib//:LICENSE",
         "android_maven_repo": "@bazel_skylib//:LICENSE",
-        "android_gradle_init_script": "hermetic.init.gradle.kts",
-        "android_gradle_distribution": "gradle-fixture.zip",
     },
     embed = [":fixture_lib"],
     tags = ["manual"],
@@ -132,7 +141,7 @@ flutter_app(
 android_offline_test(
     name = "android_offline_apk_test",
     expected_inputs = [
-        "hermetic.init.gradle.kts",
+        "android.init.gradle.kts",
         "gradle-fixture.zip",
     ],
     expected_substrings = [
@@ -143,14 +152,9 @@ android_offline_test(
     target_under_test = ":fixture_android_offline_app.apk",
 )
 
-# The same target without --//flutter:android_gradle_offline keeps the old
-# posture, so declaring the attributes is not by itself a behaviour change.
 android_online_test(
     name = "android_online_apk_test",
-    absent_substrings = [
-        "RULES_FLUTTER_MAVEN_MIRROR",
-        "GRADLE_USER_HOME/init.d",
-    ],
+    expected_substrings = ["RULES_FLUTTER_MAVEN_MIRROR", "GRADLE_USER_HOME/init.d"],
     target_under_test = ":fixture_android_offline_app.apk",
 )
 

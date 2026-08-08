@@ -150,6 +150,13 @@ flutter_build_settings(
     mode_default = "debug",
 )
 
+# Analysis-only placeholder for the manual example. Real applications restore
+# a checked-in, checksummed Maven closure at repository fetch time.
+filegroup(
+    name = "android_maven_mirror",
+    srcs = ["android/settings.gradle.kts"],
+)
+
 flutter_app(
     name = "mobile",
     apk = {
@@ -159,7 +166,7 @@ flutter_app(
             "//conditions:default": "debug",
         }),
         "build_number": ":settings_build_number",
-        "android_sdk": "@androidsdk//:sdk_path",
+        "android_maven_repo": ":android_maven_mirror",
     },
     embed = [":lib"],
     ios = {
