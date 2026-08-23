@@ -7,8 +7,14 @@ load(
     "TREE_WORKSPACE",
     "heavy_action_execution_requirements",
     "heavy_action_resource_set",
+    "prepare_deps_tree_kind",
     "tree_output_execution_requirements",
 )
+
+# The two postures tree_output_execution_requirements can return under local
+# execution.
+_LOCAL_ONLY = {"no-remote-exec": "1", "no-remote-cache": "1"}
+_REMOTE_CACHED = {"no-remote-exec": "1"}
 
 def _default_posture_test_impl(ctx):
     env = unittest.begin(ctx)
@@ -35,15 +41,12 @@ def _resource_set_test_impl(ctx):
 def _tree_output_posture_test_impl(ctx):
     env = unittest.begin(ctx)
 
-    local_only = {"no-remote-exec": "1", "no-remote-cache": "1"}
-    cached = {"no-remote-exec": "1"}
-
     # "none" (the default): local execution AND no remote-cache upload of
     # either kind of tree (the local disk cache stays eligible for both).
     for kind in [TREE_WORKSPACE, TREE_PUB_CACHE]:
         asserts.equals(
             env,
-            local_only,
+            _LOCAL_ONLY,
             tree_output_execution_requirements(False, "none", kind = kind),
             "none must keep %s out of the remote cache" % kind,
         )
@@ -52,7 +55,7 @@ def _tree_output_posture_test_impl(ctx):
     # the same answer as one that names it.
     asserts.equals(
         env,
-        local_only,
+        _LOCAL_ONLY,
         tree_output_execution_requirements(False, "none"),
     )
 
@@ -60,12 +63,12 @@ def _tree_output_posture_test_impl(ctx):
     # multi-GB pub cache local -- the split the setting exists for.
     asserts.equals(
         env,
-        cached,
+        _REMOTE_CACHED,
         tree_output_execution_requirements(False, "workspaces", kind = TREE_WORKSPACE),
     )
     asserts.equals(
         env,
-        local_only,
+        _LOCAL_ONLY,
         tree_output_execution_requirements(False, "workspaces", kind = TREE_PUB_CACHE),
     )
 
@@ -73,7 +76,7 @@ def _tree_output_posture_test_impl(ctx):
     for kind in [TREE_WORKSPACE, TREE_PUB_CACHE]:
         asserts.equals(
             env,
-            cached,
+            _REMOTE_CACHED,
             tree_output_execution_requirements(False, "all", kind = kind),
             "all must remote-cache %s" % kind,
         )
@@ -90,9 +93,58 @@ def _tree_output_posture_test_impl(ctx):
             )
     return unittest.end(env)
 
+def _prepare_deps_kind_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    # FlutterPrepareDeps declares its own pub cache tree unless it consumes a
+    # preassembled one, and an action carries a single posture for all of its
+    # outputs. Classifying it as a workspace in that case would let
+    # `workspaces` upload a merged pub cache -- the exact split the setting
+    # exists to make.
+    asserts.equals(
+        env,
+        TREE_PUB_CACHE,
+        prepare_deps_tree_kind(True),
+        "a prepare action that emits a pub cache must be classified as one",
+    )
+    asserts.equals(
+        env,
+        _LOCAL_ONLY,
+        tree_output_execution_requirements(
+            False,
+            "workspaces",
+            kind = prepare_deps_tree_kind(True),
+        ),
+        "workspaces must not remote-cache a prepare action carrying a pub cache",
+    )
+
+    # With a preassembled cache the action produces workspace trees only.
+    asserts.equals(
+        env,
+        TREE_WORKSPACE,
+        prepare_deps_tree_kind(False),
+    )
+    asserts.equals(
+        env,
+        _REMOTE_CACHED,
+        tree_output_execution_requirements(
+            False,
+            "workspaces",
+            kind = prepare_deps_tree_kind(False),
+        ),
+    )
+    return unittest.end(env)
+
 _default_posture_test = unittest.make(_default_posture_test_impl)
 _resource_set_test = unittest.make(_resource_set_test_impl)
 _tree_output_posture_test = unittest.make(_tree_output_posture_test_impl)
+_prepare_deps_kind_test = unittest.make(_prepare_deps_kind_test_impl)
 
 def exec_posture_test_suite(name):
-    unittest.suite(name, _default_posture_test, _resource_set_test, _tree_output_posture_test)
+    unittest.suite(
+        name,
+        _default_posture_test,
+        _prepare_deps_kind_test,
+        _resource_set_test,
+        _tree_output_posture_test,
+    )

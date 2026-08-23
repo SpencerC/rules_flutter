@@ -275,6 +275,13 @@ split by output shape:
   full `intl_utils` plus `build_runner` codegen run, which is the trade that
   usually pays.
 
+  Classification is per *action*, not per output, so an action that declares
+  both kinds counts as a pub cache. That is the dependency-preparation action
+  of a library with `assemble_dep_caches = False` (and of a pub package that
+  assembles): it merges its cache in the same action that prepares the
+  workspace, so `=workspaces` leaves it local. Libraries on the default path
+  assemble in a separate `FlutterAssemblePubCache` action and are unaffected.
+
   Be aware of what `=workspaces` can and cannot do today. The prepared trees
   are **not reproducible**: `.dart_tool` records the producing sandbox's
   absolute execroot in about sixteen text files, and the host native-asset

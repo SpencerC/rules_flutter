@@ -333,9 +333,9 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
             workspace-relative paths (e.g. generated proto sources). These take
             precedence over the derived layout for the same file.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set.
-        remote_cache_trees: The //flutter:remote_cache_trees value; when it
-            does not cover this action's tree kind and
-            False the ~100MB seed tree carries no-remote-cache.
+        remote_cache_trees: The //flutter:remote_cache_trees value; unless
+            it names this action's tree kind, the ~100MB seed tree carries
+            no-remote-cache.
 
     Returns:
         Tuple of (working_dir, input_files)
@@ -502,10 +502,10 @@ def flutter_assemble_pub_cache_action(
             dependencies.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec.
-        remote_cache_trees: The //flutter:remote_cache_trees value; when it
-            does not cover this action's tree kind and
-            False the multi-GB assembled tree carries no-remote-cache (local
-            disk cache stays eligible).
+        remote_cache_trees: The //flutter:remote_cache_trees value; unless
+            it names this action's tree kind (only "all" does), the multi-GB
+            assembled tree carries no-remote-cache (local disk cache stays
+            eligible).
 
     Returns:
         The assembled pub cache tree artifact.
@@ -733,10 +733,11 @@ def flutter_pub_get_action(
         is_pub_package: Whether the target represents a hosted pub.dev package.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec.
-        remote_cache_trees: The //flutter:remote_cache_trees value; when it
-            does not cover this action's tree kind and
-            False the prepared workspace / dart_tool trees carry
-            no-remote-cache (local disk cache stays eligible).
+        remote_cache_trees: The //flutter:remote_cache_trees value; unless
+            it names this action's tree kind, the trees this action declares
+            carry no-remote-cache (local disk cache stays eligible). The kind
+            is TREE_PUB_CACHE whenever a pub cache is among those trees — see
+            prepare_deps_tree_kind.
         preassembled_cache: An assembled pub cache tree (from
             flutter_assemble_pub_cache_action) to use read-only instead of
             merging dependency_pub_caches here. When set, this action produces
@@ -1423,7 +1424,11 @@ echo "Status: Prepared dependencies from declared metadata" >> "$LOG_FILE"
         ),
         mnemonic = "FlutterPrepareDeps",
         progress_message = "Preparing Flutter dependencies for %s" % ctx.label.name,
-        execution_requirements = tree_output_execution_requirements(allow_remote_exec, remote_cache_trees),
+        execution_requirements = tree_output_execution_requirements(
+            allow_remote_exec,
+            remote_cache_trees,
+            kind = prepare_deps_tree_kind(pub_cache_dir in prepare_outputs),
+        ),
         resource_set = heavy_action_resource_set,
         # The cache opt-in needs the persistent directory reachable from the
         # action. It is an out-of-sandbox path (the consumer also passes
@@ -1460,6 +1465,25 @@ _TREE_CACHE_KINDS = {
     "workspaces": [TREE_WORKSPACE],
     "all": [TREE_WORKSPACE, TREE_PUB_CACHE],
 }
+
+def prepare_deps_tree_kind(has_own_pub_cache):
+    """The tree kind FlutterPrepareDeps must be classified under.
+
+    That action always declares the prepared workspace and .dart_tool trees,
+    and — unless it consumes a preassembled cache read-only — its own pub
+    cache tree as well, which for an assembling target is the full multi-GB
+    merge. An action carries one posture for all of its outputs, so it takes
+    the more restrictive kind whenever a pub cache is among them: `workspaces`
+    promises not to put a pub cache on the wire.
+
+    Args:
+        has_own_pub_cache: Whether a pub cache tree is among the action's
+            declared outputs.
+
+    Returns:
+        TREE_PUB_CACHE or TREE_WORKSPACE.
+    """
+    return TREE_PUB_CACHE if has_own_pub_cache else TREE_WORKSPACE
 
 def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees, kind = TREE_WORKSPACE):
     """Execution requirements for actions producing large tree artifacts.
