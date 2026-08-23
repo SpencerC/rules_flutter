@@ -21,20 +21,39 @@ bool_flag(
     visibility = ["//visibility:public"],
 )
 
-# The prepare/assemble/workspace actions produce large tree artifacts (an
-# assembled pub cache is multi-GB; prepared and per-target overlay workspaces
-# run ~100MB each) that change with every source edit. Uploading them via
+# The prepare/assemble/workspace actions produce large tree artifacts that
+# change with every source edit. Uploading them via
 # --remote_upload_local_results has been observed draining a CI gate for 485s
-# after the last test finished, so by default they carry no-remote-cache:
-# they are rebuilt locally when needed (the hardlink assembly runs in ~seconds
-# per GB) and stay eligible for the local disk cache. Small, expensive,
-# high-value results (staged pub packages, golden renders, flutter build
-# outputs) remain remotely cached. Flip this flag to remote-cache the trees
-# too — e.g. on an RBE fleet where executors share the cache:
-#   build --//flutter:remote_cache_trees
-bool_flag(
+# after the last test finished, so by default they carry no-remote-cache: they
+# are rebuilt locally when needed (the hardlink assembly runs in ~seconds per
+# GB) and stay eligible for the local disk cache. Small, expensive, high-value
+# results (staged pub packages, golden renders, flutter build outputs) remain
+# remotely cached.
+#
+# The two kinds of tree have very different economics, so this is not one
+# decision:
+#
+#   none        (default) neither is remotely cached.
+#   workspaces  The ~100MB prepared and per-target overlay workspaces are, the
+#               multi-GB assembled pub cache is not. This is the setting for a
+#               fleet whose workers start cold: a cold worker has to materialize
+#               the pub cache locally either way (it is an input to the
+#               local-only flutter build, and its own inputs -- the @pub_*
+#               repositories -- must be fetched to compute any action key at
+#               all), whereas downloading ~180MB of prepared workspace replaces
+#               a full intl_utils + build_runner codegen run.
+#   all         Both. For an RBE fleet where executors share the cache and the
+#               pub cache upload is affordable.
+#
+#   build --//flutter:remote_cache_trees=workspaces
+string_flag(
     name = "remote_cache_trees",
-    build_setting_default = False,
+    build_setting_default = "none",
+    values = [
+        "none",
+        "workspaces",
+        "all",
+    ],
     visibility = ["//visibility:public"],
 )
 

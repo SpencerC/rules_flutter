@@ -1475,6 +1475,17 @@ fi
         command = copy_script,
         mnemonic = "PrepareFlutterAppWorkspace",
         progress_message = "Preparing Flutter workspace for %s" % ctx.label.name,
+        # Same posture as every other tree-producing action, which this one was
+        # missing: a ~100MB rsync of the library workspace feeding a local-only
+        # flutter build. Without it the action was remote-execution eligible
+        # (which would have to upload its no-remote-cache input tree) and its
+        # own 100MB output was uploaded on every run under
+        # --remote_upload_local_results -- exactly the drain the flag exists to
+        # avoid.
+        execution_requirements = tree_output_execution_requirements(
+            _allow_remote_exec(ctx),
+            _remote_cache_trees(ctx),
+        ),
     )
 
     android = _android_environment(ctx)

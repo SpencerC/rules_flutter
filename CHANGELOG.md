@@ -7,6 +7,38 @@ it reaches 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING** `//flutter:remote_cache_trees` is a string flag taking `none`
+  (default), `workspaces` or `all` instead of a boolean. The assembled pub
+  cache and the prepared/overlay workspaces have very different economics — a
+  worker must materialize the pub cache locally either way, while remote-caching
+  the workspaces replaces a full `intl_utils` plus `build_runner` run with a
+  ~180MB download — so they are no longer one decision. `--//flutter:remote_cache_trees`
+  becomes `--//flutter:remote_cache_trees=all`.
+
+### Fixed
+
+- `PrepareFlutterAppWorkspace` carries the same execution posture as every
+  other tree-producing action. It had none, so a ~100MB rsync of the library
+  workspace was remote-execution eligible (which would upload its
+  `no-remote-cache` input tree) and its own ~100MB output was uploaded on every
+  build under `--remote_upload_local_results` — the drain
+  `//flutter:remote_cache_trees` exists to prevent.
+- The dependency-preparation log (`<name>_pub_prepare.log`) no longer records a
+  wall-clock timestamp. It is a declared output, so the clock reading made the
+  action gratuitously unreproducible.
+
+### Documented
+
+- `docs/hermeticity.md` now states what `remote_cache_trees=workspaces` can and
+  cannot achieve: the prepared trees are not reproducible (`.dart_tool` embeds
+  the producing sandbox's execroot in text _and_ inside the host native-asset
+  binaries JIT codegen links, where load commands cannot be rewritten), and the
+  SDK filegroup contributes 51 mtime-fingerprinted source directories. Sharing
+  therefore works between workers that share an output base or a fetched SDK,
+  and not between independently provisioned ones.
+
 ## [0.2.1] - 2026-07-14
 
 ### Fixed

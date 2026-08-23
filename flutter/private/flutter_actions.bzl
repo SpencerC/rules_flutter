@@ -320,7 +320,7 @@ with open(graph_path, "w", encoding="utf-8") as fh:
     json.dump(graph, fh, indent=2)
     fh.write("\\n")"""
 
-def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = [], allow_remote_exec = False, remote_cache_trees = False):
+def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = [], allow_remote_exec = False, remote_cache_trees = "none"):
     """Create a working directory structure for Flutter commands.
 
     Args:
@@ -333,7 +333,8 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
             workspace-relative paths (e.g. generated proto sources). These take
             precedence over the derived layout for the same file.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set.
-        remote_cache_trees: Whether //flutter:remote_cache_trees is set; when
+        remote_cache_trees: The //flutter:remote_cache_trees value; when it
+            does not cover this action's tree kind and
             False the ~100MB seed tree carries no-remote-cache.
 
     Returns:
@@ -486,7 +487,7 @@ def flutter_assemble_pub_cache_action(
         ctx,
         dependency_pub_caches = [],
         allow_remote_exec = False,
-        remote_cache_trees = False):
+        remote_cache_trees = "none"):
     """Merge transitive dependency pub caches into a single assembled cache tree.
 
     This is the offline pub cache the library exposes. It is a pure function of
@@ -501,7 +502,8 @@ def flutter_assemble_pub_cache_action(
             dependencies.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec.
-        remote_cache_trees: Whether //flutter:remote_cache_trees is set; when
+        remote_cache_trees: The //flutter:remote_cache_trees value; when it
+            does not cover this action's tree kind and
             False the multi-GB assembled tree carries no-remote-cache (local
             disk cache stays eligible).
 
@@ -578,7 +580,11 @@ echo "=== Pub cache assembly complete ==="
         command = script_content,
         mnemonic = "FlutterAssemblePubCache",
         progress_message = "Assembling pub cache for %s" % ctx.label.name,
-        execution_requirements = tree_output_execution_requirements(allow_remote_exec, remote_cache_trees),
+        execution_requirements = tree_output_execution_requirements(
+            allow_remote_exec,
+            remote_cache_trees,
+            kind = TREE_PUB_CACHE,
+        ),
         resource_set = heavy_action_resource_set,
     )
 
@@ -704,7 +710,7 @@ def flutter_pub_get_action(
         run_build_runner_build = False,
         is_pub_package = False,
         allow_remote_exec = False,
-        remote_cache_trees = False,
+        remote_cache_trees = "none",
         preassembled_cache = None,
         build_runner_cache = ""):
     """Prepare Flutter/Dart dependencies from declared pub_deps.json metadata.
@@ -727,7 +733,8 @@ def flutter_pub_get_action(
         is_pub_package: Whether the target represents a hosted pub.dev package.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec.
-        remote_cache_trees: Whether //flutter:remote_cache_trees is set; when
+        remote_cache_trees: The //flutter:remote_cache_trees value; when it
+            does not cover this action's tree kind and
             False the prepared workspace / dart_tool trees carry
             no-remote-cache (local disk cache stays eligible).
         preassembled_cache: An assembled pub cache tree (from
@@ -1360,7 +1367,9 @@ LOG_FILE="{pub_get_output}"
 echo "=== Flutter Dependency Preparation ===" > "$LOG_FILE"
 echo "Flutter binary: {flutter_bin}" >> "$LOG_FILE"
 echo "Workspace output: {workspace_dir}" >> "$LOG_FILE"
-echo "Prepared at: $(date)" >> "$LOG_FILE"
+# Deliberately no timestamp: this is a declared output, and a clock reading in
+# it makes the action unreproducible for no benefit. The invocation's own start
+# time is in the build log.
 echo "" >> "$LOG_FILE"
 
 if [ -f "$WORKSPACE_DIR_ABS/pub_deps.json" ]; then
@@ -1371,6 +1380,23 @@ else
     exit 1
 fi
 
+# NOTE: these two declared trees are NOT reproducible, and that is why the
+# flutter build downstream of them can never be a remote cache hit across
+# machines. .dart_tool carries the sandbox's absolute execroot in ~16 text files
+# (package_config.json alone holds one file:// URI per package) AND, decisively,
+# inside the host native-asset binaries the JIT codegen builds:
+# .dart_tool/hooks_runner/shared/objective_c/build/<hash>/objective_c.dylib
+# contains 17 copies of it in Mach-O load commands, which are length-prefixed
+# and so cannot be rewritten.
+#
+# Canonicalizing the text was implemented and reverted: it fixes 16 of 17
+# sources of variance and leaves the build broken-or-unreproducible on the last
+# one. Making this tree reproducible means not shipping the host native-asset
+# build directory at all (per-action scratch, which downstream host-JIT
+# consumers would then rebuild), and it only pays off alongside content-hashing
+# the 51 source *directories* the Flutter SDK filegroup contributes -- Bazel
+# fingerprints those by mtime, so a refetch on another worker changes the key
+# regardless. Both are ruleset projects; see //flutter:remote_cache_trees.
 rm -rf "{dart_tool_dir}"
 mkdir -p "{dart_tool_dir}"
 if [ -d "$WORKSPACE_DIR_ABS/.dart_tool" ]; then
@@ -1424,7 +1450,18 @@ def heavy_action_execution_requirements(allow_remote_exec):
         return None
     return {"no-remote-exec": "1"}
 
-def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees):
+# The kinds of tree artifact //flutter:remote_cache_trees distinguishes. Pass
+# one as tree_output_execution_requirements' `kind`.
+TREE_WORKSPACE = "workspace"
+TREE_PUB_CACHE = "pub_cache"
+
+_TREE_CACHE_KINDS = {
+    "none": [],
+    "workspaces": [TREE_WORKSPACE],
+    "all": [TREE_WORKSPACE, TREE_PUB_CACHE],
+}
+
+def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees, kind = TREE_WORKSPACE):
     """Execution requirements for actions producing large tree artifacts.
 
     The assembled pub cache (multi-GB) and the prepared/overlay workspace
@@ -1433,26 +1470,45 @@ def tree_output_execution_requirements(allow_remote_exec, remote_cache_trees):
     for hundreds of seconds after the last real action finished. The default
     posture therefore adds no-remote-cache — Bazel still caches these actions
     in the local disk cache, and rebuilding them locally is cheap — alongside
-    the usual no-remote-exec. //flutter:remote_cache_trees opts the trees back
-    into the remote cache (e.g. on an RBE fleet where executors share it), and
-    //flutter:allow_remote_execution lifts the execution restriction.
+    the usual no-remote-exec. //flutter:remote_cache_trees opts a chosen kind
+    of tree back into the remote cache, and //flutter:allow_remote_execution
+    lifts the execution restriction.
+
+    The two kinds are separable because their economics differ. A cold worker
+    has to materialize the pub cache locally whichever way the flag is set (it
+    feeds the local-only flutter build, and its own @pub_* repository inputs
+    must be fetched to compute any action key), so remote-caching it buys a
+    multi-GB download in place of a hardlink assembly. Remote-caching the
+    prepared workspaces buys ~180MB of download in place of a full intl_utils
+    plus build_runner codegen run.
 
     Args:
         allow_remote_exec: Whether //flutter:allow_remote_execution is set;
             when False the action carries no-remote-exec.
-        remote_cache_trees: Whether //flutter:remote_cache_trees is set; when
-            False (and execution is local) the action carries no-remote-cache.
-            Ignored under allow_remote_exec: remotely executed actions must
-            store their outputs in the remote CAS, so suppressing the cache
-            there would only force constant re-execution.
+        remote_cache_trees: The //flutter:remote_cache_trees value — "none",
+            "workspaces" or "all". A kind it does not name (and local
+            execution) means the action carries no-remote-cache. Ignored under
+            allow_remote_exec: remotely executed actions must store their
+            outputs in the remote CAS, so suppressing the cache there would
+            only force constant re-execution.
+        kind: TREE_WORKSPACE (default) or TREE_PUB_CACHE — which kind of tree
+            this action produces.
 
     Returns:
         An execution_requirements dict, or None when nothing is restricted.
     """
+    if remote_cache_trees not in _TREE_CACHE_KINDS:
+        fail(
+            "//flutter:remote_cache_trees must be one of {}, got '{}'".format(
+                sorted(_TREE_CACHE_KINDS.keys()),
+                remote_cache_trees,
+            ),
+        )
+
     reqs = {}
     if not allow_remote_exec:
         reqs["no-remote-exec"] = "1"
-        if not remote_cache_trees:
+        if kind not in _TREE_CACHE_KINDS[remote_cache_trees]:
             reqs["no-remote-cache"] = "1"
     return reqs or None
 
