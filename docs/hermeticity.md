@@ -259,13 +259,40 @@ split by output shape:
   `no-remote-cache`. Uploading them via `--remote_upload_local_results` on
   every change has been observed draining a CI invocation for minutes after
   the last test finished, while rebuilding them locally takes seconds; they
-  remain eligible for the local disk cache (`--disk_cache`). Opt the trees
-  back into the remote cache — e.g. when a warm main-branch runner populates
-  a cache that ephemeral PR runners read — with:
+  remain eligible for the local disk cache (`--disk_cache`). Opt a kind of
+  tree back into the remote cache — e.g. when a warm main-branch runner
+  populates a cache that ephemeral PR runners read — with:
 
   ```
-  build --//flutter:remote_cache_trees
+  build --//flutter:remote_cache_trees=workspaces   # or =all; default =none
   ```
+
+  The two kinds are separated because their economics differ. A worker has to
+  materialize the pub cache locally either way: it feeds the local-only
+  flutter build, and its own `@pub_*` repository inputs must be fetched to
+  compute any action key at all — so `=all` buys a multi-GB download in place
+  of a hardlink assembly. `=workspaces` buys ~180MB of download in place of a
+  full `intl_utils` plus `build_runner` codegen run, which is the trade that
+  usually pays.
+
+  Classification is per *action*, not per output, so an action that declares
+  both kinds counts as a pub cache. That is the dependency-preparation action
+  of a library with `assemble_dep_caches = False` (and of a pub package that
+  assembles): it merges its cache in the same action that prepares the
+  workspace, so `=workspaces` leaves it local. Libraries on the default path
+  assemble in a separate `FlutterAssemblePubCache` action and are unaffected.
+
+  Be aware of what `=workspaces` can and cannot do today. The prepared trees
+  are **not reproducible**: `.dart_tool` records the producing sandbox's
+  absolute execroot in about sixteen text files, and the host native-asset
+  binaries that JIT codegen links embed it in Mach-O/ELF load commands, which
+  cannot be rewritten. The Flutter SDK filegroup also contributes 51 source
+  *directories*, which Bazel fingerprints by mtime rather than content (hence
+  its "dependency checking of directories is unsound" warning), so a worker
+  that fetched the SDK itself never agrees on a key with one that fetched it
+  separately. `=workspaces` therefore helps a cache shared by workers that
+  share an output base or a fetched SDK, and does nothing for two independently
+  provisioned workers.
 
 Android and iOS builds are additionally `no-sandbox`/`requires-network` (see
 the per-target table above) and are not affected by this section.

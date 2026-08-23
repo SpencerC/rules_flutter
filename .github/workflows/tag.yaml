@@ -17,6 +17,15 @@ on:
   #   schedule:
   #     - cron: "0 15 1,15 * *"
 
+  # WHILE THIS MODULE IS PRE-1.0, DO NOT DISPATCH THIS FOR A BREAKING CHANGE.
+  # ccv has no 0.x special case: a `feat!:`/`fix!:` subject or a
+  # `BREAKING CHANGE:` footer maps straight to IncMajor(), so a run over such
+  # a commit tags v1.0.0 -- and the guard on the release job below then skips
+  # the release, leaving a major tag with no artifacts behind it. Pre-1.0
+  # breaking changes are released by pushing the intended minor tag by hand
+  # (`git tag v0.3.0 && git push origin v0.3.0`), which release.yml picks up
+  # on its own.
+
 jobs:
   tag:
     permissions:
