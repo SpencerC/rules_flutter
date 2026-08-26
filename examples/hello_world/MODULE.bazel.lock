@@ -318,7 +318,7 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "TlsLQ+9IuduQk2CdQckTQPoWsTzk0L9uMs1ZiiiMv1Y=",
+        "bzlTransitiveDigest": "RvJFom/IApmXpnVuDvmM9H89s9ETdplu6UIPFy2kmmE=",
         "usagesDigest": "28OnpcYnSmzay/V6WMwTNE0upCyG0V5VmLKmR7xi70Y=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -329,6 +329,7 @@
             "attributes": {
               "platform": "macos",
               "integrity": "",
+              "integrity_arm64": "",
               "flutter_version": "3.24.0",
               "precache": [
                 "web"
@@ -340,6 +341,7 @@
             "attributes": {
               "platform": "linux",
               "integrity": "",
+              "integrity_arm64": "",
               "flutter_version": "3.24.0",
               "precache": [
                 "web"
@@ -351,6 +353,7 @@
             "attributes": {
               "platform": "windows",
               "integrity": "",
+              "integrity_arm64": "",
               "flutter_version": "3.24.0",
               "precache": [
                 "web"

@@ -222,37 +222,43 @@ for version in "${SUPPORTED_VERSIONS[@]}"; do
         platform_name=""
         archive_path=""
         
-        # Determine platform name from URL
+        # Determine archive variants from URL. macOS publishes separate x64
+        # and arm64 archives; both are recorded so the repository rule can
+        # verify whichever one the host architecture selects.
+        variants=()
         case "${URLS[$i]}" in
             *macos*)
-                platform_name="macos"
-                archive_path="stable/macos/flutter_macos_${version}-stable.zip"
+                variants+=("macos stable/macos/flutter_macos_${version}-stable.zip")
+                variants+=("macos_arm64 stable/macos/flutter_macos_arm64_${version}-stable.zip")
                 ;;
             *linux*)
-                platform_name="linux"
-                archive_path="stable/linux/flutter_linux_${version}-stable.tar.xz"
+                variants+=("linux stable/linux/flutter_linux_${version}-stable.tar.xz")
                 ;;
             *windows*)
-                platform_name="windows"
-                archive_path="stable/windows/flutter_windows_${version}-stable.zip"
+                variants+=("windows stable/windows/flutter_windows_${version}-stable.zip")
                 ;;
         esac
-        
-        # Extract SHA-256 hash for this version and platform (stable channel only)
-        sha256_hash=$(jq -r ".releases[] | select(.version == \"$version\" and .channel == \"stable\" and (\"${archive_path}\" == \"\" or .archive == \"${archive_path}\")) | .sha256" "$platform_file" 2>/dev/null | head -1)
-        
-        if [[ "$sha256_hash" != "null" && -n "$sha256_hash" ]]; then
-            sri_hash=$(sha256_to_sri "$sha256_hash")
-            echo "        \"$platform_name\": \"$sri_hash\"," >> flutter/private/versions.bzl
-            info "  Found $platform_name: ${sha256_hash:0:16}..."
-        else
-            # No stable release published for this platform+version (e.g. Flutter
-            # 3.35.0 shipped for macOS/Linux but not Windows). Omit the key rather
-            # than emitting a placeholder hash: a phantom hash would 404 or fail
-            # integrity at fetch, whereas an omitted platform yields a clear
-            # "provide integrity" error only if someone selects that platform.
-            warn "  No stable $platform_name archive for $version; omitting key"
-        fi
+
+        for variant in "${variants[@]}"; do
+            platform_name="${variant%% *}"
+            archive_path="${variant#* }"
+
+            # Extract SHA-256 hash for this version and archive (stable channel only)
+            sha256_hash=$(jq -r ".releases[] | select(.version == \"$version\" and .channel == \"stable\" and .archive == \"${archive_path}\") | .sha256" "$platform_file" 2>/dev/null | head -1)
+
+            if [[ "$sha256_hash" != "null" && -n "$sha256_hash" ]]; then
+                sri_hash=$(sha256_to_sri "$sha256_hash")
+                echo "        \"$platform_name\": \"$sri_hash\"," >> flutter/private/versions.bzl
+                info "  Found $platform_name: ${sha256_hash:0:16}..."
+            else
+                # No stable release published for this archive+version (e.g. Flutter
+                # 3.35.0 shipped for macOS/Linux but not Windows). Omit the key rather
+                # than emitting a placeholder hash: a phantom hash would 404 or fail
+                # integrity at fetch, whereas an omitted platform yields a clear
+                # "provide integrity" error only if someone selects that platform.
+                warn "  No stable $platform_name archive for $version; omitting key"
+            fi
+        done
     done
     
     echo "    }," >> flutter/private/versions.bzl

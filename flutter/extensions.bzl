@@ -31,8 +31,10 @@ registrations of the same toolchain name.
 """, default = []),
     "integrity": attr.string_dict(doc = """\
 Escape hatch for Flutter versions not in the built-in version table: a map
-from platform (macos, linux, windows) to the SRI integrity of that platform's
-stable release archive, e.g. {"macos": "sha256-...", "linux": "sha256-..."}.
+from platform (macos, macos_arm64, linux, windows) to the SRI integrity of
+that platform's stable release archive, e.g. {"macos": "sha256-...",
+"macos_arm64": "sha256-...", "linux": "sha256-..."}. macOS ships separate x64
+and arm64 archives; "macos_arm64" is the one fetched on Apple Silicon hosts.
 Only the platforms you actually build on need an entry (the per-platform SDK
 repositories are fetched lazily). When flutter_version is in the built-in
 table this may be omitted. Merged across registrations of the same name.
