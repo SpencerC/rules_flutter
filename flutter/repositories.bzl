@@ -23,6 +23,13 @@ Required only when `flutter_version` is not in the built-in version table
 (the escape hatch surfaced as `flutter.toolchain(integrity = {...})`). When
 empty and the version is known, the built-in integrity is used.""",
     ),
+    "integrity_arm64": attr.string(
+        default = "",
+        doc = """SRI integrity of the platform's arm64 stable release archive,
+for platforms that publish a separate arm64 archive (today only macOS). Used
+instead of `integrity` when the fetch selects the arm64 archive. Surfaced as
+the "macos_arm64" key of `flutter.toolchain(integrity = {...})`.""",
+    ),
     "precache": attr.string_list(
         default = [],
         doc = """Artifact groups that must exist in the SDK cache after fetch
@@ -248,38 +255,60 @@ def _seal_sdk_cache(repository_ctx):
     if result.return_code != 0:
         fail("rules_flutter: unsealing engine frameworks failed: " + result.stderr)
 
-def _resolve_integrity(repository_ctx):
-    """Pick the SRI to verify the SDK archive against.
+def _archive_platform(repository_ctx):
+    """The platform string used in the release archive's file name.
 
-    A caller-supplied `integrity` (the escape hatch for unlisted versions) wins;
-    otherwise the built-in version table is consulted. Fails with an actionable
-    message when the version is unknown and no integrity was provided for this
-    platform — this runs lazily per-platform, so cross-OS repos that are never
-    fetched never trip on it.
+    macOS publishes separate x64 and arm64 archives (the x64 one needs Rosetta
+    2 on Apple Silicon, which is not installed by default), so on an arm64 host
+    the macos repository fetches the arm64 archive. Linux and Windows stable
+    archives are x64-only. The Bazel JVM reports Apple Silicon as "aarch64";
+    "arm64" is matched defensively.
     """
     platform = repository_ctx.attr.platform
+    if platform == "macos" and repository_ctx.os.arch in ("aarch64", "arm64"):
+        return "macos_arm64"
+    return platform
+
+def _resolve_integrity(repository_ctx, archive_platform):
+    """Pick the SRI to verify the SDK archive against.
+
+    A caller-supplied integrity (the escape hatch for unlisted versions) wins;
+    otherwise the built-in version table is consulted, keyed by the archive
+    variant actually being fetched (e.g. "macos_arm64" on Apple Silicon).
+    Fails with an actionable message when the version is unknown and no
+    integrity was provided for this archive — this runs lazily per-platform,
+    so cross-OS repos that are never fetched never trip on it.
+    """
     version = repository_ctx.attr.flutter_version
-    override = repository_ctx.attr.integrity
+    if archive_platform.endswith("_arm64"):
+        override = repository_ctx.attr.integrity_arm64
+    else:
+        override = repository_ctx.attr.integrity
     if override:
         return override
     known = TOOL_VERSIONS.get(version)
-    if known and platform in known:
-        return known[platform]
+    if known and archive_platform in known:
+        return known[archive_platform]
     fail(("rules_flutter: Flutter {version} is not in the built-in version table and no " +
           "integrity was provided for platform {platform}. Register it with " +
           "flutter.toolchain(flutter_version = \"{version}\", integrity = {{\"{platform}\": \"sha256-...\"}}). " +
           "Compute the SRI from the stable archive URL below, e.g. " +
           "`curl -sL <url> | openssl dgst -sha256 -binary | openssl base64 -A` prefixed with 'sha256-'.").format(
         version = version,
-        platform = platform,
+        platform = archive_platform,
     ))
 
 def _flutter_repo_impl(repository_ctx):
     # Flutter SDK download URLs from Google Cloud Storage
     platform = repository_ctx.attr.platform
+    archive_platform = _archive_platform(repository_ctx)
     extension = "zip" if platform == "windows" else ("zip" if platform == "macos" else "tar.xz")
-    url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/{0}/flutter_{0}_{1}-stable.{2}".format(
+
+    # The directory is the OS platform; the file name carries the archive
+    # variant (e.g. stable/macos/flutter_macos_arm64_<version>-stable.zip).
+    url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/{0}/flutter_{1}_{2}-stable.{3}".format(
         platform,
+        archive_platform,
         repository_ctx.attr.flutter_version,
         extension,
     )
@@ -287,7 +316,7 @@ def _flutter_repo_impl(repository_ctx):
     # Download and verify Flutter SDK with integrity checking enabled
     repository_ctx.download_and_extract(
         url = url,
-        integrity = _resolve_integrity(repository_ctx),
+        integrity = _resolve_integrity(repository_ctx, archive_platform),
     )
 
     _patch_engine_version_script(repository_ctx)
@@ -425,10 +454,11 @@ def flutter_register_toolchains(name, register = True, integrity = None, **kwarg
         name: base name for all created repos, like "flutter1_14"
         register: whether to call through to native.register_toolchains.
             Set this to False when toolchain registration is handled elsewhere (for example by a module extension).
-        integrity: optional dict mapping platform (macos, linux, windows) to the
-            SRI integrity of that platform's stable Flutter archive. Required for
-            versions outside the built-in table; only the platforms you build on
-            need an entry. See flutter.toolchain(integrity = {...}).
+        integrity: optional dict mapping platform (macos, macos_arm64, linux,
+            windows) to the SRI integrity of that platform's stable Flutter
+            archive. Required for versions outside the built-in table; only the
+            platforms you build on need an entry ("macos_arm64" for macOS on
+            Apple Silicon). See flutter.toolchain(integrity = {...}).
         **kwargs: passed to each flutter_repositories call (e.g. flutter_version, precache)
     """
     integrity = integrity or {}
@@ -437,6 +467,7 @@ def flutter_register_toolchains(name, register = True, integrity = None, **kwarg
             name = name + "_" + platform,
             platform = platform,
             integrity = integrity.get(platform, ""),
+            integrity_arm64 = integrity.get(platform + "_arm64", ""),
             **kwargs
         )
         if register:

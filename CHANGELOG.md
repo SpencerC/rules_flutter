@@ -7,6 +7,16 @@ it reaches 1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- The macOS SDK repository fetches the arm64 release archive on Apple Silicon
+  hosts instead of always fetching the x64 one, whose Dart binaries fail with
+  "Bad CPU type in executable" when Rosetta 2 is not installed. The built-in
+  version table now records a `macos_arm64` integrity per version, the
+  `flutter.toolchain(integrity = {...})` escape hatch accepts a
+  `"macos_arm64"` key, and `flutter_repositories` grew an `integrity_arm64`
+  attribute to carry it.
+
 ## [0.3.0] - 2026-08-23
 
 ### Changed
