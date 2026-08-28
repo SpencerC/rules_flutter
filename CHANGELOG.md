@@ -9,6 +9,22 @@ it reaches 1.0.
 
 ### Fixed
 
+- Flutter SDK package repositories resolve their hosted dependencies against
+  the SDK's own workspace lockfile (`flutter/pubspec.lock`) instead of
+  re-solving them against pub.dev. Flutter >= 3.35 resolves its packages as a
+  pub workspace, so their pubspecs carry `any` constraints and the lockfile
+  holds the pins; resolving each package standalone meant the vendored
+  `.pub_cache` took whatever pub.dev served as latest on the day the
+  repository was fetched. When that drifted away from the version a consumer
+  pinned in its own `pub_deps.json`, the package was dropped from
+  `.dart_tool/package_config.json` and the build failed much later with an
+  unexplained `Bad state: Dependency <name> of BuildPackage(...) not present`
+  from `build_runner`. Releases before the pub-workspace migration pin exact
+  versions in every package pubspec, ship no workspace lock, and are
+  unaffected.
+- Preparing a library now fails with the offending package and version when
+  the assembled pub cache holds a different version than `pub_deps.json` pins,
+  instead of silently omitting the package from `package_config.json`.
 - The macOS SDK repository fetches the arm64 release archive on Apple Silicon
   hosts instead of always fetching the x64 one, whose Dart binaries fail with
   "Bad CPU type in executable" when Rosetta 2 is not installed. The built-in

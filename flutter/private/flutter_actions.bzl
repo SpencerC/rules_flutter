@@ -162,12 +162,75 @@ if not os.path.isfile(entrypoint):
 
 print(entrypoint)"""
 
+# The reconciliation both package_config writers below run once every
+# declared package has been placed: it turns "the cache does not hold what
+# pub_deps.json pins" from a silent omission into an explained failure.
+# Shared verbatim so the two writers can never disagree about it, and
+# injected as a format *value*, so braces here are single. Expects
+# `missing`, `cache_root`, `os` and `sys` already in scope.
+PACKAGE_CONFIG_RECONCILE_PY = """# A hosted package whose pinned version is absent while *another* version of
+# the same package sits in the cache is version drift, not a missing
+# dependency edge: some dependency published a different version than
+# pub_deps.json pins. That is always a bug in the dependency graph and is
+# fatal here, where it can still be explained, rather than downstream.
+hosted_root = os.path.join(cache_root, "hosted", "pub.dev")
+cached_names = os.listdir(hosted_root) if os.path.isdir(hosted_root) else []
+drifted = []
+absent = []
+for name, version, source, root_path in missing:
+    alternatives = []
+    if source == "hosted":
+        prefix = name + "-"
+        alternatives = sorted(
+            entry[len(prefix):]
+            for entry in cached_names
+            if entry.startswith(prefix) and os.path.isdir(os.path.join(hosted_root, entry))
+        )
+    if alternatives:
+        drifted.append((name, version, alternatives))
+    else:
+        absent.append(name)
+
+if drifted:
+    report = [
+        "",
+        "rules_flutter: the assembled pub cache holds a different version than",
+        "pub_deps.json pins for {} package(s):".format(len(drifted)),
+    ]
+    for name, version, alternatives in drifted:
+        report.append(
+            "  {}: pub_deps.json pins {}, cache has {}".format(
+                name, version, ", ".join(alternatives)
+            )
+        )
+    report.extend([
+        "",
+        "Nothing supplies the pinned version to this target, so it would be",
+        "dropped from .dart_tool/package_config.json and surface later as an",
+        "opaque `Dependency <name> ... not present` from build_runner or the",
+        "analyzer. Re-pin the two ends so they agree: regenerate this target's",
+        "pub_deps.json (bazel run <target>.update), or add a dependency that",
+        "publishes the pinned version into the cache.",
+        "",
+    ])
+    sys.stderr.write("\\n".join(report) + "\\n")
+    sys.exit(1)
+
+if absent:
+    sys.stderr.write(
+        "rules_flutter: {} package(s) declared in pub_deps.json are not in the "
+        "pub cache and were left out of package_config.json: {}\\n".format(
+            len(absent), ", ".join(sorted(absent))
+        )
+    )"""
+
 # Python snippet that writes .dart_tool/package_config.json from declared
 # pub_deps.json metadata. Inputs via env: PUB_DEPS_PATH, PUB_CACHE_ABS,
 # WORKSPACE_ABS, PACKAGE_CONFIG_PATH, FLUTTER_ROOT. Injected as a format
 # *value*, so braces here are single.
 PACKAGE_CONFIG_FROM_PUB_DEPS_PY = """import json
 import os
+import sys
 
 deps_path = os.environ["PUB_DEPS_PATH"]
 cache_root = os.environ["PUB_CACHE_ABS"]
@@ -244,9 +307,18 @@ with open(deps_path, "r", encoding="utf-8") as fh:
     data = json.load(fh)
 
 packages = []
+missing = []
 
-def add_package(name, root_path):
-    if not name or not root_path or not os.path.isdir(root_path):
+def add_package(name, root_path, source=None, version=None):
+    if not name or not root_path:
+        return
+    if not os.path.isdir(root_path):
+        # Recorded rather than dropped: a package_config that silently omits a
+        # package pub_deps.json declares is broken, and the tools that read it
+        # (build_runner's bootstrap, the analyzer) only report it much later,
+        # as an unexplained "dependency <x> not present" from a package the
+        # user never named. See the reconciliation below.
+        missing.append((name, version, source, root_path))
         return
     pkg = dict()
     pkg["name"] = name
@@ -264,9 +336,9 @@ for entry in data.get("packages", []):
         continue
     if source == "hosted" and version:
         root_path = os.path.join(cache_root, "hosted", "pub.dev", name + "-" + version)
-        add_package(name, root_path)
+        add_package(name, root_path, source, version)
     elif source == "root":
-        add_package(name, workspace_root)
+        add_package(name, workspace_root, source, version)
     elif source == "sdk":
         if name == "sky_engine":
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "pkg", name)
@@ -274,7 +346,7 @@ for entry in data.get("packages", []):
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "dart-sdk", "pkg", name)
         else:
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "packages", name)
-        add_package(name, root_path)
+        add_package(name, root_path, source, version)
     elif source == "path":
         path_value = ""
         if isinstance(description, str):
@@ -282,8 +354,9 @@ for entry in data.get("packages", []):
         elif isinstance(description, dict):
             path_value = description.get("path") or ""
         if path_value:
-            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
+            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)), source, version)
 
+""" + PACKAGE_CONFIG_RECONCILE_PY + """
 config = dict()
 config["configVersion"] = 2
 config["generated"] = True
@@ -1076,6 +1149,7 @@ mkdir -p "$(dirname "$PACKAGE_CONFIG_PATH")"
 "$PYTHON_BIN" <<'PY'
 import json
 import os
+import sys
 
 deps_path = os.path.join(os.environ["WORKSPACE_ABS"], "pub_deps.json")
 cache_root = os.environ["PUB_CACHE_ABS"]
@@ -1136,8 +1210,18 @@ def _root_uri(root_path):
         rel += "/"
     return rel
 
-def add_package(name, root_path):
-    if not name or not root_path or not os.path.isdir(root_path):
+missing = []
+
+def add_package(name, root_path, source=None, version=None):
+    if not name or not root_path:
+        return
+    if not os.path.isdir(root_path):
+        # Recorded rather than dropped: a package_config that silently omits a
+        # package pub_deps.json declares is broken, and the tools that read it
+        # (build_runner's bootstrap, the analyzer) only report it much later,
+        # as an unexplained "dependency <x> not present" from a package the
+        # user never named. See the reconciliation below.
+        missing.append((name, version, source, root_path))
         return
     pkg = dict()
     pkg["name"] = name
@@ -1155,9 +1239,9 @@ for entry in data.get("packages", []):
         continue
     if source == "hosted" and version:
         root_path = os.path.join(cache_root, "hosted", "pub.dev", name + "-" + version)
-        add_package(name, root_path)
+        add_package(name, root_path, source, version)
     elif source == "root":
-        add_package(name, workspace_root)
+        add_package(name, workspace_root, source, version)
     elif source == "sdk":
         if name == "sky_engine":
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "pkg", name)
@@ -1165,7 +1249,7 @@ for entry in data.get("packages", []):
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "bin", "cache", "dart-sdk", "pkg", name)
         else:
             root_path = os.path.join(os.environ["FLUTTER_ROOT"], "packages", name)
-        add_package(name, root_path)
+        add_package(name, root_path, source, version)
     elif source == "path":
         path_value = ""
         if isinstance(description, str):
@@ -1173,8 +1257,9 @@ for entry in data.get("packages", []):
         elif isinstance(description, dict):
             path_value = description.get("path") or ""
         if path_value:
-            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)))
+            add_package(name, os.path.abspath(os.path.join(workspace_root, path_value)), source, version)
 
+{package_config_reconcile_py}
 config = dict()
 config["configVersion"] = 2
 config["generated"] = True
@@ -1340,6 +1425,7 @@ echo "=== Dependency preparation complete ==="
         build_runner_build_args = " ".join(build_runner_build_args_quoted),
         run_build_runner_build = "1" if run_build_runner_build else "0",
         is_pub_package = "1" if is_pub_package else "0",
+        package_config_reconcile_py = PACKAGE_CONFIG_RECONCILE_PY,
         resolve_entrypoint_py = RESOLVE_ENTRYPOINT_PY,
         build_runner_cache_restore = build_runner_cache_restore,
         build_runner_cache_save = build_runner_cache_save,
