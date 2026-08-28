@@ -1,4 +1,6 @@
 load(":exec_posture_test.bzl", "exec_posture_test_suite")
+load(":package_config_test.bzl", "package_config_reconcile_test")
+load(":sdk_lock_test.bzl", "sdk_lock_test_suite")
 load(":version_select_test.bzl", "version_select_test_suite")
 load(":versions_test.bzl", "versions_test_suite")
 
@@ -10,6 +12,66 @@ version_select_test_suite(name = "version_select_test")
 
 # Unit tests for the execution-posture helpers
 exec_posture_test_suite(name = "exec_posture_test")
+
+# Unit tests for the Flutter SDK workspace-lock seed
+sdk_lock_test_suite(name = "sdk_lock_test")
+
+# The regression this whole area exists for: the assembled cache holds
+# process 5.0.6 (what pub.dev served the day the SDK repository was fetched)
+# while pub_deps.json pins 5.0.5. Dropping the entry silently is what turned a
+# one-line version mismatch into an unexplained build_runner crash.
+package_config_reconcile_test(
+    name = "package_config_version_drift_test",
+    cached = [
+        "process-5.0.6",
+        "vm_service-15.2.0",
+    ],
+    expect_failure = True,
+    expect_stderr = [
+        "process: pub_deps.json pins 5.0.5, cache has 5.0.6",
+        "dropped from .dart_tool/package_config.json",
+    ],
+    pinned = {"process": "5.0.5"},
+)
+
+# A package no dependency supplies at all is a different situation -- the
+# target simply never asked for it -- and stays a note, not a build failure.
+package_config_reconcile_test(
+    name = "package_config_absent_package_test",
+    cached = ["collection-1.19.0"],
+    expect_stderr = ["not in the pub cache and were left out of package_config.json: webdriver"],
+    pinned = {"webdriver": "3.1.0"},
+    reject_stderr = ["cache has"],
+)
+
+# Prefix matching must not treat a longer package name as another version of
+# a shorter one: path_provider-2.1.5 is not "path" at version "provider-2.1.5".
+package_config_reconcile_test(
+    name = "package_config_prefix_test",
+    cached = ["path_provider-2.1.5"],
+    expect_stderr = ["left out of package_config.json: path"],
+    pinned = {"path": "1.9.1"},
+    reject_stderr = ["cache has"],
+)
+
+# An SDK-sourced package resolves from FLUTTER_ROOT, never the pub cache, so
+# a same-named hosted directory must not be read as a drifted version of it.
+package_config_reconcile_test(
+    name = "package_config_sdk_source_test",
+    cached = ["integration_test-0.0.1"],
+    expect_stderr = ["left out of package_config.json: integration_test"],
+    pinned_sdk = ["integration_test"],
+    reject_stderr = ["cache has"],
+)
+
+# Nothing missing: no diagnostics at all, so a healthy prepare stays quiet.
+package_config_reconcile_test(
+    name = "package_config_complete_cache_test",
+    cached = ["process-5.0.5"],
+    reject_stderr = [
+        "rules_flutter:",
+    ],
+)
 
 # Toolchain-focused smoke tests that still live in the main workspace
 test_suite(
@@ -30,6 +92,12 @@ test_suite(
     name = "all_tests",
     tests = [
         ":exec_posture_test",
+        ":package_config_absent_package_test",
+        ":package_config_complete_cache_test",
+        ":package_config_prefix_test",
+        ":package_config_sdk_source_test",
+        ":package_config_version_drift_test",
+        ":sdk_lock_test",
         ":toolchain_tests",
         ":version_select_test",
         ":versions_test",

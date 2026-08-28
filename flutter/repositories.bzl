@@ -1,6 +1,6 @@
 """Repository utilities for Flutter toolchains used via bzlmod."""
 
-load("//flutter/private:package_generation.bzl", "generate_package_build")
+load("//flutter/private:package_generation.bzl", "filter_lock_to_hosted", "generate_package_build")
 load("//flutter/private:sdk_repo.bzl", "flutter_sdk_repo")
 load("//flutter/private:toolchains_repo.bzl", "PLATFORMS", "toolchains_repo")
 load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
@@ -406,6 +406,19 @@ def _generate_flutter_packages(repository_ctx):
         "flutter/bin/cache/pkg",
     ]
 
+    # Flutter >= 3.35 resolves its packages as a pub workspace: their pubspecs
+    # carry `any` constraints and this checked-in lockfile holds the pins. Each
+    # package is resolved standalone here, so without the pins a fetch would
+    # vendor whatever pub.dev serves as latest that day -- versions that no
+    # longer match the ones consumers pinned in their own pub_deps.json, whose
+    # packages then silently drop out of package_config.json. Older releases
+    # ship no workspace lock (they pin exactly in every package pubspec) and
+    # are left untouched.
+    lock_seed = ""
+    workspace_lock = repository_ctx.path("flutter/pubspec.lock")
+    if workspace_lock.exists:
+        lock_seed = filter_lock_to_hosted(repository_ctx.read("flutter/pubspec.lock"))
+
     package_labels = []
 
     for root in package_roots:
@@ -429,6 +442,7 @@ def _generate_flutter_packages(repository_ctx):
                 package_dir = package_dir,
                 include_hosted_deps = False,
                 include_pub_cache_data = True,
+                lock_seed = lock_seed,
             )
 
             package_labels.append("//{}:{}_files".format(package_dir, package_name))
