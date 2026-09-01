@@ -381,4 +381,10 @@ TOOL_VERSIONS = {
         "linux": "sha256-odgWbAMJJny33JnxQk7s8IuGlGrTtQcjxvWZRZZK6kU=",
         "windows": "sha256-TL+U/eH1+Na5/FCySDtXzyB39hcSKCwvTPklYBaPRCs=",
     },
+    "3.47.2": {
+        "macos": "sha256-tv1rqYyFA9XuBqZnBie1scNhZ+zjQnQ17IO2bpsoxrU=",
+        "macos_arm64": "sha256-9Fb9ZzMFPZMBgooucC1svshykjEmgJqoxI6wppbWzAE=",
+        "linux": "sha256-RHh4hZ0Bypv9uZqF8kWvB+2KFf7c2dGJxHSejpLR8YU=",
+        "windows": "sha256-N5NPISilXXeji6uhL9YRFX7SOke/fSt9F+noTaEYQJ0=",
+    },
 }
