@@ -92,9 +92,15 @@ build_command_test(
 
 build_command_test(
     name = "android_default_apk_test",
-    absent_substrings = ["assembleAndroidTest"],
+    # Release Android builds must not pass --no-pub: the in-build pub get is
+    # what rewrites the plugin registrant with release-mode dev-dependency
+    # filtering (see flutter_actions.bzl).
+    absent_substrings = [
+        "assembleAndroidTest",
+        "--no-pub",
+    ],
     expected_substrings = [
-        "'build' 'apk' '--no-pub' '--release'",
+        "'build' 'apk' '--release'",
     ],
     target_under_test = ":fixture_android_app.apk",
 )
