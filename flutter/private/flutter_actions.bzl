@@ -1726,6 +1726,18 @@ def flutter_build_action(
         fail("flutter_app '{}': android_test is only supported on apk targets (got '{}').".format(ctx.label, target))
 
     command_args = list(config["args"])
+
+    # `flutter pub get` regenerates the Android plugin registrant without the
+    # release-mode dev-dependency filter, so it registers dev-only plugins
+    # such as integration_test. Flutter's Gradle plugin excludes those
+    # packages from release dependencies, and `flutter build --no-pub` keeps
+    # the stale registrant, so javac fails on the missing package. Drop
+    # --no-pub for release Android builds: the pub get that already ran makes
+    # the in-build pub get a no-op, and the build then rewrites the
+    # registrant with release-mode filtering.
+    if mode == "release" and target in ANDROID_TARGETS:
+        command_args = [arg for arg in command_args if arg != "--no-pub"]
+
     command_args.append("--" + mode)
     for key in sorted(dart_defines.keys()):
         command_args.append("--dart-define={}={}".format(key, dart_defines[key]))
