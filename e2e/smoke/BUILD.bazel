@@ -28,6 +28,21 @@ filegroup(
 )
 
 py_test(
+    name = "pub_extension_test",
+    size = "medium",
+    srcs = ["pub_extension_test.py"],
+    args = [
+        "$(rootpath @pub_extension_test_bazel//:bazel)",
+        "$(rootpath @rules_flutter//flutter:extensions.bzl)",
+    ],
+    data = [
+        "@pub_extension_test_bazel//:bazel",
+        "@rules_flutter//flutter:extensions.bzl",
+    ],
+    deps = ["@bazel_tools//tools/python/runfiles"],
+)
+
+py_test(
     name = "gazelle_generation_test",
     srcs = ["gazelle_generation_test.py"],
     args = ["$(rootpath :gazelle_bin)"],
@@ -79,6 +94,7 @@ test_suite(
     name = "integration_tests",
     tests = [
         ":gazelle_generation_test",
+        ":pub_extension_test",
         ":pub_tooling_dependency_build_test",
         ":sdk_cache_sealed_test",
         ":single_pub_dependency_build_test",

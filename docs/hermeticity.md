@@ -74,6 +74,17 @@ networked dependency resolution happens. (Mobile builds later re-run an
 offline solve against the assembled cache — see the table below — but never
 touch the network for pub.)
 
+The `pub` module extension is reproducible: its repository declarations are
+derived from module tags and watched workspace inputs. Bazel therefore keeps
+this extension's report hashes and repository specifications out of
+`MODULE.bazel.lock`, avoiding a shared hash conflict when independent dependency
+updates change `pub_deps.json`. The checked-in report still pins package
+versions. File contents, scanned directory listings, and `.bazelignore` are
+watched, so changing a report, adding or removing one, or changing exclusions
+invalidates discovery. The scan uses Bazel's filesystem API and does not need
+a host Python interpreter. It skips Bazel output trees, VCS directories,
+`.dart_tool`, ignored directories, and directory symlinks.
+
 ### Code generation
 
 Both one-shot `generator_commands` and action-backed `build_runner build`
