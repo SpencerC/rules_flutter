@@ -31,7 +31,21 @@ and a plain Dart package ([`dart_package/`](e2e/smoke/dart_package)).
 
 ## Installation
 
-`rules_flutter` uses bzlmod and requires Bazel 8 or newer. Until a release lands in the Bazel Central Registry,
+`rules_flutter` uses bzlmod and requires Bazel 9 or newer. Development is pinned
+to Bazel 9.2.0; CI tests Bazel 9.0.0 and 9.2.0 on Linux and macOS, including the
+Gazelle plugin, smoke workspace, and standalone example. Bazel 8 users should
+stay on rules_flutter 0.3.1 until they upgrade Bazel.
+
+The rules use Starlark sets for deduplication, named file-write actions for
+workspace manifests, and `config.none()` for configuration-independent
+protoc plugin sources. Flutter test rules explicitly resolve a Flutter SDK
+for the `test` execution group. If you constrain remote test platforms, use
+`exec_group_compatible_with = {"test": [...]}` on the test target.
+
+For Dart proto generation, enable protobuf's [prebuilt compiler](#prebuilt-protoc)
+to avoid compiling protoc from source.
+
+Until a release lands in the Bazel Central Registry,
 depend on it with a `git_override` in your `MODULE.bazel`:
 
 ```starlark
@@ -385,30 +399,19 @@ flutter_library(
 
 ### Prebuilt protoc
 
-By default the aspect invokes the source-built `@protobuf//:protoc`, which
-drags protobuf's C++ compilation graph (tens of thousands of configured
-targets) into analysis. `dart_proto_library` supports
-[proto toolchain resolution](https://protobuf.dev/support/migration/#toolchain-resolution):
-with `--incompatible_enable_proto_toolchain_resolution` set, protoc comes from
-the resolved proto toolchain instead, so registering a prebuilt one — e.g.
-[toolchains_protoc](https://github.com/aspect-build/toolchains_protoc) —
-removes that graph entirely:
+Bazel 9 resolves protobuf 33.4 or newer, which supplies prebuilt compiler
+toolchains matching the protobuf version. Enable them to avoid compiling
+protoc and its C++ dependencies from source:
 
-```starlark
-# MODULE.bazel
-bazel_dep(name = "toolchains_protoc", version = "0.6.1")
-
-protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
-protoc.toolchain(version = "v33.0")
-use_repo(protoc, "toolchains_protoc_hub")
-
-register_toolchains("@toolchains_protoc_hub//:all")
-```
-
-```
+```text
 # .bazelrc
-common --incompatible_enable_proto_toolchain_resolution
+build --@protobuf//bazel/toolchains:prefer_prebuilt_protoc
 ```
+
+No separate `toolchains_protoc` dependency or registration is needed. The
+smoke workspace uses this configuration with Bazel 9's default proto
+toolchain resolution. CI also checks the legacy compiler attribute path
+with `--noincompatible_enable_proto_toolchain_resolution`.
 
 ## Building apps: flutter_app
 

@@ -52,13 +52,12 @@ def _toolchain_extension(module_ctx):
                 Only the root module may override the default name for the flutter toolchain.
                 This prevents conflicting registrations in the global namespace of external repos.
                 """)
-            if toolchain.name not in registrations.keys():
+            if toolchain.name not in registrations:
                 registrations[toolchain.name] = []
-                precache_groups[toolchain.name] = {}
+                precache_groups[toolchain.name] = set()
                 integrity_overrides[toolchain.name] = {}
             registrations[toolchain.name].append(toolchain.flutter_version)
-            for group in toolchain.precache:
-                precache_groups[toolchain.name][group] = True
+            precache_groups[toolchain.name].update(toolchain.precache)
 
             # Integrity is bound to the (name, version) it was declared for, so
             # a map declared for one version is never applied to a different
@@ -71,7 +70,7 @@ def _toolchain_extension(module_ctx):
                     by_version[toolchain.flutter_version][platform] = sri
     for name, versions in registrations.items():
         # Deduplicate versions to avoid noise when the same version is registered multiple times
-        unique_versions = {v: True for v in versions}.keys()
+        unique_versions = set(versions)
         if len(unique_versions) > 1:
             # Highest requested version wins (MVS: every module gets at least
             # the version it asked for), compared semver-aware not lexically.
@@ -94,7 +93,7 @@ def _toolchain_extension(module_ctx):
         flutter_register_toolchains(
             name = name,
             flutter_version = selected,
-            precache = sorted(precache_groups[name].keys()),
+            precache = sorted(precache_groups[name]),
             integrity = overrides,
             register = False,
         )
@@ -355,7 +354,7 @@ def _register_repo(repo_map, repo_name, package, version, origin, from_root = Tr
 def _pub_extension(module_ctx):
     """Extension implementation for pub.dev packages."""
     repos = {}
-    scanned_roots = {}
+    scanned_roots = set()
     dep_edges = {}
 
     for mod in module_ctx.modules:
@@ -365,7 +364,7 @@ def _pub_extension(module_ctx):
         root_key = str(root)
         if root_key in scanned_roots:
             continue
-        scanned_roots[root_key] = True
+        scanned_roots.add(root_key)
         deps_files = _execute_deps_scan(module_ctx, root)
         for deps_file in deps_files:
             module_ctx.watch(deps_file)
@@ -380,10 +379,9 @@ def _pub_extension(module_ctx):
                     info.get("version"),
                     origin,
                 )
-                merged = {dep: True for dep in dep_edges.get(package, [])}
-                for dep in info.get("dependencies", []):
-                    merged[dep] = True
-                dep_edges[package] = sorted(merged.keys())
+                merged = set(dep_edges.get(package, []))
+                merged.update(info.get("dependencies", []))
+                dep_edges[package] = sorted(merged)
 
     for mod in module_ctx.modules:
         for pkg in mod.tags.package:
@@ -400,7 +398,7 @@ def _pub_extension(module_ctx):
 
     # Restrict recorded edges to hosted packages that actually have repos and
     # break dependency cycles so the generated target graph is a DAG.
-    known_packages = {meta["package"]: True for meta in repos.values()}
+    known_packages = set([meta["package"] for meta in repos.values()])
     hosted_edges = {
         package: [dep for dep in deps if dep in known_packages]
         for package, deps in dep_edges.items()

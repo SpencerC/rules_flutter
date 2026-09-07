@@ -44,8 +44,8 @@ body:
     id: bazel-version
     attributes:
       label: Bazel version
-      description: Output of `bazel --version` (rules_flutter requires Bazel 8+).
-      placeholder: e.g. 8.4.2
+      description: Output of `bazel --version` (rules_flutter requires Bazel 9+).
+      placeholder: e.g. 9.2.0
     validations:
       required: true
   - type: input

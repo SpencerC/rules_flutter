@@ -73,7 +73,7 @@ def _build_runner_cache(ctx):
 def _remote_cache_trees(ctx):
     return ctx.attr._remote_cache_trees[BuildSettingInfo].value
 
-def _resolve_flutter_toolchain(ctx):
+def _resolve_flutter_toolchain(ctx, exec_group = None):
     """Return (toolchain, flutter_bin File) for the resolved Flutter toolchain.
 
     Fails with an actionable message when no toolchain is registered (or it
@@ -82,11 +82,13 @@ def _resolve_flutter_toolchain(ctx):
 
     Args:
         ctx: the rule context.
+        exec_group: Execution group whose platform runs Flutter, or None for build actions.
 
     Returns:
         A tuple of (toolchain info, the flutter launcher File).
     """
-    flutter_toolchain = ctx.toolchains["//flutter:toolchain_type"]
+    toolchains = ctx.exec_groups[exec_group].toolchains if exec_group else ctx.toolchains
+    flutter_toolchain = toolchains["//flutter:toolchain_type"]
     if not flutter_toolchain.flutterinfo.tool_files:
         fail("rules_flutter: no Flutter toolchain is registered (the resolved " +
              "toolchain has no tool files). Register one via the `flutter` module " +
@@ -434,14 +436,14 @@ def _shell_quote(arg):
     return "'" + arg.replace("'", "'\"'\"'") + "'"
 
 def _normalize_build_runner_modes(modes):
-    seen = {}
+    seen = set()
     normalized = []
     for mode in modes:
         if mode not in _BUILD_RUNNER_MODES:
             fail("Unsupported build_runner mode '{}'. Expected one of {}.".format(mode, _BUILD_RUNNER_MODES))
         if mode in seen:
             continue
-        seen[mode] = True
+        seen.add(mode)
         normalized.append(mode)
     return normalized
 
@@ -674,16 +676,16 @@ def _flutter_sync_impl(ctx):
     entries = _generated_srcs_entries(ctx.attr.generated_srcs)
     trees = []
     manifest_lines = []
-    dest_dirs = {}
+    dest_dirs = set()
     for rel, artifact in entries:
         kind = "dir" if artifact.is_directory else "file"
         if artifact.is_directory:
-            dest_dirs[rel] = True
+            dest_dirs.add(rel)
         manifest_lines.append("{}\t{}\t{}".format(kind, artifact.short_path, rel))
         trees.append(artifact)
 
     manifest = ctx.actions.declare_file(ctx.label.name + "_sync_manifest.txt")
-    ctx.actions.write(manifest, "\n".join(manifest_lines) + "\n")
+    ctx.actions.write(manifest, "\n".join(manifest_lines) + "\n", mnemonic = "FlutterSyncManifest")
 
     runner = ctx.actions.declare_file(ctx.label.name + "_sync.sh")
     ctx.actions.write(
@@ -756,7 +758,7 @@ echo "✓ Synced generated sources into $PACKAGE_DIR"
 """.format(
             package = ctx.label.package,
             manifest = manifest.short_path,
-            dest_dirs = " ".join([_shell_quote(d) for d in sorted(dest_dirs.keys())]) if dest_dirs else "",
+            dest_dirs = " ".join([_shell_quote(d) for d in sorted(dest_dirs)]) if dest_dirs else "",
         ),
         is_executable = True,
     )
@@ -2245,7 +2247,7 @@ fi
         package_config_py = PACKAGE_CONFIG_FROM_PUB_DEPS_PY,
     )
 
-def _single_embedded_library(ctx, rule_name):
+def _single_embedded_library(ctx, rule_name, exec_group = None):
     """Return (library_info, flutter_bin) for a rule embedding one flutter_library."""
 
     if not ctx.attr.embed:
@@ -2257,7 +2259,7 @@ def _single_embedded_library(ctx, rule_name):
     library_info = ctx.attr.embed[0][FlutterLibraryInfo]
     _check_embeddable(ctx, ctx.attr.embed[0], library_info)
 
-    _, flutter_bin = _resolve_flutter_toolchain(ctx)
+    _, flutter_bin = _resolve_flutter_toolchain(ctx, exec_group = exec_group)
 
     return library_info, flutter_bin.path
 
@@ -2326,6 +2328,7 @@ done
 
 def _runtime_runfiles(ctx, runner, prepared_workspace, library_info):
     """Runfiles common to rules that materialize a runtime workspace."""
+    flutter_toolchain, _ = _resolve_flutter_toolchain(ctx, exec_group = "test")
     return ctx.runfiles(
         files = [
             runner,
@@ -2333,13 +2336,13 @@ def _runtime_runfiles(ctx, runner, prepared_workspace, library_info):
             library_info.pub_cache,
             library_info.pub_deps,
             library_info.dart_tool,
-        ],
+        ] + flutter_toolchain.flutterinfo.tool_files + flutter_toolchain.flutterinfo.sdk_files,
     )
 
 def _flutter_test_impl(ctx):
     """Implementation for flutter_test rule."""
 
-    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_test")
+    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_test", exec_group = "test")
 
     prepared_workspace = _prepare_overlay_workspace(
         ctx,
@@ -2507,6 +2510,8 @@ flutter_test = rule(
         ),
     } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,
+    # Bazel 9 resolves test actions separately from the default execution group.
+    exec_groups = {"test": exec_group(toolchains = ["//flutter:toolchain_type"])},
     toolchains = ["//flutter:toolchain_type"],
     doc = """Runs Flutter tests using a prepared flutter_library workspace.""",
 )
@@ -2854,7 +2859,7 @@ to run every test under test_files (only safe when golden is the sole skip).""",
 def _flutter_analyze_test_impl(ctx):
     """Implementation for flutter_analyze_test rule."""
 
-    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_analyze_test")
+    library_info, flutter_bin = _single_embedded_library(ctx, "flutter_analyze_test", exec_group = "test")
 
     prepared_workspace = _prepare_overlay_workspace(
         ctx,
@@ -2954,6 +2959,7 @@ flutter_analyze_test = rule(
         ),
     } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,
+    exec_groups = {"test": exec_group(toolchains = ["//flutter:toolchain_type"])},
     toolchains = ["//flutter:toolchain_type"],
     doc = "Runs `flutter analyze` hermetically against a prepared flutter_library workspace.",
 )
@@ -2961,7 +2967,7 @@ flutter_analyze_test = rule(
 def _dart_format_test_impl(ctx):
     """Implementation for dart_format_test rule."""
 
-    flutter_toolchain, flutter_bin_file = _resolve_flutter_toolchain(ctx)
+    flutter_toolchain, flutter_bin_file = _resolve_flutter_toolchain(ctx, exec_group = "test")
 
     if not ctx.files.srcs:
         fail("dart_format_test requires at least one file in srcs")
@@ -3046,6 +3052,7 @@ dart_format_test = rule(
         ),
     } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,
+    exec_groups = {"test": exec_group(toolchains = ["//flutter:toolchain_type"])},
     toolchains = ["//flutter:toolchain_type"],
     doc = "Fails when any of the given Dart sources are not dart-format clean.",
 )
@@ -3217,6 +3224,8 @@ _dart_proto_aspect = aspect(
     }) | {
         "_dart_plugin_files": attr.label(
             default = Label("@pub_protoc_plugin//:protoc_plugin_files"),
+            # The vendored plugin is source data, independent of target build flags.
+            cfg = config.none(),
         ),
     },
     required_providers = [ProtoInfo],

@@ -5,6 +5,7 @@ Add a basic smoke-test target below.
 load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
+load("@rules_python//python:py_test.bzl", "py_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 gazelle_binary(
@@ -37,7 +38,7 @@ py_test(
     ],
     main = "gazelle_generation_test.py",
     tags = ["no-sandbox"],
-    deps = ["@bazel_tools//tools/python/runfiles"],
+    deps = ["@rules_python//python/runfiles"],
 )
 
 # Test basic rule functionality
