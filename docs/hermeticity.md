@@ -85,6 +85,13 @@ invalidates discovery. The scan uses Bazel's filesystem API and does not need
 a host Python interpreter. It skips Bazel output trees, VCS directories,
 `.dart_tool`, ignored directories, and directory symlinks.
 
+Bazel 9.2 has an [upstream directory invalidation bug](https://github.com/bazelbuild/bazel/issues/30883):
+deleting or renaming a scanned directory can fail with "is no longer an existing
+directory" before the extension can run again. Run `bazel clean --expunge` and
+retry; this clears the stale extension cache along with local build outputs.
+Deleting a report while keeping its directory does not require this workaround.
+The upstream fix is awaiting a [9.3 backport](https://github.com/bazelbuild/bazel/issues/30884).
+
 ### Code generation
 
 Both one-shot `generator_commands` and action-backed `build_runner build`

@@ -56,6 +56,6 @@
 
 ## Security & Configuration Tips
 
-- Bazel 6+ with bzlmod is expected; `.bazelrc` enables `--enable_bzlmod`.
+- Bazel 9+ is required; bzlmod is always enabled.
 - For downstream/local testing, you can use `--override_repository=rules_flutter=/path/to/clone`.
 - Do not commit credentials or SDK artifacts; toolchains are resolved via Bazel.

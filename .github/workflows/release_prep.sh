@@ -44,7 +44,7 @@ INTEGRITY=$(python3 -c "import base64; print('sha256-' + base64.b64encode(bytes.
 cat << EOF
 ## Using Bzlmod
 
-rules_flutter requires Bazel 8 or newer.
+rules_flutter requires Bazel 9 or newer.
 
 Add to your \`MODULE.bazel\` file:
 

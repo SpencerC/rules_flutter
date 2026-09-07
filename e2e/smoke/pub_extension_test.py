@@ -1,7 +1,7 @@
 """Exercise the production pub extension with real Bazel input invalidation.
 
 Repository fetching is stubbed: these tests inspect declarations, not SDKs or
-pub.dev archives. Empty built-in modules and a registry keep the fixture
+pub.dev archives. An empty bazel_tools module and registry keep the fixture
 independent of the network and of the host's installed toolchains.
 """
 
@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bazel_tools.tools.python.runfiles import runfiles
+from python.runfiles import runfiles
 
 
 RUNFILES = runfiles.Create()
@@ -31,6 +31,14 @@ EXTENSION = runfile(sys.argv.pop(1))
 
 
 class PubExtensionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.install_temp = tempfile.TemporaryDirectory(dir=os.environ["TEST_TMPDIR"])
+        cls.addClassCleanup(cls.install_temp.cleanup)
+        # The executable's embedded JDK is immutable. Share its extraction while
+        # keeping each case's server and extension cache isolated.
+        cls.install_base = str(Path(cls.install_temp.name) / "install")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ["TEST_TMPDIR"])
         self.addCleanup(self.temp.cleanup)
@@ -39,13 +47,10 @@ class PubExtensionTest(unittest.TestCase):
         self.workspace.mkdir()
         self.write("BUILD.bazel", "")
         self.write("MODULE.bazel", '''module(name = "pub_extension_test")
-local_path_override(module_name = "bazel_tools", path = "tools")
-local_path_override(module_name = "platforms", path = "platforms")
 pub = use_extension("//flutter:extensions.bzl", "pub")
 use_repo(pub, "pub_alpha")
 ''')
         self.write("tools/MODULE.bazel", 'module(name = "bazel_tools")\n')
-        self.write("platforms/MODULE.bazel", 'module(name = "platforms")\n')
         self.write("flutter/BUILD.bazel", "")
         self.write("flutter/private/BUILD.bazel", "")
         shutil.copyfile(EXTENSION, self.workspace / "flutter/extensions.bzl")
@@ -75,6 +80,7 @@ pub_dev_repository = repository_rule(
         self.startup = [
             str(BAZEL),
             "--ignore_all_rc_files",
+            "--install_base=" + self.install_base,
             "--output_user_root=" + str(self.root / "bazel"),
             "--host_jvm_args=-XX:ActiveProcessorCount=2",
         ]
@@ -103,15 +109,21 @@ pub_dev_repository = repository_rule(
             "dependencies": [],
         }]}))
 
-    def show(self, package="alpha", version="1.0.0", mode="update"):
+    def show(self, package="alpha", version="1.0.0", mode="update", expected_error=None):
+        # Bazel 9 resolves embedded bazel_tools before MODULE.bazel overrides.
+        # Override the canonical repository to keep this fixture offline.
         result = subprocess.run(
             self.startup + ["mod", "show_repo", "@@+pub+pub_" + package,
+                            "--override_repository=bazel_tools=" + str(self.workspace / "tools"),
                             "--registry=" + (self.root / "registry").as_uri(),
                             "--lockfile_mode=" + mode, "--color=no", "--curses=no"],
             cwd=self.workspace, env=self.env, capture_output=True, text=True,
             timeout=90,
         )
-        if version is None:
+        if expected_error:
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(expected_error, result.stderr)
+        elif version is None:
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("no such repo", result.stderr)
             self.assertIn("pub_" + package, result.stdout + result.stderr)
@@ -167,7 +179,7 @@ pub_dev_repository = repository_rule(
         self.show(package="beta", version="2.0.0")
 
         # Removing a report must stop its old pin from conflicting with a new one.
-        shutil.rmtree(self.workspace / "new")
+        (self.workspace / "new/nested/pub_deps.json").unlink()
         self.report("existing/pub_deps.json", package="beta", version="3.0.0")
         self.show(package="beta", version="3.0.0")
 
@@ -180,6 +192,21 @@ pub_dev_repository = repository_rule(
         self.show(package="beta", version=None)
         ignore.unlink()
         self.show(package="beta", version="3.0.0")
+
+    def test_deleted_directory_recovery_on_bazel_9_2(self):
+        self.report("app/pub_deps.json")
+        self.report("removed/nested/pub_deps.json", package="beta")
+        self.show(package="beta")
+        shutil.rmtree(self.workspace / "removed")
+        self.report("app/replacement/pub_deps.json", package="beta", version="2.0.0")
+
+        # Bazel 9.2 checks cached directory listings before their existence.
+        # Keep this failure explicit until the 9.3 backport ships:
+        # https://github.com/bazelbuild/bazel/issues/30884
+        self.show(package="beta", expected_error="is no longer an existing directory")
+        subprocess.run(self.startup + ["clean", "--expunge"], cwd=self.workspace,
+                       env=self.env, capture_output=True, timeout=60, check=True)
+        self.show(package="beta", version="2.0.0")
 
     def test_scan_exclusions_and_directory_symlinks(self):
         self.report("app/pub_deps.json")

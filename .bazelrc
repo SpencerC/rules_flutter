@@ -2,8 +2,8 @@
 # Take care to document any settings that you expect users to apply.
 # Settings that apply only to CI are in .github/workflows/ci.bazelrc
 
-# Required until this is the default; expected in Bazel 7
-common --enable_bzlmod
+# Bazel 9's protobuf dependency supplies matching prebuilt protoc toolchains.
+build --@protobuf//bazel/toolchains:prefer_prebuilt_protoc
 
 # Don’t want to push a rules author to update their deps if not needed.
 # https://bazel.build/reference/command-line-reference#flag--check_direct_dependencies

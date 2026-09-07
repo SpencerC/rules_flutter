@@ -454,14 +454,14 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
         return file.basename
 
     workspace_entries = {}
-    seen = {}
+    seen = set()
 
     def add_entry(file, rel_path = None):
         if file == None:
             return
         if file.path in seen:
             return
-        seen[file.path] = True
+        seen.add(file.path)
 
         if rel_path == None:
             rel_path = source_relative_path(file)
@@ -485,7 +485,7 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
     for rel_path, f in extra_entries:
         if f.path in seen:
             continue
-        seen[f.path] = True
+        seen.add(f.path)
         manifest_content.append("{}|{}".format(rel_path, f.path))
 
     manifest_payload = "\n".join(manifest_content)
@@ -495,11 +495,13 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
     ctx.actions.write(
         output = manifest,
         content = manifest_payload,
+        mnemonic = "FlutterWorkspaceManifest",
     )
 
     workspace_script = ctx.actions.declare_file(ctx.label.name + "_setup_workspace.sh")
     ctx.actions.write(
         output = workspace_script,
+        mnemonic = "FlutterWorkspaceScript",
         content = """#!/bin/bash
 set -euo pipefail
 
@@ -534,13 +536,13 @@ done < "$MANIFEST_FILE"
 
     # Collect unique input files for the action
     input_files = []
-    seen_inputs = {}
+    seen_inputs = set()
     for f in [pubspec_file] + [entry[1] for entry in extra_entries] + dart_files + other_files + data_files:
         if f == None:
             continue
         if f.path in seen_inputs:
             continue
-        seen_inputs[f.path] = True
+        seen_inputs.add(f.path)
         input_files.append(f)
 
     # Run the workspace setup
@@ -703,6 +705,7 @@ def flutter_stage_pub_package_action(ctx, payload_files, allow_remote_exec = Fal
     ctx.actions.write(
         manifest,
         "".join([f.path + "\t" + f.path[len(root_prefix):] + "\n" for f in payload_files]),
+        mnemonic = "FlutterPubPayloadManifest",
     )
 
     script_content = """#!/bin/bash

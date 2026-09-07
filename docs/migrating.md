@@ -117,6 +117,12 @@ use those pins. Bazel tracks report contents, directory listings, and
 `.bazelignore`, so dependency changes are detected even with
 `--lockfile_mode=error`.
 
+On Bazel 9.2, deleting or renaming a scanned directory can trigger the upstream
+[directory invalidation bug](https://github.com/bazelbuild/bazel/issues/30883).
+If Bazel reports "is no longer an existing directory", run
+`bazel clean --expunge` and retry. This removes local build outputs and the stale
+extension cache; ordinary report edits and deletions do not need it.
+
 Common snags in this phase:
 
 - **`dependency_overrides` are baked in at update time.** The `.update` helper

@@ -1,10 +1,10 @@
 """Pinned Bazel executable for the offline pub extension integration test."""
 
 _SHA256 = {
-    "darwin-arm64": "8a65ea2de137757774390a16d6f9322bf12ff984abd4553c2521afa19ddf7063",
-    "darwin-x86_64": "6dceb9a73ab682c6f2b485cc607bea079cd7fe00d2d080402e7e7a7d73350fe0",
-    "linux-arm64": "44e20bcd475259869d943fb2e604a3e31a629bc7333d7d77809b853a85c7c9ea",
-    "linux-x86_64": "43445203739a7fd4eb28abbbee8803f24998e6259cc618a3323fb32bd7fa4f30",
+    "darwin-arm64": "dd466352a3e4d3581b8898740ee1ff208866ccbe25f8d367c5dcb950219587e6",
+    "darwin-x86_64": "14c9bcb01303b38192e0e2895051c1bcf19bf89d7e416f5aeeeb48b6b624cfbf",
+    "linux-arm64": "049dd21f40ad979db11c3ee68c96a42ce75f1185e69ac61ab20de1501427a410",
+    "linux-x86_64": "7668a95db1250f12c40407251e4e203b4ec8bf39bc495d2f485b2d8c99048694",
 }
 
 def _bazel_test_tool_impl(ctx):
@@ -16,7 +16,7 @@ def _bazel_test_tool_impl(ctx):
     if platform not in _SHA256:
         fail("Unsupported pub extension test platform: " + platform)
     ctx.download(
-        url = "https://releases.bazel.build/8.4.0/release/bazel-8.4.0-" + platform,
+        url = "https://releases.bazel.build/9.2.0/release/bazel-9.2.0-" + platform,
         sha256 = _SHA256[platform],
         output = "bazel",
         executable = True,
@@ -25,5 +25,5 @@ def _bazel_test_tool_impl(ctx):
 
 bazel_test_tool = repository_rule(
     implementation = _bazel_test_tool_impl,
-    doc = "Fetch Bazel 8.4.0 at repository time, with no test-time downloads.",
+    doc = "Fetch Bazel 9.2.0 at repository time, with no test-time downloads.",
 )
