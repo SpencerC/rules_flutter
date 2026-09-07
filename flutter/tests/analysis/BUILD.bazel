@@ -1,4 +1,5 @@
 load("//flutter:defs.bzl", "flutter_app", "flutter_library")
+load(":bazel9_test.bzl", "bazel9_test_suite")
 load(":defs_analysis_test.bzl", "build_command_test", "embed_guard_test")
 
 # Fixture targets are analysis-only: the analysis tests inspect their action
@@ -127,11 +128,14 @@ embed_guard_test(
     target_under_test = ":fixture_unassembled_app.web",
 )
 
+bazel9_test_suite(name = "bazel9_tests")
+
 test_suite(
     name = "analysis_tests",
     tests = [
         ":android_default_apk_test",
         ":android_test_apk_test",
+        ":bazel9_tests",
         ":build_command_customization_test",
         ":build_command_defaults_test",
         ":embed_unassembled_cache_test",
