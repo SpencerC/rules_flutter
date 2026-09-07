@@ -582,16 +582,15 @@ runtime toolchain.
 
 ```starlark
 # MODULE.bazel
-bazel_dep(name = "rules_android", version = "0.6.6")
+bazel_dep(name = "rules_android", version = "0.7.3")
 
 android_sdk_repo = use_extension("@rules_android//rules/android_sdk_repository:rule.bzl", "android_sdk_repository_extension")
 use_repo(android_sdk_repo, "androidsdk")
 ```
 
-```
-# .bazelrc — pass discovery through to repository fetches
-common --repo_env=ANDROID_HOME
-```
+Export `ANDROID_HOME` in the shell before running Bazel. rules_android tracks
+this environment variable during SDK discovery; no `.bazelrc` forwarding is
+needed.
 
 ```starlark
 # BUILD.bazel

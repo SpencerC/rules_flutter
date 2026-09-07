@@ -62,6 +62,11 @@ build_test(
 )
 
 build_test(
+    name = "android_sdk_load_test",
+    targets = ["@android_sdk_fixture//:adb"],
+)
+
+build_test(
     name = "pub_tooling_dependency_build_test",
     targets = [
         "@pub_analyzer//:analyzer",
@@ -79,6 +84,7 @@ sh_test(
 test_suite(
     name = "integration_tests",
     tests = [
+        ":android_sdk_load_test",
         ":gazelle_generation_test",
         ":pub_tooling_dependency_build_test",
         ":sdk_cache_sealed_test",
