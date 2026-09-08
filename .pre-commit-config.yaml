@@ -12,6 +12,15 @@ default_language_version:
   node: 16.18.0
 
 repos:
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: terraform fmt
+        entry: bazel run //terraform/github:terraform -- fmt -check
+        language: system
+        files: ^terraform/github/.*\.tf$
+        pass_filenames: false
+        require_serial: true
   # Check formatting and lint for starlark code
   - repo: https://github.com/keith/pre-commit-buildifier
     rev: 7.3.1.1

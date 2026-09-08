@@ -81,16 +81,11 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # v3.0.3
-
-      # Note: possible conclusion values:
-      # https://github.com/technote-space/workflow-conclusion-action/blob/main/src/constant.ts
-      - name: report success
-        if: ${{ env.WORKFLOW_CONCLUSION == 'success' }}
-        working-directory: /tmp
-        run: echo ${{ env.WORKFLOW_CONCLUSION }} && exit 0
-
-      - name: report failure
-        if: ${{ env.WORKFLOW_CONCLUSION == 'failure' }}
-        working-directory: /tmp
-        run: echo ${{ env.WORKFLOW_CONCLUSION }} && exit 1
+      - uses: actions/checkout@v4
+      - name: Require every job to succeed
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          EXAMPLE_RESULT: ${{ needs.example.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          PRE_COMMIT_RESULT: ${{ needs.pre-commit.result }}
+        run: bash scripts/ci_required_jobs.sh "$TEST_RESULT" "$EXAMPLE_RESULT" "$DOCS_RESULT" "$PRE_COMMIT_RESULT"

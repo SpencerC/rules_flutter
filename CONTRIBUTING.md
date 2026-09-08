@@ -19,6 +19,23 @@ pre-commit install
 
 Otherwise later tooling on CI will yell at you about formatting/linting violations.
 
+## Repository settings and branch cleanup
+
+GitHub settings are managed in [terraform/github](terraform/github/README.md).
+The default branch requires all CI test/example matrix jobs, docs, pre-commit,
+and the final conclusion. GitHub deletes PR head branches after merge.
+
+Enable automatic pruning in each clone so fetches also remove deleted
+remote-tracking references such as `origin/feature/example`:
+
+```sh
+git config --local fetch.prune true
+git fetch origin
+```
+
+Codex's environment setup enables this setting automatically. It is shared by
+worktrees in the same clone. Local working branches and worktrees are retained.
+
 ## Updating BUILD files
 
 Some targets are generated from sources.

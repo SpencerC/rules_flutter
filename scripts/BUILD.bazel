@@ -1,5 +1,6 @@
 """Scripts for maintaining rules_flutter"""
 
 exports_files([
+    "ci_required_jobs.sh",
     "update_flutter_versions.sh",
 ])
