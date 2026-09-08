@@ -5,6 +5,7 @@ name = "rules_flutter"
 script = '''
 set -eu
 pre-commit install
+git config --local fetch.prune true
 bazel info
 '''
 

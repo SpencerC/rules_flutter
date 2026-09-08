@@ -3,3 +3,7 @@ bazel-*
 .idea/
 .ijwb/
 .bazelbsp/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan

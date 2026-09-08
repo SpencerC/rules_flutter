@@ -25,6 +25,13 @@ bazel_dep(name = "aspect_bazel_lib", version = "2.22.5", dev_dependency = True)
 # so the two gates agree on formatting.
 bazel_dep(name = "buildifier_prebuilt", version = "7.3.1", dev_dependency = True)
 
+terraform_tool = use_repo_rule("//tools:terraform_tool.bzl", "terraform_tool")
+
+terraform_tool(
+    name = "terraform_cli",
+    dev_dependency = True,
+)
+
 # The Gazelle plugin lives in its own module (gazelle/) so that plain
 # rules_flutter consumers never resolve Go rules or a Go toolchain. These
 # dev-only deps exist to run `bazel run //:gazelle` in this repo.
