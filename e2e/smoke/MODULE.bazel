@@ -9,6 +9,12 @@ bazel_dep(name = "rules_python", version = "1.7.0", dev_dependency = True)
 bazel_dep(name = "rules_shell", version = "0.4.1")
 bazel_dep(name = "rules_multirun", version = "0.13.0")
 
+# The discovery regression runs a declared Bazel binary against an offline
+# fixture, so it never relies on a host Bazel installation or runtime downloads.
+bazel_test_tool = use_repo_rule("//:bazel_test_tool.bzl", "bazel_test_tool")
+
+bazel_test_tool(name = "pub_extension_test_bazel")
+
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
 
 # Host Android SDK for the manual mobile example targets in //flutter_app.

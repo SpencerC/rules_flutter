@@ -250,7 +250,7 @@
   "moduleExtensions": {
     "//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "YfbTiSC1zTKGz+j26YiGsM0vRijlpCqQpoFGHGeB8yA=",
+        "bzlTransitiveDigest": "nuaF05umQ64XOs+qaAAcXGSRlHPUPERMrtH5/hQIXh0=",
         "usagesDigest": "MPZC/xzGVbRvfxHYU74cPXZyyx32ojSPxKT0ZE+0WUE=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -294,62 +294,6 @@
             "repoRuleId": "@@//flutter/private:sdk_repo.bzl%flutter_sdk_repo",
             "attributes": {
               "user_repository_name": "flutter"
-            }
-          }
-        }
-      }
-    },
-    "//flutter:extensions.bzl%pub": {
-      "general": {
-        "bzlTransitiveDigest": "YfbTiSC1zTKGz+j26YiGsM0vRijlpCqQpoFGHGeB8yA=",
-        "usagesDigest": "3gAU9n5Op2qqiGszPR8sJraNKYT2c6mBN9ysbRuWHDA=",
-        "recordedInputs": [
-          "FILE:@@//flutter/tests/analysis/pub_deps.json 7c074babb777e14501577377e80fff2ec31011797ba2a6a47a70d3a60daee897"
-        ],
-        "generatedRepoSpecs": {
-          "pub_fixnum": {
-            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
-            "attributes": {
-              "package": "fixnum",
-              "version": "1.1.1",
-              "keep_vendored_cache": true,
-              "resolve_deps": true
-            }
-          },
-          "pub_meta": {
-            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
-            "attributes": {
-              "package": "meta",
-              "version": "1.15.0",
-              "keep_vendored_cache": true,
-              "resolve_deps": true
-            }
-          },
-          "pub_path": {
-            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
-            "attributes": {
-              "package": "path",
-              "version": "1.9.0",
-              "keep_vendored_cache": true,
-              "resolve_deps": true
-            }
-          },
-          "pub_protobuf": {
-            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
-            "attributes": {
-              "package": "protobuf",
-              "version": "3.1.0",
-              "keep_vendored_cache": true,
-              "resolve_deps": true
-            }
-          },
-          "pub_protoc_plugin": {
-            "repoRuleId": "@@//flutter/private:pub_repository.bzl%pub_dev_repository",
-            "attributes": {
-              "package": "protoc_plugin",
-              "version": "21.1.1",
-              "keep_vendored_cache": true,
-              "resolve_deps": true
             }
           }
         }
@@ -478,6 +422,28 @@
             "repoRuleId": "@@buildifier_prebuilt+//:defs.bzl%_buildifier_toolchain_setup",
             "attributes": {
               "assets_json": "[{\"arch\":\"amd64\",\"name\":\"buildifier\",\"platform\":\"darwin\",\"sha256\":\"375f823103d01620aaec20a0c29c6cbca99f4fd0725ae30b93655c6704f44d71\",\"version\":\"v7.3.1\"},{\"arch\":\"arm64\",\"name\":\"buildifier\",\"platform\":\"darwin\",\"sha256\":\"5a6afc6ac7a09f5455ba0b89bd99d5ae23b4174dc5dc9d6c0ed5ce8caac3f813\",\"version\":\"v7.3.1\"},{\"arch\":\"amd64\",\"name\":\"buildifier\",\"platform\":\"linux\",\"sha256\":\"5474cc5128a74e806783d54081f581662c4be8ae65022f557e9281ed5dc88009\",\"version\":\"v7.3.1\"},{\"arch\":\"arm64\",\"name\":\"buildifier\",\"platform\":\"linux\",\"sha256\":\"0bf86c4bfffaf4f08eed77bde5b2082e4ae5039a11e2e8b03984c173c34a561c\",\"version\":\"v7.3.1\"},{\"arch\":\"amd64\",\"name\":\"buildifier\",\"platform\":\"windows\",\"sha256\":\"370cd576075ad29930a82f5de132f1a1de4084c784a82514bd4da80c85acf4a8\",\"version\":\"v7.3.1\"},{\"arch\":\"amd64\",\"name\":\"buildozer\",\"platform\":\"darwin\",\"sha256\":\"854c9583efc166602276802658cef3f224d60898cfaa60630b33d328db3b0de2\",\"version\":\"v7.3.1\"},{\"arch\":\"arm64\",\"name\":\"buildozer\",\"platform\":\"darwin\",\"sha256\":\"31b1bfe20d7d5444be217af78f94c5c43799cdf847c6ce69794b7bf3319c5364\",\"version\":\"v7.3.1\"},{\"arch\":\"amd64\",\"name\":\"buildozer\",\"platform\":\"linux\",\"sha256\":\"3305e287b3fcc68b9a35fd8515ee617452cd4e018f9e6886b6c7cdbcba8710d4\",\"version\":\"v7.3.1\"},{\"arch\":\"arm64\",\"name\":\"buildozer\",\"platform\":\"linux\",\"sha256\":\"0b5a2a717ac4fc911e1fec8d92af71dbb4fe95b10e5213da0cc3d56cea64a328\",\"version\":\"v7.3.1\"},{\"arch\":\"amd64\",\"name\":\"buildozer\",\"platform\":\"windows\",\"sha256\":\"58d41ce53257c5594c9bc86d769f580909269f68de114297f46284fbb9023dcf\",\"version\":\"v7.3.1\"}]"
+            }
+          }
+        }
+      }
+    },
+    "@@pybind11_bazel+//:internal_configure.bzl%internal_configure_extension": {
+      "general": {
+        "bzlTransitiveDigest": "NRXra7941UfmNUyIxnLt82V5hULluVGL2nBsijTl4j4=",
+        "usagesDigest": "D1r3lfzMuUBFxgG8V6o0bQTLMk3GkaGOaPzw53wrwyw=",
+        "recordedInputs": [
+          "REPO_MAPPING:pybind11_bazel+,bazel_tools bazel_tools",
+          "FILE:@@pybind11_bazel+//MODULE.bazel e6f4c20442eaa7c90d7190d8dc539d0ab422f95c65a57cc59562170c58ae3d34"
+        ],
+        "generatedRepoSpecs": {
+          "pybind11": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file": "@@pybind11_bazel+//:pybind11-BUILD.bazel",
+              "strip_prefix": "pybind11-2.12.0",
+              "urls": [
+                "https://github.com/pybind/pybind11/archive/v2.12.0.zip"
+              ]
             }
           }
         }
