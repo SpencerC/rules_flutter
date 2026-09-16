@@ -19,11 +19,42 @@ pre-commit install
 
 Otherwise later tooling on CI will yell at you about formatting/linting violations.
 
+## Repository settings and branch cleanup
+
+GitHub settings are managed in [terraform/github](terraform/github/README.md).
+The default branch requires all CI test/example matrix jobs, docs, pre-commit,
+and the final conclusion. GitHub deletes PR head branches after merge.
+
+Enable automatic pruning in each clone so fetches also remove deleted
+remote-tracking references such as `origin/feature/example`:
+
+```sh
+git config --local fetch.prune true
+git fetch origin
+```
+
+Codex's environment setup enables this setting automatically. It is shared by
+worktrees in the same clone. Local working branches and worktrees are retained.
+
 ## Updating BUILD files
 
 Some targets are generated from sources.
 Currently this is just the `bzl_library` targets.
 Run `bazel run //:gazelle` to keep them up-to-date.
+
+Development uses the pinned Bazel 9.2.0. Before completing a change, run:
+
+```sh
+bazel test //flutter/tests:all_tests //docs:update_tests
+cd e2e/smoke && bazel test //:integration_tests
+```
+
+CI also builds and tests the root, `gazelle/`, `e2e/smoke/`, and the standalone
+example with Bazel 9.0.0, the minimum supported version. Use
+`USE_BAZEL_VERSION=9.0.0 bazel test ...` to reproduce that coverage locally.
+The manual `//docs:update_tests` gate runs only at the pinned version because
+Stardoc output varies between Bazel versions; regenerate it with
+`bazel run //docs:update` when needed.
 
 ## Using this as a development dependency of other rules
 

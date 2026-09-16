@@ -52,13 +52,12 @@ def _toolchain_extension(module_ctx):
                 Only the root module may override the default name for the flutter toolchain.
                 This prevents conflicting registrations in the global namespace of external repos.
                 """)
-            if toolchain.name not in registrations.keys():
+            if toolchain.name not in registrations:
                 registrations[toolchain.name] = []
-                precache_groups[toolchain.name] = {}
+                precache_groups[toolchain.name] = set()
                 integrity_overrides[toolchain.name] = {}
             registrations[toolchain.name].append(toolchain.flutter_version)
-            for group in toolchain.precache:
-                precache_groups[toolchain.name][group] = True
+            precache_groups[toolchain.name].update(toolchain.precache)
 
             # Integrity is bound to the (name, version) it was declared for, so
             # a map declared for one version is never applied to a different
@@ -71,7 +70,7 @@ def _toolchain_extension(module_ctx):
                     by_version[toolchain.flutter_version][platform] = sri
     for name, versions in registrations.items():
         # Deduplicate versions to avoid noise when the same version is registered multiple times
-        unique_versions = {v: True for v in versions}.keys()
+        unique_versions = set(versions)
         if len(unique_versions) > 1:
             # Highest requested version wins (MVS: every module gets at least
             # the version it asked for), compared semver-aware not lexically.
@@ -94,7 +93,7 @@ def _toolchain_extension(module_ctx):
         flutter_register_toolchains(
             name = name,
             flutter_version = selected,
-            precache = sorted(precache_groups[name].keys()),
+            precache = sorted(precache_groups[name]),
             integrity = overrides,
             register = False,
         )
@@ -111,53 +110,7 @@ pub_package = tag_class(attrs = {
     "version": attr.string(doc = "Package version (optional, defaults to latest)"),
 })
 
-_DEPS_DISCOVERY_SCRIPT = """
-import os
-import sys
-
-root = os.path.realpath(sys.argv[1])
-results = []
-
-SKIP_PREFIXES = ("bazel-",)
-SKIP_NAMES = {".git", ".hg", ".svn", ".dart_tool"}
-
-# Honor the workspace's .bazelignore: ignored trees are not part of the
-# build (nested workspaces, tool worktrees, vendored checkouts), and stale
-# pub_deps.json copies inside them must not join -- or version-conflict
-# with -- the real dependency scan.
-ignored = []
-try:
-    with open(os.path.join(root, ".bazelignore")) as fh:
-        for line in fh:
-            entry = line.split("#", 1)[0].strip().strip("/")
-            if entry:
-                ignored.append(entry.replace(os.sep, "/"))
-except OSError:
-    pass
-
-def is_ignored(rel):
-    rel = rel.replace(os.sep, "/")
-    for entry in ignored:
-        if rel == entry or rel.startswith(entry + "/"):
-            return True
-    return False
-
-for dirpath, dirnames, filenames in os.walk(root):
-    rel_dir = os.path.relpath(dirpath, root)
-    if rel_dir == ".":
-        rel_dir = ""
-    dirnames[:] = [
-        name
-        for name in dirnames
-        if not name.startswith(SKIP_PREFIXES) and name not in SKIP_NAMES and
-        not is_ignored(rel_dir + "/" + name if rel_dir else name)
-    ]
-    if "pub_deps.json" in filenames:
-        results.append(os.path.join(dirpath, "pub_deps.json"))
-
-for path in sorted(results):
-    print(path)
-"""
+_DEPS_SKIP_NAMES = [".git", ".hg", ".svn", ".dart_tool"]
 
 def _module_root(module_ctx, mod):
     """Return the filesystem root for the given module."""
@@ -169,31 +122,50 @@ def _module_root(module_ctx, mod):
     module_file = module_ctx.path(Label(label))
     return module_file.dirname
 
-def _execute_deps_scan(module_ctx, root):
-    """Run a python helper to locate pub_deps.json files under the module root."""
-    python = module_ctx.which("python3") or module_ctx.which("python")
-    if not python:
-        fail("Unable to locate python3 or python on PATH while scanning pub_deps.json files")
+def _discover_pub_deps(module_ctx, root):
+    """Find dependency reports and track every input that controls discovery."""
+    root = root.realpath
+    ignore_file = root.get_child(".bazelignore")
 
-    result = module_ctx.execute([
-        python,
-        "-c",
-        _DEPS_DISCOVERY_SCRIPT,
-        str(root),
-    ], quiet = True)
+    # Watch even when absent, so creating or deleting .bazelignore invalidates
+    # discovery. Ignored trees must not contribute stale dependency pins.
+    module_ctx.watch(ignore_file)
+    ignored = []
+    if ignore_file.exists:
+        for line in module_ctx.read(ignore_file).splitlines():
+            entry = line.split("#", 1)[0].strip().replace("\\", "/").strip("/")
+            if entry:
+                ignored.append(entry)
 
-    if result.return_code != 0:
-        fail(
-            "pub extension failed to scan {} for pub_deps.json files (code {}):\nstdout: {}\nstderr: {}".format(
-                str(root),
-                result.return_code,
-                result.stdout,
-                result.stderr,
-            ),
-        )
+    pending = [(root, "")]
+    deps_files = []
+    for _ in range(1000000):  # bounded traversal: Starlark has no while
+        if not pending:
+            return sorted(deps_files, key = str)
+        directory, relative = pending.pop()
 
-    deps_files = [line for line in result.stdout.splitlines() if line]
-    return [module_ctx.path(path) for path in deps_files]
+        # Record existence/type before the listing so Bazel can stop checking
+        # a deleted directory (requires the fix in bazelbuild/bazel#30933).
+        module_ctx.watch(directory)
+
+        # Unlike a subprocess walk, this tracks additions, removals and renames
+        # even when no previously discovered pub_deps.json changed.
+        for child in directory.readdir(watch = "yes"):
+            name = child.basename
+            if child.is_dir:
+                rel = relative + "/" + name if relative else name
+                if name.startswith("bazel-") or name in _DEPS_SKIP_NAMES:
+                    continue
+                if any([rel == entry or rel.startswith(entry + "/") for entry in ignored]):
+                    continue
+
+                # Match os.walk(followlinks=False): avoid directory symlinks,
+                # including loops and links outside the root module.
+                if child.realpath == child:
+                    pending.append((child, rel))
+            elif name == "pub_deps.json":
+                deps_files.append(child)
+    fail("pub extension exceeded the directory scan limit under {}".format(root))
 
 def _sanitize_repo_name(package):
     """Generate a deterministic repository name for a package."""
@@ -355,7 +327,7 @@ def _register_repo(repo_map, repo_name, package, version, origin, from_root = Tr
 def _pub_extension(module_ctx):
     """Extension implementation for pub.dev packages."""
     repos = {}
-    scanned_roots = {}
+    scanned_roots = set()
     dep_edges = {}
 
     for mod in module_ctx.modules:
@@ -365,8 +337,8 @@ def _pub_extension(module_ctx):
         root_key = str(root)
         if root_key in scanned_roots:
             continue
-        scanned_roots[root_key] = True
-        deps_files = _execute_deps_scan(module_ctx, root)
+        scanned_roots.add(root_key)
+        deps_files = _discover_pub_deps(module_ctx, root)
         for deps_file in deps_files:
             module_ctx.watch(deps_file)
             packages = _parse_pub_deps_json(module_ctx.read(deps_file))
@@ -380,10 +352,9 @@ def _pub_extension(module_ctx):
                     info.get("version"),
                     origin,
                 )
-                merged = {dep: True for dep in dep_edges.get(package, [])}
-                for dep in info.get("dependencies", []):
-                    merged[dep] = True
-                dep_edges[package] = sorted(merged.keys())
+                merged = set(dep_edges.get(package, []))
+                merged.update(info.get("dependencies", []))
+                dep_edges[package] = sorted(merged)
 
     for mod in module_ctx.modules:
         for pkg in mod.tags.package:
@@ -400,7 +371,7 @@ def _pub_extension(module_ctx):
 
     # Restrict recorded edges to hosted packages that actually have repos and
     # break dependency cycles so the generated target graph is a DAG.
-    known_packages = {meta["package"]: True for meta in repos.values()}
+    known_packages = set([meta["package"] for meta in repos.values()])
     hosted_edges = {
         package: [dep for dep in deps if dep in known_packages]
         for package, deps in dep_edges.items()
@@ -428,6 +399,11 @@ def _pub_extension(module_ctx):
                 keep_vendored_cache = meta["tagged"],
                 resolve_deps = meta["tagged"],
             )
+
+    # Repository declarations depend only on tags and watched workspace inputs.
+    # Keep their cache out of MODULE.bazel.lock: a shared report digest would
+    # otherwise make independent dependency updates conflict on the same line.
+    return module_ctx.extension_metadata(reproducible = True)
 
 pub = module_extension(
     implementation = _pub_extension,

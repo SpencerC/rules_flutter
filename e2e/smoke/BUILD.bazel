@@ -5,7 +5,15 @@ Add a basic smoke-test target below.
 load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
+load("@rules_python//python:py_test.bzl", "py_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+sh_test(
+    name = "ci_required_jobs_test",
+    srcs = ["ci_required_jobs_test.sh"],
+    args = ["$(rootpath @rules_flutter//scripts:ci_required_jobs.sh)"],
+    data = ["@rules_flutter//scripts:ci_required_jobs.sh"],
+)
 
 gazelle_binary(
     name = "gazelle_bin",
@@ -28,6 +36,21 @@ filegroup(
 )
 
 py_test(
+    name = "pub_extension_test",
+    size = "medium",
+    srcs = ["pub_extension_test.py"],
+    args = [
+        "$(rootpath @pub_extension_test_bazel//:bazel)",
+        "$(rootpath @rules_flutter//flutter:extensions.bzl)",
+    ],
+    data = [
+        "@pub_extension_test_bazel//:bazel",
+        "@rules_flutter//flutter:extensions.bzl",
+    ],
+    deps = ["@rules_python//python/runfiles"],
+)
+
+py_test(
     name = "gazelle_generation_test",
     srcs = ["gazelle_generation_test.py"],
     args = ["$(rootpath :gazelle_bin)"],
@@ -37,7 +60,7 @@ py_test(
     ],
     main = "gazelle_generation_test.py",
     tags = ["no-sandbox"],
-    deps = ["@bazel_tools//tools/python/runfiles"],
+    deps = ["@rules_python//python/runfiles"],
 )
 
 # Test basic rule functionality
@@ -61,6 +84,11 @@ build_test(
 )
 
 build_test(
+    name = "android_sdk_load_test",
+    targets = ["@android_sdk_fixture//:adb"],
+)
+
+build_test(
     name = "pub_tooling_dependency_build_test",
     targets = [
         "@pub_analyzer//:analyzer",
@@ -78,7 +106,10 @@ sh_test(
 test_suite(
     name = "integration_tests",
     tests = [
+        ":android_sdk_load_test",
+        ":ci_required_jobs_test",
         ":gazelle_generation_test",
+        ":pub_extension_test",
         ":pub_tooling_dependency_build_test",
         ":sdk_cache_sealed_test",
         ":single_pub_dependency_build_test",

@@ -1,0 +1,10 @@
+"""GitHub repository administration."""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+sh_binary(
+    name = "terraform",
+    srcs = ["terraform.sh"],
+    args = ["$(rootpath @terraform_cli//:terraform)"],
+    data = ["@terraform_cli//:terraform"],
+)

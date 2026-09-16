@@ -1,7 +1,8 @@
-# Host Android SDK discovery for the manual mobile example targets
-# (//flutter_app:mobile.apk). Harmless when ANDROID_HOME is unset: the
-# @androidsdk repo is only fetched when those targets are built.
-common --repo_env=ANDROID_HOME
+# rules_android tracks ANDROID_HOME itself for the manual mobile targets.
+# Do not forward it with --repo_env: Bazel 9.0.0 crashes if it is unset.
 
 # iOS builds keep the host HOME so CocoaPods caches persist across builds.
 build --action_env=HOME
+
+# Bazel 9's protobuf dependency supplies matching prebuilt protoc toolchains.
+build --@protobuf//bazel/toolchains:prefer_prebuilt_protoc

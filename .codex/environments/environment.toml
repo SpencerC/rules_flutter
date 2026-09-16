@@ -1,0 +1,35 @@
+version = 1
+name = "rules_flutter"
+
+[setup]
+script = '''
+set -eu
+pre-commit install
+git config --local fetch.prune true
+bazel info
+'''
+
+[[actions]]
+name = "Build"
+icon = "run"
+command = "bazel build //..."
+
+[[actions]]
+name = "Test"
+icon = "run"
+command = '''
+set -eu
+bazel test //flutter/tests:all_tests //docs:update_tests
+(cd e2e/smoke && bazel test //:integration_tests)
+(cd gazelle && bazel test //...)
+'''
+
+[[actions]]
+name = "Format"
+icon = "run"
+command = "bazel run @buildifier_prebuilt//:buildifier -- -r ."
+
+[[actions]]
+name = "Lint"
+icon = "run"
+command = "pre-commit run --all-files"

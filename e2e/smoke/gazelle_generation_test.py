@@ -6,7 +6,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from bazel_tools.tools.python.runfiles import runfiles
+from python.runfiles import runfiles
 
 
 def load_runfile(path: str, workspace: str = None) -> Path:

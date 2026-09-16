@@ -18,21 +18,29 @@ concurrency:
 
 jobs:
   test:
-    uses: bazel-contrib/.github/.github/workflows/bazel.yaml@v7.2.3
-    with:
-      folders: |
-        [
-          ".",
-          "gazelle",
-          "e2e/smoke"
-        ]
-      exclude: |
-        [
-          {"folder": ".", "bzlmodEnabled": false},
-          {"folder": "gazelle", "bzlmodEnabled": false},
-          {"folder": "e2e/smoke", "bzlmodEnabled": false}
-        ]
-      exclude_windows: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        bazel: ["9.0.0", "9.2.0"]
+        folder: [".", "gazelle", "e2e/smoke"]
+    runs-on: ${{ matrix.os }}
+    env:
+      USE_BAZEL_VERSION: ${{ matrix.bazel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.8.0
+        with:
+          repository-cache: true
+      - name: Build and test with explicit language rule loads
+        working-directory: ${{ matrix.folder }}
+        run: |
+          bazel build --incompatible_autoload_externally= //...
+          bazel test --incompatible_autoload_externally= --test_output=errors //...
+      - name: Legacy proto compiler path
+        if: matrix.folder == 'e2e/smoke'
+        working-directory: e2e/smoke
+        run: bazel test --noincompatible_enable_proto_toolchain_resolution --test_output=errors //proto_service:proto_generation_test
   # The standalone example consumes rules_flutter as a plain bazel_dep; in-repo
   # CI overrides it with the working tree. After the first BCR release, a
   # no-override leg is added as the "did the release actually publish" canary.
@@ -41,7 +49,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-14]
+        bazel: ["9.0.0", "9.2.0"]
     runs-on: ${{ matrix.os }}
+    env:
+      USE_BAZEL_VERSION: ${{ matrix.bazel }}
     steps:
       - uses: actions/checkout@v4
       - name: Test the example against the working tree
@@ -49,18 +60,6 @@ jobs:
         run: |
           bazel test --override_module=rules_flutter=$GITHUB_WORKSPACE //...
           bazel build --override_module=rules_flutter=$GITHUB_WORKSPACE //:app.web
-  # bazel_compatibility declares ">=8.0.0". The reusable workflow already
-  # tests the root/gazelle/e2e folders at 8.0.0; this job covers the example
-  # (which isn't a workflow folder) at the floor.
-  bazel-floor:
-    runs-on: ubuntu-24.04
-    env:
-      USE_BAZEL_VERSION: 8.0.0
-    steps:
-      - uses: actions/checkout@v4
-      - name: Example at the minimum supported Bazel
-        working-directory: examples/hello_world
-        run: bazel test --override_module=rules_flutter=$GITHUB_WORKSPACE //...
   # The docs staleness gate runs only under the pinned .bazelversion: its
   # goldens match that version's stardoc rendering, so the tests are
   # manual-tagged and invoked explicitly here.
@@ -78,20 +77,15 @@ jobs:
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
   # on "all matrix jobs were successful".
   conclusion:
-    needs: [test, example, bazel-floor, docs, pre-commit]
+    needs: [test, example, docs, pre-commit]
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # v3.0.3
-
-      # Note: possible conclusion values:
-      # https://github.com/technote-space/workflow-conclusion-action/blob/main/src/constant.ts
-      - name: report success
-        if: ${{ env.WORKFLOW_CONCLUSION == 'success' }}
-        working-directory: /tmp
-        run: echo ${{ env.WORKFLOW_CONCLUSION }} && exit 0
-
-      - name: report failure
-        if: ${{ env.WORKFLOW_CONCLUSION == 'failure' }}
-        working-directory: /tmp
-        run: echo ${{ env.WORKFLOW_CONCLUSION }} && exit 1
+      - uses: actions/checkout@v4
+      - name: Require every job to succeed
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          EXAMPLE_RESULT: ${{ needs.example.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          PRE_COMMIT_RESULT: ${{ needs.pre-commit.result }}
+        run: bash scripts/ci_required_jobs.sh "$TEST_RESULT" "$EXAMPLE_RESULT" "$DOCS_RESULT" "$PRE_COMMIT_RESULT"

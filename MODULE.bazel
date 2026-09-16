@@ -4,7 +4,7 @@ module(
     name = "rules_flutter",
     # Stamped by the release workflow; 0.0.0 on main between releases.
     version = "0.0.0",
-    bazel_compatibility = [">=8.0.0"],
+    bazel_compatibility = [">=9.0.0"],
     compatibility_level = 1,
 )
 
@@ -15,19 +15,27 @@ bazel_dep(name = "bazel_skylib", version = "1.4.1")
 # binary rejected by current Xcode toolchains (missing LC_UUID).
 bazel_dep(name = "apple_support", version = "1.23.1")
 bazel_dep(name = "platforms", version = "0.0.5")
-bazel_dep(name = "protobuf", version = "32.1")
+bazel_dep(name = "protobuf", version = "33.4")
 
+bazel_dep(name = "rules_shell", version = "0.4.1", dev_dependency = True)
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.4.1", dev_dependency = True)
-bazel_dep(name = "aspect_bazel_lib", version = "1.32.1", dev_dependency = True)
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5", dev_dependency = True)
 
 # Kept in lockstep with .pre-commit-config.yaml's pre-commit-buildifier rev
 # so the two gates agree on formatting.
 bazel_dep(name = "buildifier_prebuilt", version = "7.3.1", dev_dependency = True)
 
+terraform_tool = use_repo_rule("//tools:terraform_tool.bzl", "terraform_tool")
+
+terraform_tool(
+    name = "terraform_cli",
+    dev_dependency = True,
+)
+
 # The Gazelle plugin lives in its own module (gazelle/) so that plain
 # rules_flutter consumers never resolve Go rules or a Go toolchain. These
 # dev-only deps exist to run `bazel run //:gazelle` in this repo.
-bazel_dep(name = "gazelle", version = "0.36.0", dev_dependency = True, repo_name = "bazel_gazelle")
+bazel_dep(name = "gazelle", version = "0.40.0", dev_dependency = True, repo_name = "bazel_gazelle")
 bazel_dep(name = "rules_flutter_gazelle", version = "0.0.0", dev_dependency = True)
 local_path_override(
     module_name = "rules_flutter_gazelle",
