@@ -188,6 +188,19 @@ Optional `pub.package` tags pin versions or add packages that no
 pub.package(name = "pub_freezed", package = "freezed", version = "2.4.5")
 ```
 
+To read specific reports instead of scanning, declare each one. The scan
+watches the listing of every directory it visits, so any directory change
+reruns the extension, and on Bazel 9.2 deleting a scanned directory fails every
+pub repository until `bazel clean --expunge`. A declared report is watched as a
+file:
+
+```starlark
+pub.from_file(pub_deps = "//app:pub_deps.json")
+```
+
+Declaring any report turns the scan off, so each `pub_deps.json` needs its own
+tag.
+
 Root-module registrations take precedence: if a dependency ruleset pins a
 package version that conflicts with your `pub_deps.json`, the root module's pin
 wins. The extension also prunes genuine dependency cycles in the pub universe

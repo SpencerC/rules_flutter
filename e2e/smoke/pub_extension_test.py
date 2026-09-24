@@ -101,6 +101,14 @@ pub_dev_repository = repository_rule(
         path.write_text(content)
         return path
 
+    def declare(self, *labels):
+        """Replace the scan with pub.from_file tags for the given reports."""
+        tags = "".join('pub.from_file(pub_deps = "{}")\n'.format(label) for label in labels)
+        self.write("MODULE.bazel", '''module(name = "pub_extension_test")
+pub = use_extension("//flutter:extensions.bzl", "pub")
+''' + tags + '''use_repo(pub, "pub_alpha")
+''')
+
     def report(self, relative, package="alpha", version="1.0.0"):
         return self.write(relative, json.dumps({"packages": [{
             "name": package,
@@ -207,6 +215,40 @@ pub_dev_repository = repository_rule(
         subprocess.run(self.startup + ["clean", "--expunge"], cwd=self.workspace,
                        env=self.env, capture_output=True, timeout=60, check=True)
         self.show(package="beta", version="2.0.0")
+
+    def test_declared_reports_replace_the_scan(self):
+        self.write("app/BUILD.bazel", "")
+        self.report("app/pub_deps.json")
+        self.report("other/pub_deps.json", package="beta")
+        self.declare("//app:pub_deps.json")
+        self.show()
+        self.show(package="beta", version=None)
+
+        self.report("app/pub_deps.json", version="2.0.0")
+        self.show(version="2.0.0")
+
+        # No directory listing is watched, so the Bazel 9.2 failure above
+        # cannot happen when a directory is deleted.
+        shutil.rmtree(self.workspace / "other")
+        self.show(version="2.0.0")
+
+    def test_declaring_reports_recovers_from_deleted_directory_on_bazel_9_2(self):
+        self.write("app/BUILD.bazel", "")
+        self.report("app/pub_deps.json")
+        self.report("removed/nested/pub_deps.json", package="beta")
+        (self.workspace / "later").mkdir()
+        self.show(package="beta")
+        shutil.rmtree(self.workspace / "removed")
+        self.show(expected_error="is no longer an existing directory")
+
+        # The changed usages rerun the extension instead of rechecking the
+        # stale directory listings, so no clean --expunge is needed.
+        self.declare("//app:pub_deps.json")
+        self.show()
+
+        # From then on no listing is watched.
+        (self.workspace / "later").rmdir()
+        self.show()
 
     def test_scan_exclusions_and_directory_symlinks(self):
         self.report("app/pub_deps.json")

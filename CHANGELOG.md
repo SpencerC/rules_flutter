@@ -7,6 +7,16 @@ it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `pub.from_file(pub_deps = ...)` declares the `pub_deps.json` reports the
+  `pub` extension reads. Declaring any report replaces the root-module scan,
+  which watches the listing of every directory it visits: on Bazel 9.2 a
+  deleted scanned directory fails every pub repository with "is no longer an
+  existing directory" until `bazel clean --expunge`
+  ([bazelbuild/bazel#30883](https://github.com/bazelbuild/bazel/issues/30883)).
+  A declared report is watched as a file.
+
 ### Fixed
 
 - Flutter SDK package repositories resolve their hosted dependencies against

@@ -43,11 +43,31 @@ flutter.toolchain(<a href="#flutter.toolchain-name">name</a>, <a href="#flutter.
 
 <pre>
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
+pub.from_file(<a href="#pub.from_file-pub_deps">pub_deps</a>)
 pub.package(<a href="#pub.package-name">name</a>, <a href="#pub.package-package">package</a>, <a href="#pub.package-version">version</a>)
 </pre>
 
 
 **TAG CLASSES**
+
+<a id="pub.from_file"></a>
+
+### from_file
+
+Reads one checked-in `pub_deps.json` dependency report.
+
+Declaring any report replaces the directory scan, and the extension reads
+exactly the declared reports. The scan watches the listing of every directory
+it visits, so any directory change reruns the extension, and on Bazel 9.2 a
+deleted directory fails it until `bazel clean --expunge`
+(bazelbuild/bazel#30883). A declared report is watched as a file. Only the
+root module's declarations are read.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pub.from_file-pub_deps"></a>pub_deps |  The `pub_deps.json` report, e.g. `//app:pub_deps.json`.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 <a id="pub.package"></a>
 
