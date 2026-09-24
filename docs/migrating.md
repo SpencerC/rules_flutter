@@ -121,7 +121,11 @@ On Bazel 9.2, deleting or renaming a scanned directory can trigger the upstream
 [directory invalidation bug](https://github.com/bazelbuild/bazel/issues/30883).
 If Bazel reports "is no longer an existing directory", run
 `bazel clean --expunge` and retry. This removes local build outputs and the stale
-extension cache; ordinary report edits and deletions do not need it.
+extension cache; ordinary report edits and deletions do not need it. Declaring
+the reports instead, with `pub.from_file(pub_deps = "//app:pub_deps.json")`,
+avoids the bug because no directory is watched, and under the default
+`--lockfile_mode=update` adding the declaration also clears the error without
+a clean.
 
 Common snags in this phase:
 

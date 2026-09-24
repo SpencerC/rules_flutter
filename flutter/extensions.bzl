@@ -110,6 +110,25 @@ pub_package = tag_class(attrs = {
     "version": attr.string(doc = "Package version (optional, defaults to latest)"),
 })
 
+pub_from_file = tag_class(
+    doc = """\
+Reads one checked-in `pub_deps.json` dependency report.
+
+Declaring any report replaces the directory scan, and the extension reads
+exactly the declared reports. The scan watches the listing of every directory
+it visits, so any directory change reruns the extension, and on Bazel 9.2 a
+deleted directory fails it until `bazel clean --expunge`
+(bazelbuild/bazel#30883). A declared report is watched as a file. Only the
+root module's declarations are read.
+""",
+    attrs = {
+        "pub_deps": attr.label(
+            doc = "The `pub_deps.json` report, e.g. `//app:pub_deps.json`.",
+            mandatory = True,
+        ),
+    },
+)
+
 _DEPS_SKIP_NAMES = [".git", ".hg", ".svn", ".dart_tool"]
 
 def _module_root(module_ctx, mod):
@@ -338,7 +357,12 @@ def _pub_extension(module_ctx):
         if root_key in scanned_roots:
             continue
         scanned_roots.add(root_key)
-        deps_files = _discover_pub_deps(module_ctx, root)
+
+        # A declared report is watched as a file. The scan also watches the
+        # listing of every directory it visits; see pub_from_file.
+        deps_files = [module_ctx.path(tag.pub_deps) for tag in mod.tags.from_file]
+        if not deps_files:
+            deps_files = _discover_pub_deps(module_ctx, root)
         for deps_file in deps_files:
             module_ctx.watch(deps_file)
             packages = _parse_pub_deps_json(module_ctx.read(deps_file))
@@ -407,5 +431,5 @@ def _pub_extension(module_ctx):
 
 pub = module_extension(
     implementation = _pub_extension,
-    tag_classes = {"package": pub_package},
+    tag_classes = {"from_file": pub_from_file, "package": pub_package},
 )

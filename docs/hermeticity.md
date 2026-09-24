@@ -81,8 +81,9 @@ this extension's report hashes and repository specifications out of
 updates change `pub_deps.json`. The checked-in report still pins package
 versions. File contents, scanned directory listings, and `.bazelignore` are
 watched, so changing a report, adding or removing one, or changing exclusions
-invalidates discovery. The scan uses Bazel's filesystem API and does not need
-a host Python interpreter. It skips Bazel output trees, VCS directories,
+invalidates discovery. With `pub.from_file` tags the extension reads only the
+declared reports and watches just those files. The scan uses Bazel's filesystem
+API and does not need a host Python interpreter. It skips Bazel output trees, VCS directories,
 `.dart_tool`, ignored directories, and directory symlinks.
 
 Bazel 9.2 has an [upstream directory invalidation bug](https://github.com/bazelbuild/bazel/issues/30883):
