@@ -405,4 +405,28 @@ TOOL_VERSIONS = {
         "linux": "sha256-ITLpkPI2+NIufGMUspoZGpWxDXy8/sm04uMD2ZZlLLs=",
         "windows": "sha256-DM1xkx9JwvvjlLHuttea89YkBYoEPqDQPTQWBYFiT7g=",
     },
+    "3.47.6": {
+        "macos": "sha256-8faMd3srNBU+FjFnBEXvvrIY9Co5i+MruiBRR2cZsKQ=",
+        "macos_arm64": "sha256-oZRtO2s94VziR9yJZJ35A1zinmtOfr6RkZoliQ6i55o=",
+        "linux": "sha256-8WMbnCyLNSkyPbQSsNG+rPSnSPh4Ow189Zmo/V9GFnU=",
+        "windows": "sha256-oBuw0m3pG8I8l82cz6rSgaYS+4MEIT/dXfERmglAR5Y=",
+    },
+    "3.47.7": {
+        "macos": "sha256-F9ObAApdBoHj97YaEFo29vMd1Bq5Bz9iX9Rm84A1+QE=",
+        "macos_arm64": "sha256-3Z2ldMMWhGBVARfrDo3QMTrpNPq/ZKgqbVV//1/RQi4=",
+        "linux": "sha256-r3RV9UDflRGEx5U/vjz4hHZudUHaz4Vx+fWC2wPdYjA=",
+        "windows": "sha256-wsh12iWhoUSNGO5OjzmLL2/OiItHddj5EwU44W2CbLQ=",
+    },
+    "3.47.8": {
+        "macos": "sha256-uKPCVaUajAwJQ6TVvfmyYAjDTwL+v2lkDIqrQTr9iW8=",
+        "macos_arm64": "sha256-YRTtwtrjY2z++35EVqRRA5nuhW4yQUmzTbrLUJ4ynQU=",
+        "linux": "sha256-uvfcxaPbumD+hjv0k6bPIDGVYh93huqlobugLNDYfdI=",
+        "windows": "sha256-EeGeo0CYCP47N2XqgUlkDCmeWMzm7afJ84/BtKGT624=",
+    },
+    "3.47.9": {
+        "macos": "sha256-DcOLQDigsAKmJYaWpbMnpYRzwXXJ4zS58ynvfXmk/c0=",
+        "macos_arm64": "sha256-ZUW4WTh0XcUHDp+vKt9wIzwYEQCdh/5tJ7/NpaBLdpg=",
+        "linux": "sha256-Je2MPCnVGnNT8qlEMQtHivghSSBjlSSxnFChnmwETFo=",
+        "windows": "sha256-2OK1l34JCCxkQPidwaqIe5TI+8w7OSInlwRilaP2ip4=",
+    },
 }
