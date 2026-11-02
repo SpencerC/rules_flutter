@@ -404,6 +404,12 @@ flutter_toolchain(
     # by now, so the cache can be sealed.
     _seal_sdk_cache(repository_ctx)
 
+    # The SDK is fully determined by the rule's attributes (version, archive
+    # integrity, precache groups), so Bazel may keep one copy in its repo
+    # contents cache and share it across workspaces instead of extracting it
+    # into every output base.
+    return repository_ctx.repo_metadata(reproducible = True)
+
 def _generate_flutter_packages(repository_ctx):
     """Generate BUILD files for packages bundled within the Flutter SDK."""
 

@@ -9,6 +9,11 @@ it reaches 1.0.
 
 ### Added
 
+- The Flutter SDK repository is declared reproducible, so Bazel 9 shares one
+  copy of the SDK across workspaces through its repo contents cache instead of
+  extracting it into every output base. With one output base per worktree,
+  the per-workspace copies (about 4 GB each) added up quickly.
+
 - `pub.from_file(pub_deps = ...)` declares the `pub_deps.json` reports the
   `pub` extension reads. Declaring any report replaces the root-module scan,
   which watches the listing of every directory it visits: on Bazel 9.2 a

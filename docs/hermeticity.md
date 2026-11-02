@@ -52,6 +52,13 @@ afterwards:
   home directory. Other actions and the developer-loop run helpers rely on
   the fetch-time launcher patch plus the sealed (read-only) cache instead:
   any residual write attempt fails loudly, which is the enforced backstop.
+- **Shared across workspaces.** The SDK repository is declared reproducible
+  (`repo_metadata(reproducible = True)`), so Bazel 9 keeps one copy in its
+  repo contents cache, keyed on the rule's attributes, and links each
+  workspace's output base to it instead of extracting the multi-gigabyte SDK
+  into every one. A Flutter version or precache change keys a fresh copy.
+  Because the copy is shared, a write into it would affect every workspace,
+  which is one more reason the seal above must hold.
 
 ### Pub dependencies: no network at build time
 
