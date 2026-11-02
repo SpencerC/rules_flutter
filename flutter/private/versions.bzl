@@ -387,4 +387,22 @@ TOOL_VERSIONS = {
         "linux": "sha256-RHh4hZ0Bypv9uZqF8kWvB+2KFf7c2dGJxHSejpLR8YU=",
         "windows": "sha256-N5NPISilXXeji6uhL9YRFX7SOke/fSt9F+noTaEYQJ0=",
     },
+    "3.47.3": {
+        "macos": "sha256-zR4ah323S4koJRIl04RpB3mU6QSxtbs1nzN2xDrASVw=",
+        "macos_arm64": "sha256-ZhRKfNaRBZyMc7/OJBePueosldeY241W0eJBHnYPZYM=",
+        "linux": "sha256-mIZlVlytkJHbG6pUv204aLtA4pcZWS88OhZN7v1CCOE=",
+        "windows": "sha256-RIIqtTr7VDxvtEbAeLpPSV4+7dqvuI2Hm95gZEfdziQ=",
+    },
+    "3.47.4": {
+        "macos": "sha256-cs7Q+BpepI8w0iFpn6RTeM3R+hVCZRJETzLk4b7p24s=",
+        "macos_arm64": "sha256-xq9vodZJRhZ7hje6TFp7s7hXRymh6+kx3s1JJNurcGE=",
+        "linux": "sha256-W0XwztqZub69yHPn5p9kUK60ww9FS1BeLmL8klWpB9M=",
+        "windows": "sha256-MRczAEgb0G43f9Ve6EIUaJZIsYF1Y+/XtFC3t4vfNRo=",
+    },
+    "3.47.5": {
+        "macos": "sha256-p4k7sP7s2L0Gb09+hQNW+Jam/DuGLmxQbSHHZpGma3I=",
+        "macos_arm64": "sha256-1N2Qi1+PZVFYMbbWiuMzB6gT8raJR93tehmU7l6nzq0=",
+        "linux": "sha256-ITLpkPI2+NIufGMUspoZGpWxDXy8/sm04uMD2ZZlLLs=",
+        "windows": "sha256-DM1xkx9JwvvjlLHuttea89YkBYoEPqDQPTQWBYFiT7g=",
+    },
 }
