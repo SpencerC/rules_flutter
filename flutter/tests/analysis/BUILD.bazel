@@ -102,6 +102,11 @@ build_command_test(
     ],
     expected_substrings = [
         "'build' 'apk' '--release'",
+        # Flutter's Gradle plugin build must not write into the SDK repository.
+        "-Dorg.gradle.projectcachedir=$RULES_FLUTTER_SDK_GRADLE_OUT/project_cache",
+        "-Dorg.gradle.project.kotlin.project.persistent.dir=$RULES_FLUTTER_SDK_GRADLE_OUT/kotlin",
+        "init.d/rules_flutter_sdk_outputs.gradle",
+        "project.layout.buildDirectory.set(",
     ],
     target_under_test = ":fixture_android_app.apk",
 )

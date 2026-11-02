@@ -230,7 +230,7 @@ def _warm_first_run_stamps(repository_ctx):
         ))
 
 def _seal_sdk_cache(repository_ctx):
-    """Make bin/cache read-only so any residual write attempt fails loudly.
+    """Make bin/cache and the Gradle plugin read-only so writes fail loudly.
 
     Build actions and run helpers set FLUTTER_ALREADY_LOCKED and
     --no-version-check, and the launcher is patched above, so nothing should
@@ -239,6 +239,12 @@ def _seal_sdk_cache(repository_ctx):
     if repository_ctx.os.name.lower().startswith("windows"):
         return
     repository_ctx.execute(["chmod", "-R", "a-w", "flutter/bin/cache"])
+
+    # Android builds include Flutter's Gradle plugin from this directory as a
+    # Gradle build; the Android action redirects that build's outputs to
+    # scratch space, and sealing makes a missed redirect fail instead of
+    # mutating the repository (which Bazel answers with a full re-fetch).
+    repository_ctx.execute(["chmod", "-R", "a-w", "flutter/packages/flutter_tools/gradle"])
 
     # Keep owner-write on the iOS/macOS engine frameworks: `flutter build ios`
     # copies them into the app's build directory with permissions preserved,
