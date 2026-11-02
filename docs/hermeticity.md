@@ -38,10 +38,10 @@ afterwards:
   print a warning instead; builds needing those artifacts fail later. One
   caveat: precached artifacts are engine-revision-pinned but not
   integrity-checked the way the archive itself is.
-- **Sealed read-only.** As the last step of the fetch, `bin/cache` is made
-  read-only (`chmod -R a-w`), so any residual write attempt fails the build
-  loudly instead of silently mutating shared state. (The chmod-based seal is
-  skipped on Windows hosts.)
+- **Sealed read-only.** As the last step of the fetch, `bin/cache` and
+  `packages/flutter_tools/gradle` are made read-only (`chmod -R a-w`), so any
+  residual write attempt fails the build loudly instead of silently mutating
+  shared state. (The chmod-based seal is skipped on Windows hosts.)
 - **Actions never need to write there.** The `flutter` build and test
   invocations export `FLUTTER_ALREADY_LOCKED=true` (skips the
   `bin/cache/lockfile` file-lock), pass `--no-version-check` and
@@ -204,6 +204,23 @@ The Android action itself runs `no-sandbox`, so the `--sandbox_writable_path`
 line is there to keep the directory usable if you tighten sandboxing later; it
 is harmless otherwise. Gradle daemons are disabled inside the action
 (`-Dorg.gradle.daemon=false`).
+
+### Android: Flutter's Gradle plugin stays out of the SDK
+
+An app's `settings.gradle` includes Flutter's Gradle plugin as a build from
+`$FLUTTER_ROOT/packages/flutter_tools/gradle`, and `flutter build` rewrites
+`flutter.sdk` in `local.properties` to the real SDK path, so the include always
+points into the external repository. Left alone, Gradle writes that build's
+`.gradle/`, `build/` and `.kotlin/` directories there; Bazel then sees the SDK
+repository as modified externally and re-fetches all of it on the next
+invocation. The Android action instead sends them to its scratch directory:
+`-Dorg.gradle.projectcachedir` and
+`-Dorg.gradle.project.kotlin.project.persistent.dir` in `GRADLE_OPTS` move the
+project cache and Kotlin session data for every build in the composite, and an
+init script written to `$GRADLE_USER_HOME/init.d/rules_flutter_sdk_outputs.gradle`
+moves the build directory of projects inside the SDK. The init script does
+nothing unless the action's `RULES_FLUTTER_SDK_*` variables are set, so it is
+harmless in a persistent Gradle home.
 
 ### iOS: persistent CocoaPods caches
 
@@ -418,7 +435,8 @@ generation printed.
 **No build action and no run helper writes to the external Flutter SDK
 repository.** The launcher is patched at fetch time, the `flutter` build and
 test invocations run with `FLUTTER_ALREADY_LOCKED` and `--no-version-check`
-under a scratch or test-local `HOME`, and `bin/cache` is sealed read-only —
+under a scratch or test-local `HOME`, Android builds keep Gradle output out
+of `packages/flutter_tools/gradle`, and both directories are sealed read-only —
 so even on the paths that skip some of those measures (direct `dart`
 invocations, developer-loop helpers running under your real `HOME`), a
 violation cannot be silent: any residual write attempt fails the offending
@@ -427,8 +445,8 @@ action.
 This is enforced continuously by the e2e workspace:
 `e2e/smoke/sdk_cache_sealed_test.sh` (target
 `//:sdk_cache_sealed_test` in `e2e/smoke`) resolves the real SDK path behind
-the runfiles symlinks, attempts to create a file inside `bin/cache`, and
-asserts both that the write fails and that `bin/cache/lockfile` is not
-writable. Do not run `flutter precache` or `flutter config` against the
-Bazel-provided SDK from your own scripts: it is unnecessary, and the sealed
-cache will reject it.
+the runfiles symlinks, attempts to create a file inside `bin/cache` and a
+directory inside `packages/flutter_tools/gradle`, and asserts that both writes
+fail and that `bin/cache/lockfile` is not writable. Do not run
+`flutter precache` or `flutter config` against the Bazel-provided SDK from
+your own scripts: it is unnecessary, and the sealed cache will reject it.

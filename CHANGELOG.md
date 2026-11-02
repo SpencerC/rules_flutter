@@ -19,6 +19,15 @@ it reaches 1.0.
 
 ### Fixed
 
+- Android builds no longer write into the Flutter SDK repository. The app's
+  `settings.gradle` includes Flutter's Gradle plugin from
+  `packages/flutter_tools/gradle`, and the `no-sandbox` Android action let
+  Gradle create `.gradle/`, `build/` and `.kotlin/` there, so Bazel reported
+  the repository as "modified externally" and re-fetched the whole SDK on the
+  next invocation. The action now sends those directories to its scratch
+  space, and the directory is sealed read-only at fetch time alongside
+  `bin/cache`.
+
 - Flutter SDK package repositories resolve their hosted dependencies against
   the SDK's own workspace lockfile (`flutter/pubspec.lock`) instead of
   re-solving them against pub.dev. Flutter >= 3.35 resolves its packages as a
