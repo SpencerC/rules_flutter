@@ -710,6 +710,10 @@ flutter_test(
     # test_files = ["test/"],  # patterns forwarded to flutter test
 )
 
+# `bazel coverage //:lib_test` collects real Dart lcov: when Bazel sets
+# COVERAGE_OUTPUT_FILE, the runner passes --coverage to flutter test and
+# copies coverage/lcov.info to the expected location.
+
 # flutter analyze --no-pub; overlay analysis_options.yaml / test sources.
 flutter_analyze_test(
     name = "lib_analyze",

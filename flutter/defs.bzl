@@ -2372,6 +2372,13 @@ if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
     CMD+=("-j" "$JOBS")
 fi
 
+# Bazel coverage: when bazel coverage sets COVERAGE_OUTPUT_FILE, ask the
+# flutter_test runner to collect VM coverage (flutter writes lcov to
+# coverage/lcov.info under the package root).
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ]; then
+    CMD+=("--coverage")
+fi
+
 # Bazel test sharding protocol: acknowledge support up front (with
 # --incompatible_check_sharding_support an untouched status file fails the
 # test whenever shard_count is set).
@@ -2435,6 +2442,15 @@ RESULT=${{PIPESTATUS[0]}}
 set -e
 
 popd >/dev/null
+
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ]; then
+    if [ -f "$RUNTIME_WORKSPACE/coverage/lcov.info" ]; then
+        mkdir -p "$(dirname "$COVERAGE_OUTPUT_FILE")"
+        cp "$RUNTIME_WORKSPACE/coverage/lcov.info" "$COVERAGE_OUTPUT_FILE"
+    else
+        echo "⚠ --coverage requested but coverage/lcov.info was not produced" >&2
+    fi
+fi
 
 echo "" | tee -a "$TEST_LOG"
 if [ "$RESULT" -eq 0 ]; then
