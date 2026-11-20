@@ -18,6 +18,17 @@ void main() {
   runApp(const MyApp());
 }
 
+// Coverage fixture for the e2e BRDA/FN assertions.
+String branchLabel(int value) {
+  if (value < 0) {
+    return 'negative';
+  }
+  if (value == 0) {
+    return 'zero';
+  }
+  return 'positive';
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 

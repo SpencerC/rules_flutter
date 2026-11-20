@@ -29,15 +29,14 @@ BAZEL = runfile(sys.argv.pop(1))
 
 
 def workspace_root():
-    # Resolving through the runfiles symlink lands on the real source file,
-    # whose parent is the e2e/smoke workspace root (with its MODULE.bazel).
+    # The runfiles symlink resolves to the real source file's parent: the
+    # e2e/smoke workspace root.
     return Path(__file__).resolve().parent
 
 
 def nested_env():
-    # Bazel test harness vars leak into the nested build: an inherited
-    # TEST_TMPDIR redirects the nested bazel's repository cache outside its
-    # sandbox (unwritable), and *RUNFILES point at the outer runfiles tree.
+    # Inherited TEST_TMPDIR redirects the nested repo cache outside its sandbox;
+    # *RUNFILES point at the outer runfiles tree.
     return {
         k: v
         for k, v in os.environ.items()
@@ -82,6 +81,70 @@ class FlutterCoverageE2eTest(unittest.TestCase):
             self.assertTrue(
                 any("SF:lib/" in line or "SF:test/" in line for line in records),
                 "dart SF paths are not package-relative as expected: {}".format(records[:3]),
+            )
+
+
+class CoverageReportContractTest(unittest.TestCase):
+    def test_coverage_report_contract(self):
+        with tempfile.TemporaryDirectory(dir=os.environ["TEST_TMPDIR"]) as temp:
+            proc = subprocess.run(
+                [
+                    str(BAZEL),
+                    "--output_base=" + str(Path(temp) / "output-base"),
+                    "coverage",
+                    "--combined_report=lcov",
+                    "--test_output=errors",
+                    "//flutter_app:lib_test",
+                ],
+                cwd=workspace_root(),
+                env=nested_env(),
+                capture_output=True,
+                text=True,
+                timeout=1800,
+            )
+            if proc.returncode != 0:
+                self.fail(
+                    f"nested bazel coverage failed (exit {proc.returncode}):\n"
+                    + (proc.stdout + proc.stderr)[-4000:]
+                )
+            self.assertTrue(
+                bool(reports := list((Path(temp) / "output-base").glob("execroot/*/bazel-out/_coverage/_coverage_report.dat"))),
+                "bazel coverage produced no report",
+            )
+            blocks = {}
+            for block in reports[0].read_text().split("end_of_record"):
+                sf_lines = [line for line in block.splitlines() if line.startswith("SF:")]
+                if sf_lines:
+                    blocks[sf_lines[0][3:]] = block.splitlines()
+            self.assertTrue(blocks, "coverage report has no record blocks")
+
+            for source in blocks:
+                self.assertFalse(source.startswith("/"), f"absolute SF path leaked: {source}")
+                self.assertTrue(
+                    source.startswith(("lib/", "test/")),
+                    f"SF path is not package-relative: {source}",
+                )
+                self.assertTrue(source.endswith(".dart"), f"non-Dart record leaked: {source}")
+
+            fn_blocks = [
+                lines for lines in blocks.values() if any(line.startswith("FN:") for line in lines)
+            ]
+            self.assertTrue(fn_blocks, "no FN records: function coverage passthrough missing")
+            self.assertTrue(
+                any(line.startswith("FNDA:") for lines in fn_blocks for line in lines),
+                "no FNDA records: function coverage passthrough missing",
+            )
+            main_block = blocks.get("lib/main.dart") or []
+            self.assertTrue(main_block, "lib/main.dart missing from the coverage report")
+            self.assertTrue(
+                any(line.startswith("FN:") and line.endswith(",branchLabel") for line in main_block),
+                "branchLabel not covered by FN records: function-coverage passthrough broken",
+            )
+
+            # flutter#171580: 3.24.x BRDA values are not faithful; presence only.
+            self.assertTrue(
+                any(line.startswith("BRDA:") for lines in blocks.values() for line in lines),
+                "no BRDA records: branch coverage passthrough missing",
             )
 
 

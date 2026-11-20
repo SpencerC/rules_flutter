@@ -42,6 +42,8 @@ flutter_library(
 flutter_test(
     name = "lib_test",
     srcs = glob(["test/**"]),
+    branch_coverage = True,
+    coverage_packages = ["hello_world"],
     embed = [":lib"],
     visibility = ["//visibility:public"],
 )

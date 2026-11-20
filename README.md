@@ -710,10 +710,6 @@ flutter_test(
     # test_files = ["test/"],  # patterns forwarded to flutter test
 )
 
-# `bazel coverage //:lib_test` collects real Dart lcov: when Bazel sets
-# COVERAGE_OUTPUT_FILE, the runner passes --coverage to flutter test and
-# copies coverage/lcov.info to the expected location.
-
 # flutter analyze --no-pub; overlay analysis_options.yaml / test sources.
 flutter_analyze_test(
     name = "lib_analyze",
@@ -731,6 +727,43 @@ dart_format_test(
 
 ```bash
 bazel test //my_app:all
+```
+
+## Coverage
+
+`flutter_test` targets support `bazel coverage` out of the box: when Bazel
+runs a target under coverage (setting `COVERAGE_OUTPUT_FILE`), the runner
+passes `--coverage` to `flutter test` and copies the produced
+`coverage/lcov.info` to the location Bazel's coverage machinery expects, so
+the combined report contains real Dart lcov (including function records —
+`FN`/`FNDA`/`FNF`/`FNH` — enabled by a fetch-time flutter_tools patch).
+
+`flutter_test` knobs that steer coverage:
+
+- `branch_coverage = True` adds `--branch-coverage`, emitting `BRDA`
+  records. Caveat: in the currently pinned SDKs (3.24.x) the VM's branch
+  data does not map to source-level branches — `BRDA` lines are VM-internal
+  branch targets and taken-flags can contradict line-hit counts
+  (flutter#171580). Treat `BRDA` as a presence signal, not exact data.
+- `coverage_packages = ["my_pkg", "other_.*"]` forwards package-name
+  regexes as flutter's repeatable `--coverage-package` flags, scoping the
+  report in multi-package monorepos. Unset keeps flutter's default: the
+  runtime workspace's own package only.
+- `extra_args = [...]` forwards arbitrary arguments verbatim to
+  `flutter test` (e.g. `--plain-name`, `--tags`, `--reporter`).
+
+```starlark
+flutter_test(
+    name = "lib_test",
+    srcs = glob(["test/**"]),
+    embed = [":lib"],
+    branch_coverage = True,
+    coverage_packages = ["hello_world"],
+)
+```
+
+```bash
+bazel coverage //my_app:lib_test --combined_report=lcov
 ```
 
 ## Write-back helpers
