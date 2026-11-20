@@ -27,4 +27,10 @@ void main() {
     expect(find.text('0'), findsNothing);
     expect(find.text('1'), findsOneWidget);
   });
+
+  test('branchLabel exercises every branch for coverage', () {
+    expect(branchLabel(-1), 'negative');
+    expect(branchLabel(0), 'zero');
+    expect(branchLabel(1), 'positive');
+  });
 }

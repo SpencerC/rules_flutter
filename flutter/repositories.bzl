@@ -98,6 +98,42 @@ def _patch_engine_version_script(repository_ctx):
         legacy_utf8 = False,
     )
 
+# flutter_tools never enables package:coverage's functionCoverage, so --coverage
+# emits lcov without FN/FNDA records.
+_COVERAGE_COLLECT_ORIGINAL = """  return coverage.collect(
+    serviceUri, false, false, false, libraryNames,
+    serviceOverrideForTesting: serviceOverride?.service,
+    branchCoverage: branchCoverage,
+    coverableLineCache: coverableLineCache,
+  );"""
+
+_COVERAGE_COLLECT_PATCHED = """  return coverage.collect(
+    serviceUri, false, false, false, libraryNames,
+    serviceOverrideForTesting: serviceOverride?.service,
+    branchCoverage: branchCoverage,
+    coverableLineCache: coverableLineCache,
+    functionCoverage: true,
+  );"""
+
+def _patch_coverage_collector(repository_ctx):
+    """Make `flutter test --coverage` also collect function coverage."""
+    script_path = "flutter/packages/flutter_tools/lib/src/test/coverage_collector.dart"
+    if not repository_ctx.path(script_path).exists:
+        return
+    content = repository_ctx.read(script_path)
+    if _COVERAGE_COLLECT_ORIGINAL not in content:
+        # Layout changed upstream; fail loudly rather than shipping an
+        # unpatched collector.
+        fail("rules_flutter: unable to patch {} for Flutter {}: unexpected script content. ".format(
+            script_path,
+            repository_ctx.attr.flutter_version,
+        ) + "Update _COVERAGE_COLLECT_ORIGINAL in flutter/repositories.bzl.")
+    repository_ctx.file(
+        script_path,
+        content.replace(_COVERAGE_COLLECT_ORIGINAL, _COVERAGE_COLLECT_PATCHED),
+        legacy_utf8 = False,
+    )
+
 def _host_matches_platform(repository_ctx, platform):
     os_name = repository_ctx.os.name.lower()
     if platform == "macos":
@@ -326,13 +362,28 @@ def _flutter_repo_impl(repository_ctx):
     )
 
     _patch_engine_version_script(repository_ctx)
+    _patch_coverage_collector(repository_ctx)
+
+    # Recompile flutter_tools from the patched sources at fetch time; skip for
+    # foreign-platform fetches, whose cache is never executed on this host.
+    if _host_matches_platform(repository_ctx, repository_ctx.attr.platform):
+        snapshot = repository_ctx.path("flutter/bin/cache/flutter_tools.snapshot")
+        if snapshot.exists:
+            repository_ctx.delete(snapshot)
+        stamp = repository_ctx.path("flutter/bin/cache/flutter_tools.stamp")
+        if stamp.exists:
+            repository_ctx.delete(stamp)
+
     _ensure_precached_artifacts(repository_ctx)
     _warm_first_run_stamps(repository_ctx)
 
-    # Drop transient download staging shipped in (or created by) the archive.
+    # Reset the archive's download staging but keep the directory: flutter's
+    # cache updater creates it unconditionally, which fails on the sealed
+    # read-only cache.
     downloads = repository_ctx.path("flutter/bin/cache/downloads")
     if downloads.exists:
         repository_ctx.delete(downloads)
+    repository_ctx.file("flutter/bin/cache/downloads/.keep", "", legacy_utf8 = False)
 
     package_labels = _generate_flutter_packages(repository_ctx)
 

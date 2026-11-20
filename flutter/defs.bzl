@@ -2357,6 +2357,11 @@ def _flutter_test_impl(ctx):
     # entries collapsed into one bogus pattern; it went unnoticed because
     # test_files almost always has zero or one entry).
     test_patterns_literal = " ".join([_shell_quote(pattern) for pattern in ctx.attr.test_files])
+    extra_args_literal = " ".join([_shell_quote(arg) for arg in ctx.attr.extra_args])
+    coverage_packages_literal = " ".join([
+        _shell_quote("--coverage-package=" + regexp)
+        for regexp in ctx.attr.coverage_packages
+    ])
 
     test_runner = ctx.actions.declare_file(ctx.label.name + "_test_runner.sh")
 
@@ -2368,8 +2373,30 @@ def _flutter_test_impl(ctx):
     ) + """
 CMD=("$FLUTTER_BIN_ABS" "--suppress-analytics" "--no-version-check" "test" "--no-pub")
 JOBS="{jobs}"
+BRANCH_COVERAGE="{branch_coverage}"
+COVERAGE_PACKAGES=({coverage_packages})
 if [ -n "$JOBS" ] && [ "$JOBS" != "0" ]; then
     CMD+=("-j" "$JOBS")
+fi
+
+# Bazel coverage: when bazel coverage sets COVERAGE_OUTPUT_FILE, ask the
+# flutter_test runner to collect VM coverage (flutter writes lcov to
+# coverage/lcov.info under the package root).
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ]; then
+    CMD+=("--coverage")
+fi
+
+# Branch coverage rides on --coverage; BRDA values are unreliable in the
+# pinned 3.24.x SDKs (flutter#171580).
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ] && [ "$BRANCH_COVERAGE" = "1" ]; then
+    CMD+=("--branch-coverage")
+fi
+
+# Package scoping via flutter's native repeatable --coverage-package flag.
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ] && [ -n "$COVERAGE_PACKAGES" ]; then
+    for coverage_package in ${{COVERAGE_PACKAGES[@]+"${{COVERAGE_PACKAGES[@]}}"}}; do
+        CMD+=("$coverage_package")
+    done
 fi
 
 # Bazel test sharding protocol: acknowledge support up front (with
@@ -2427,6 +2454,11 @@ for test_arg in ${{TEST_ARGS[@]+"${{TEST_ARGS[@]}}"}}; do
     CMD+=("$test_arg")
 done
 
+EXTRA_ARGS=({extra_args})
+for extra_arg in ${{EXTRA_ARGS[@]+"${{EXTRA_ARGS[@]}}"}}; do
+    CMD+=("$extra_arg")
+done
+
 pushd "$RUNTIME_WORKSPACE" >/dev/null
 
 set +e
@@ -2435,6 +2467,15 @@ RESULT=${{PIPESTATUS[0]}}
 set -e
 
 popd >/dev/null
+
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ]; then
+    if [ -f "$RUNTIME_WORKSPACE/coverage/lcov.info" ]; then
+        mkdir -p "$(dirname "$COVERAGE_OUTPUT_FILE")"
+        cp "$RUNTIME_WORKSPACE/coverage/lcov.info" "$COVERAGE_OUTPUT_FILE"
+    else
+        echo "⚠ --coverage requested but coverage/lcov.info was not produced" >&2
+    fi
+fi
 
 echo "" | tee -a "$TEST_LOG"
 if [ "$RESULT" -eq 0 ]; then
@@ -2447,6 +2488,9 @@ exit "$RESULT"
 """.format(
         test_patterns = test_patterns_literal,
         jobs = str(ctx.attr.jobs),
+        branch_coverage = "1" if ctx.attr.branch_coverage else "",
+        extra_args = extra_args_literal,
+        coverage_packages = coverage_packages_literal,
     )
 
     ctx.actions.write(
@@ -2507,6 +2551,18 @@ flutter_test = rule(
         "test_files": attr.string_list(
             default = ["test/"],
             doc = "Test files or directories to run",
+        ),
+        "extra_args": attr.string_list(
+            default = [],
+            doc = "Additional arguments forwarded to flutter test (e.g. --plain-name, --tags).",
+        ),
+        "coverage_packages": attr.string_list(
+            default = [],
+            doc = "Regular expressions matching package names to include in the coverage report under `bazel coverage` (forwarded as repeatable --coverage-package flags). Unset keeps flutter's default: the runtime workspace's own package only.",
+        ),
+        "branch_coverage": attr.bool(
+            default = False,
+            doc = "Add --branch-coverage to `flutter test` under `bazel coverage`, emitting BRDA records. BRDA values are unreliable in the pinned 3.24.x SDKs (flutter#171580); treat them as a presence signal.",
         ),
     } | ALLOW_REMOTE_EXECUTION_ATTR,
     test = True,

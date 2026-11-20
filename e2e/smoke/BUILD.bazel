@@ -36,6 +36,16 @@ filegroup(
 )
 
 py_test(
+    name = "flutter_coverage_e2e_test",
+    size = "large",
+    srcs = ["flutter_coverage_e2e_test.py"],
+    args = ["$(rootpath @pub_extension_test_bazel//:bazel)"],
+    data = ["@pub_extension_test_bazel//:bazel"],
+    tags = ["no-sandbox"],
+    deps = ["@rules_python//python/runfiles"],
+)
+
+py_test(
     name = "pub_extension_test",
     size = "medium",
     srcs = ["pub_extension_test.py"],
@@ -108,6 +118,7 @@ test_suite(
     tests = [
         ":android_sdk_load_test",
         ":ci_required_jobs_test",
+        ":flutter_coverage_e2e_test",
         ":gazelle_generation_test",
         ":pub_extension_test",
         ":pub_tooling_dependency_build_test",
