@@ -4,7 +4,7 @@
 # action or run helper can mutate the external repository.
 set -euo pipefail
 
-FLUTTER_BIN="$(find -L "${TEST_SRCDIR:-$PWD}" -path "*flutter_sdk/bin/flutter" 2>/dev/null | head -n 1)"
+FLUTTER_BIN="$(find -L "${TEST_SRCDIR:-$PWD}" -path "*${SDK_REPOSITORY:-flutter_sdk}/bin/flutter" 2>/dev/null | head -n 1)"
 if [ -z "$FLUTTER_BIN" ]; then
     echo "✗ flutter binary not found in runfiles" >&2
     exit 1

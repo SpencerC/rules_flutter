@@ -330,8 +330,8 @@
     },
     "@@rules_flutter+//flutter:extensions.bzl%flutter": {
       "general": {
-        "bzlTransitiveDigest": "j7SGTOMv9S7mrAs6FrR6W6zAQhDOCZoYs8yFvWu28xc=",
-        "usagesDigest": "28OnpcYnSmzay/V6WMwTNE0upCyG0V5VmLKmR7xi70Y=",
+        "bzlTransitiveDigest": "X5LTylhTNE0gpuNm8b1xCdO8xFIgRTTLY5ow8f0bj24=",
+        "usagesDigest": "dwteLTunO7SVVt/Oo9hluZDMQ224AjRUC/Y8NEbZfD0=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
           "flutter_macos": {
@@ -380,6 +380,48 @@
             "repoRuleId": "@@rules_flutter+//flutter/private:sdk_repo.bzl%flutter_sdk_repo",
             "attributes": {
               "user_repository_name": "flutter"
+            }
+          },
+          "flutter_atomic_macos": {
+            "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
+            "attributes": {
+              "platform": "macos",
+              "integrity": "",
+              "integrity_arm64": "",
+              "flutter_version": "3.44.9",
+              "precache": []
+            }
+          },
+          "flutter_atomic_linux": {
+            "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
+            "attributes": {
+              "platform": "linux",
+              "integrity": "",
+              "integrity_arm64": "",
+              "flutter_version": "3.44.9",
+              "precache": []
+            }
+          },
+          "flutter_atomic_windows": {
+            "repoRuleId": "@@rules_flutter+//flutter:repositories.bzl%flutter_repositories",
+            "attributes": {
+              "platform": "windows",
+              "integrity": "",
+              "integrity_arm64": "",
+              "flutter_version": "3.44.9",
+              "precache": []
+            }
+          },
+          "flutter_atomic_toolchains": {
+            "repoRuleId": "@@rules_flutter+//flutter/private:toolchains_repo.bzl%toolchains_repo",
+            "attributes": {
+              "user_repository_name": "flutter_atomic"
+            }
+          },
+          "flutter_atomic_sdk": {
+            "repoRuleId": "@@rules_flutter+//flutter/private:sdk_repo.bzl%flutter_sdk_repo",
+            "attributes": {
+              "user_repository_name": "flutter_atomic"
             }
           }
         }

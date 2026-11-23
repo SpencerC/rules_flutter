@@ -72,6 +72,14 @@ use_repo(
 
 register_toolchains("@flutter_toolchains//:all")
 
+# Exercise the SDK launcher layout that uses atomic engine stamp writes without
+# changing the SDK used by the minimum-version application smoke tests.
+flutter.toolchain(
+    name = "flutter_atomic",
+    flutter_version = "3.44.9",
+)
+use_repo(flutter, "flutter_atomic_sdk")
+
 # Pub.dev dependencies
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
 use_repo(
