@@ -103,6 +103,13 @@ sh_test(
     data = ["@flutter_sdk//:flutter_bin"],
 )
 
+sh_test(
+    name = "sdk_atomic_cache_sealed_test",
+    srcs = ["sdk_cache_sealed_test.sh"],
+    data = ["@flutter_atomic_sdk//:flutter_bin"],
+    env = {"SDK_REPOSITORY": "flutter_atomic_sdk"},
+)
+
 test_suite(
     name = "integration_tests",
     tests = [
@@ -111,6 +118,7 @@ test_suite(
         ":gazelle_generation_test",
         ":pub_extension_test",
         ":pub_tooling_dependency_build_test",
+        ":sdk_atomic_cache_sealed_test",
         ":sdk_cache_sealed_test",
         ":single_pub_dependency_build_test",
         ":smoke_test",
