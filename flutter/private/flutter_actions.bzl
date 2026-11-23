@@ -393,7 +393,7 @@ with open(graph_path, "w", encoding="utf-8") as fh:
     json.dump(graph, fh, indent=2)
     fh.write("\\n")"""
 
-def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = [], allow_remote_exec = False, remote_cache_trees = "none"):
+def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_files, extra_entries = [], pubspec_hooks = None, allow_remote_exec = False, remote_cache_trees = "none"):
     """Create a working directory structure for Flutter commands.
 
     Args:
@@ -405,6 +405,9 @@ def create_flutter_working_dir(ctx, pubspec_file, dart_files, other_files, data_
         extra_entries: List of (rel_path, file) tuples mounted at explicit
             workspace-relative paths (e.g. generated proto sources). These take
             precedence over the derived layout for the same file.
+        pubspec_hooks: Optional file holding a top-level `hooks:` YAML
+            section (see hook_assets.bzl) appended to the workspace's
+            pubspec.yaml. The source pubspec.yaml must not declare one.
         allow_remote_exec: Whether //flutter:allow_remote_execution is set.
         remote_cache_trees: The //flutter:remote_cache_trees value; unless
             it names this action's tree kind, the ~100MB seed tree carries
@@ -507,6 +510,7 @@ set -euo pipefail
 
 WORKSPACE_DIR="$1"
 MANIFEST_FILE="$2"
+PUBSPEC_HOOKS="${3:-}"
 
 rm -rf "$WORKSPACE_DIR"
 mkdir -p "$WORKSPACE_DIR"
@@ -530,6 +534,17 @@ while IFS='|' read -r RELATIVE_PATH SOURCE_PATH; do
         cp -RLf "$SOURCE_PATH" "$DEST_PATH"
     fi
 done < "$MANIFEST_FILE"
+
+if [ -n "$PUBSPEC_HOOKS" ]; then
+    PUBSPEC="$WORKSPACE_DIR/pubspec.yaml"
+    if grep -q '^hooks:' "$PUBSPEC"; then
+        echo "✗ pubspec.yaml already declares a top-level hooks: section, which hook_assets" >&2
+        echo "  would duplicate. Move its user_defines into flutter_hook_assets targets." >&2
+        exit 1
+    fi
+    chmod u+w "$PUBSPEC"
+    cat "$PUBSPEC_HOOKS" >> "$PUBSPEC"
+fi
 """,
         is_executable = True,
     )
@@ -545,12 +560,18 @@ done < "$MANIFEST_FILE"
         seen_inputs.add(f.path)
         input_files.append(f)
 
+    setup_inputs = input_files + [manifest]
+    setup_args = [working_dir.path, manifest.path]
+    if pubspec_hooks:
+        setup_inputs.append(pubspec_hooks)
+        setup_args.append(pubspec_hooks.path)
+
     # Run the workspace setup
     ctx.actions.run(
-        inputs = input_files + [manifest],
+        inputs = setup_inputs,
         outputs = [working_dir],
         executable = workspace_script,
-        arguments = [working_dir.path, manifest.path],
+        arguments = setup_args,
         mnemonic = "SetupFlutterWorkspace",
         progress_message = "Setting up Flutter workspace for %s" % ctx.label.name,
         execution_requirements = tree_output_execution_requirements(allow_remote_exec, remote_cache_trees),

@@ -355,6 +355,45 @@ under the destination directory (so `api/v1/service.proto` becomes
 `package:my_app/generated/api/v1/service.pb.dart`); other targets mount flat by
 basename.
 
+### Build-hook downloads: hook_assets
+
+Some packages' build hooks (`hook/build.dart`) download native binaries while
+the app builds. `package:sqlite3`, for example, downloads `libsqlite3` from
+GitHub releases. Under Bazel, that download runs again in every action that
+builds or tests the app, and the action fails whenever the download does.
+`pub.hook_assets` has Bazel download the files once instead, at fetch time,
+with the sha256 values the package itself ships:
+
+```starlark
+# MODULE.bazel
+pub.hook_assets(package = "sqlite3")
+use_repo(pub, "pub_sqlite3_hook_assets")
+```
+
+```starlark
+flutter_library(
+    name = "app_lib",
+    hook_assets = ["@pub_sqlite3_hook_assets"],
+    pubspec = "pubspec.yaml",
+    # ...
+)
+```
+
+The library mounts the files under `.rules_flutter/hook_assets/<package>/` in
+its workspace and adds `hooks.user_defines` to the workspace copy of
+pubspec.yaml so the hook reads them from there. The source pubspec.yaml is not
+changed, and must not declare its own top-level `hooks:` section. The
+downloads follow the package version pinned in pub_deps.json, so dependency
+updates need no change in MODULE.bazel. Supported packages: `sqlite3`.
+
+For a package without built-in support, declare the files and the
+user_defines that select the hook's local mode yourself with
+`flutter_hook_assets`, and list that target in `hook_assets`.
+
+Only Bazel actions use the mounted files. Builds that read the source
+pubspec.yaml directly, such as `flutter run` outside Bazel, still let the hook
+download.
+
 ## Protobuf: dart_proto_library
 
 `dart_proto_library` wraps the Dart protoc plugin (run from its own pinned pub

@@ -76,6 +76,20 @@ pub_dev_repository = repository_rule(
     },
 )
 ''')
+        self.write("flutter/private/hook_assets_repository.bzl", '''HOOK_ASSET_ADAPTERS = {"sqlite3": None}
+
+def _impl(ctx):
+    fail("Inspect repository declarations without downloading hook assets")
+
+pub_hook_assets_repository = repository_rule(
+    implementation = _impl,
+    attrs = {
+        "package": attr.string(),
+        "package_pubspec": attr.label(),
+        "variant": attr.string(),
+    },
+)
+''')
         (self.root / "registry").mkdir()
         self.startup = [
             str(BAZEL),
@@ -117,17 +131,20 @@ pub = use_extension("//flutter:extensions.bzl", "pub")
             "dependencies": [],
         }]}))
 
-    def show(self, package="alpha", version="1.0.0", mode="update", expected_error=None):
+    def show_repo(self, repo, mode="update"):
         # Bazel 9 resolves embedded bazel_tools before MODULE.bazel overrides.
         # Override the canonical repository to keep this fixture offline.
-        result = subprocess.run(
-            self.startup + ["mod", "show_repo", "@@+pub+pub_" + package,
+        return subprocess.run(
+            self.startup + ["mod", "show_repo", "@@+pub+" + repo,
                             "--override_repository=bazel_tools=" + str(self.workspace / "tools"),
                             "--registry=" + (self.root / "registry").as_uri(),
                             "--lockfile_mode=" + mode, "--color=no", "--curses=no"],
             cwd=self.workspace, env=self.env, capture_output=True, text=True,
             timeout=90,
         )
+
+    def show(self, package="alpha", version="1.0.0", mode="update", expected_error=None):
+        result = self.show_repo("pub_" + package, mode=mode)
         if expected_error:
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn(expected_error, result.stderr)
@@ -139,6 +156,31 @@ pub = use_extension("//flutter:extensions.bzl", "pub")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('version = "' + version + '"', result.stdout)
         return result.stdout
+
+    def declare_hook_assets(self, package):
+        self.write("MODULE.bazel", '''module(name = "pub_extension_test")
+pub = use_extension("//flutter:extensions.bzl", "pub")
+pub.from_file(pub_deps = "//app:pub_deps.json")
+pub.hook_assets(package = "{package}")
+use_repo(pub, "pub_{package}_hook_assets")
+'''.format(package=package))
+        self.write("app/BUILD.bazel", 'exports_files(["pub_deps.json"])\n')
+
+    def test_hook_assets_reads_the_package_repository(self):
+        self.report("app/pub_deps.json", package="sqlite3", version="3.3.3")
+        self.declare_hook_assets("sqlite3")
+        result = self.show_repo("pub_sqlite3_hook_assets")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('package = "sqlite3"', result.stdout)
+        # The adapter reads the hash table of the pinned package version.
+        self.assertIn('package_pubspec = Label("@@+pub+pub_sqlite3//:pubspec.yaml")', result.stdout)
+
+    def test_hook_assets_requires_a_registered_package(self):
+        self.report("app/pub_deps.json")
+        self.declare_hook_assets("sqlite3")
+        result = self.show_repo("pub_sqlite3_hook_assets")
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no pub_deps.json or pub.package tag registers that package", result.stderr)
 
     def test_dependency_changes_do_not_change_lockfile(self):
         self.report("app/pub_deps.json")

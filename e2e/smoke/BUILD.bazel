@@ -118,6 +118,7 @@ test_suite(
         "//codegen_app:lib_test",
         "//dart_package:dart_package_test",
         "//dart_package:lib_analyze",
+        "//hook_assets:hook_assets_workspace_test",
         "//flutter_app:app_build_test",
         "//flutter_app:build_runner_mode_targets_test",
         "//flutter_app:build_runner_multirun_target_test",

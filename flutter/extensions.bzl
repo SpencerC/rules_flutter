@@ -10,6 +10,7 @@ names (the latest version will be picked for each name) and can register them as
 effectively overriding the default named toolchain due to toolchain resolution precedence.
 """
 
+load("//flutter/private:hook_assets_repository.bzl", "HOOK_ASSET_ADAPTERS", "pub_hook_assets_repository")
 load("//flutter/private:pub_repository.bzl", "pub_dev_repository")
 load("//flutter/private:version_select.bzl", "highest_version")
 load("//flutter/private:versions.bzl", "TOOL_VERSIONS")
@@ -125,6 +126,42 @@ root module's declarations are read.
         "pub_deps": attr.label(
             doc = "The `pub_deps.json` report, e.g. `//app:pub_deps.json`.",
             mandatory = True,
+        ),
+    },
+)
+
+pub_hook_assets = tag_class(
+    doc = """\
+Downloads a pub package's build-hook assets through Bazel.
+
+Some packages' build hooks download native binaries from GitHub in every
+Flutter build and test action, and fail the action when a download fails.
+This tag creates the repository `@pub_<package>_hook_assets`, which downloads the
+same files once (pinned by the sha256 values the package itself ships) and
+declares a `flutter_hook_assets` target of the same name. List it in a
+flutter_library's `hook_assets` to have the hook read the files instead:
+
+```starlark
+pub.hook_assets(package = "sqlite3")
+use_repo(pub, "pub_sqlite3_hook_assets")
+
+flutter_library(..., hook_assets = ["@pub_sqlite3_hook_assets"])
+```
+
+The downloads follow the package version that pub_deps.json pins, so a
+dependency update needs no change here. Supported packages: {packages}.
+Only the root module's declarations are read.
+""".format(packages = ", ".join(sorted(HOOK_ASSET_ADAPTERS.keys()))),
+    attrs = {
+        "package": attr.string(
+            doc = "The pub package whose hook downloads to replace.",
+            mandatory = True,
+            values = sorted(HOOK_ASSET_ADAPTERS.keys()),
+        ),
+        "variant": attr.string(
+            doc = "Package-specific selection. For sqlite3, the library the app " +
+                  "loads: `sqlite3` (default), `sqlite3mc` or `sqlcipher`, matching " +
+                  "the hook's `source` user_define.",
         ),
     },
 )
@@ -393,6 +430,8 @@ def _pub_extension(module_ctx):
                 tagged = True,
             )
 
+    _declare_hook_assets(module_ctx, repos)
+
     # Restrict recorded edges to hosted packages that actually have repos and
     # break dependency cycles so the generated target graph is a DAG.
     known_packages = set([meta["package"] for meta in repos.values()])
@@ -429,7 +468,32 @@ def _pub_extension(module_ctx):
     # otherwise make independent dependency updates conflict on the same line.
     return module_ctx.extension_metadata(reproducible = True)
 
+def _declare_hook_assets(module_ctx, repos):
+    """Create one pub_hook_assets_repository per root pub.hook_assets tag."""
+    repo_by_package = {meta["package"]: name for name, meta in repos.items()}
+    declared = {}
+    for mod in module_ctx.modules:
+        if not mod.is_root:
+            continue
+        for tag in mod.tags.hook_assets:
+            if tag.package in declared:
+                fail("pub.hook_assets declares package '{}' more than once".format(tag.package))
+            declared[tag.package] = True
+            package_repo = repo_by_package.get(tag.package)
+            if not package_repo:
+                fail("pub.hook_assets(package = '{}'): no pub_deps.json or pub.package tag registers that package".format(tag.package))
+            pub_hook_assets_repository(
+                name = _sanitize_repo_name(tag.package) + "_hook_assets",
+                package = tag.package,
+                package_pubspec = "@{}//:pubspec.yaml".format(package_repo),
+                variant = tag.variant,
+            )
+
 pub = module_extension(
     implementation = _pub_extension,
-    tag_classes = {"from_file": pub_from_file, "package": pub_package},
+    tag_classes = {
+        "from_file": pub_from_file,
+        "hook_assets": pub_hook_assets,
+        "package": pub_package,
+    },
 )

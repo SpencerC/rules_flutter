@@ -113,6 +113,49 @@ to run every test under test_files (only safe when golden is the sole skip).
 | <a id="flutter_goldens-test_tags"></a>test_tags |  Tags passed to `flutter test --tags`, scoping --run-skipped. Defaults to ["golden"] so only golden-tagged tests are un-skipped and rendered — a test that is `skip: true` for an unrelated reason (parked/flaky/platform) is never run. Set to [] to run every test under test_files (unscoped --run-skipped; only safe when golden is the sole skip).   | List of strings | optional |  `["golden"]`  |
 
 
+<a id="flutter_hook_assets"></a>
+
+## flutter_hook_assets
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "flutter_hook_assets")
+
+flutter_hook_assets(<a href="#flutter_hook_assets-name">name</a>, <a href="#flutter_hook_assets-srcs">srcs</a>, <a href="#flutter_hook_assets-directory_define">directory_define</a>, <a href="#flutter_hook_assets-package">package</a>, <a href="#flutter_hook_assets-user_defines">user_defines</a>)
+</pre>
+
+Files that a pub package's build hook reads instead of downloading them.
+
+List the target in a flutter_library's `hook_assets`. The library mounts `srcs`
+flat into `.rules_flutter/hook_assets/<package>/` in its workspace and adds
+`hooks.user_defines.<package>` to the workspace's pubspec.yaml, with
+`directory_define` set to that directory (with a trailing slash). The source
+pubspec.yaml stays unchanged and must not declare a top-level `hooks:` section.
+
+For packages with a known adapter, `pub.hook_assets` in MODULE.bazel generates
+this target, including the downloads. Use the rule directly for other packages:
+
+```starlark
+flutter_hook_assets(
+    name = "foo_hook_assets",
+    package = "foo",
+    srcs = ["@foo_prebuilt//:libraries"],
+    user_defines = {"source": "local"},
+    directory_define = "directory",
+)
+```
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="flutter_hook_assets-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="flutter_hook_assets-srcs"></a>srcs |  Files the hook reads. They are mounted flat, by basename.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="flutter_hook_assets-directory_define"></a>directory_define |  user_defines key to set to the mount directory, with a trailing slash. Empty sets none.   | String | optional |  `""`  |
+| <a id="flutter_hook_assets-package"></a>package |  Name of the pub package whose build hook reads the files.   | String | required |  |
+| <a id="flutter_hook_assets-user_defines"></a>user_defines |  user_defines that select the hook's local-file mode, e.g. `{"source": "local"}`.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+
+
 <a id="flutter_test"></a>
 
 ## flutter_test
@@ -202,6 +245,28 @@ Generated Dart sources produced from .proto files.
 | Name  | Description |
 | :------------- | :------------- |
 | <a id="DartProtoLibraryInfo-sources"></a>sources |  Depset of tree artifacts, one per proto_library in the transitive closure, each laid out by proto import path (e.g. `api/v1/service.pb.dart`). Mount them into a package workspace with the `generated_srcs` attribute of flutter_library/dart_library.    |
+
+
+<a id="FlutterHookAssetsInfo"></a>
+
+## FlutterHookAssetsInfo
+
+<pre>
+load("@rules_flutter//flutter:defs.bzl", "FlutterHookAssetsInfo")
+
+FlutterHookAssetsInfo(<a href="#FlutterHookAssetsInfo-package">package</a>, <a href="#FlutterHookAssetsInfo-files">files</a>, <a href="#FlutterHookAssetsInfo-user_defines">user_defines</a>, <a href="#FlutterHookAssetsInfo-directory_define">directory_define</a>)
+</pre>
+
+Files a pub package's build hook reads, and the user_defines that point it at them.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="FlutterHookAssetsInfo-package"></a>package |  Name of the pub package whose build hook reads the files.    |
+| <a id="FlutterHookAssetsInfo-files"></a>files |  Depset of the files, mounted flat into one workspace directory.    |
+| <a id="FlutterHookAssetsInfo-user_defines"></a>user_defines |  Dict of string user_defines to set for the package.    |
+| <a id="FlutterHookAssetsInfo-directory_define"></a>directory_define |  user_defines key that receives the mount directory, or empty.    |
 
 
 <a id="FlutterLibraryInfo"></a>
