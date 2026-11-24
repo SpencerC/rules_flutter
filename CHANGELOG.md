@@ -9,6 +9,11 @@ it reaches 1.0.
 
 ### Added
 
+- The Flutter SDK repository is declared reproducible, so Bazel 9 shares one
+  copy of the SDK across workspaces through its repo contents cache instead of
+  extracting it into every output base. With one output base per worktree,
+  the per-workspace copies (about 4 GB each) added up quickly.
+
 - `pub.from_file(pub_deps = ...)` declares the `pub_deps.json` reports the
   `pub` extension reads. Declaring any report replaces the root-module scan,
   which watches the listing of every directory it visits: on Bazel 9.2 a
@@ -18,6 +23,15 @@ it reaches 1.0.
   A declared report is watched as a file.
 
 ### Fixed
+
+- Android builds no longer write into the Flutter SDK repository. The app's
+  `settings.gradle` includes Flutter's Gradle plugin from
+  `packages/flutter_tools/gradle`, and the `no-sandbox` Android action let
+  Gradle create `.gradle/`, `build/` and `.kotlin/` there, so Bazel reported
+  the repository as "modified externally" and re-fetched the whole SDK on the
+  next invocation. The action now sends those directories to its scratch
+  space, and the directory is sealed read-only at fetch time alongside
+  `bin/cache`.
 
 - Flutter SDK package repositories resolve their hosted dependencies against
   the SDK's own workspace lockfile (`flutter/pubspec.lock`) instead of

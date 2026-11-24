@@ -1,7 +1,7 @@
 #!/bin/bash
-# Asserts the hermeticity guarantee: the Flutter SDK's bin/cache is sealed
-# read-only at fetch time, so no build action or run helper can mutate the
-# external repository.
+# Asserts the hermeticity guarantee: the Flutter SDK's bin/cache and its
+# Gradle plugin directory are sealed read-only at fetch time, so no build
+# action or run helper can mutate the external repository.
 set -euo pipefail
 
 FLUTTER_BIN="$(find -L "${TEST_SRCDIR:-$PWD}" -path "*flutter_sdk/bin/flutter" 2>/dev/null | head -n 1)"
@@ -30,4 +30,18 @@ if [ -w "$CACHE_DIR/lockfile" ]; then
     exit 1
 fi
 
-echo "✓ SDK bin/cache is sealed read-only"
+# Android builds include Flutter's Gradle plugin from this directory; its
+# .gradle/, build/ and .kotlin/ output must go to action scratch space.
+GRADLE_PLUGIN_DIR="$(dirname "$(dirname "$REAL_BIN")")/packages/flutter_tools/gradle"
+if [ ! -d "$GRADLE_PLUGIN_DIR" ]; then
+    echo "✗ SDK Gradle plugin directory not found at $GRADLE_PLUGIN_DIR" >&2
+    exit 1
+fi
+
+if mkdir "$GRADLE_PLUGIN_DIR/.rules_flutter_mutation_probe" 2>/dev/null; then
+    rmdir "$GRADLE_PLUGIN_DIR/.rules_flutter_mutation_probe"
+    echo "✗ SDK packages/flutter_tools/gradle is writable; expected it to be sealed read-only at fetch time" >&2
+    exit 1
+fi
+
+echo "✓ SDK bin/cache and packages/flutter_tools/gradle are sealed read-only"
