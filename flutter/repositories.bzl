@@ -65,11 +65,30 @@ else
   echo "" >"$FLUTTER_ROOT/bin/cache/engine.realm"
 fi"""
 
+# Newer SDKs write the stamp atomically and quote the engine/realm values.
+_ENGINE_VERSION_WRITE_ATOMIC = """# Write the engine version out so downstream tools know what to look for.
+# Use a temporary file and atomic mv to prevent race conditions during parallel flutter executions.
+pid=$$
+es_tmp="$FLUTTER_ROOT/bin/cache/engine.stamp.tmp.$pid"
+trap 'rm -f "$es_tmp"' EXIT
+echo "$ENGINE_VERSION" >"$es_tmp" && mv "$es_tmp" "$FLUTTER_ROOT/bin/cache/engine.stamp"
+trap - EXIT
+
+# The realm on CI is passed in.
+if [ -n "${FLUTTER_REALM}" ]; then
+  echo "$FLUTTER_REALM" >"$FLUTTER_ROOT/bin/cache/engine.realm"
+else
+  echo "" >"$FLUTTER_ROOT/bin/cache/engine.realm"
+fi"""
+
 _ENGINE_VERSION_WRITE_PATCHED = """# Write the engine version out so downstream tools know what to look for.
 # Patched by rules_flutter: skip writes when the content is already correct so
 # launcher invocations never mutate the Bazel external repository.
 if [ "$(cat "$FLUTTER_ROOT/bin/cache/engine.stamp" 2>/dev/null)" != "$ENGINE_VERSION" ]; then
-  echo $ENGINE_VERSION >"$FLUTTER_ROOT/bin/cache/engine.stamp"
+  es_tmp="$FLUTTER_ROOT/bin/cache/engine.stamp.tmp.$$"
+  trap 'rm -f "$es_tmp"' EXIT
+  echo "$ENGINE_VERSION" >"$es_tmp" && mv "$es_tmp" "$FLUTTER_ROOT/bin/cache/engine.stamp"
+  trap - EXIT
 fi
 
 # The realm on CI is passed in.
@@ -84,7 +103,10 @@ def _patch_engine_version_script(repository_ctx):
     if not repository_ctx.path(script_path).exists:
         return
     content = repository_ctx.read(script_path)
-    if _ENGINE_VERSION_WRITE_ORIGINAL not in content:
+    original = _ENGINE_VERSION_WRITE_ORIGINAL
+    if _ENGINE_VERSION_WRITE_ATOMIC in content:
+        original = _ENGINE_VERSION_WRITE_ATOMIC
+    if original not in content:
         # Layout changed upstream; fail loudly rather than silently shipping a
         # mutating launcher. Update the patch alongside new Flutter versions.
         fail("rules_flutter: unable to patch {} for Flutter {}: unexpected script content. ".format(
@@ -93,7 +115,7 @@ def _patch_engine_version_script(repository_ctx):
         ) + "Update _ENGINE_VERSION_WRITE_ORIGINAL in flutter/repositories.bzl.")
     repository_ctx.file(
         script_path,
-        content.replace(_ENGINE_VERSION_WRITE_ORIGINAL, _ENGINE_VERSION_WRITE_PATCHED),
+        content.replace(original, _ENGINE_VERSION_WRITE_PATCHED),
         executable = True,
         legacy_utf8 = False,
     )
@@ -107,21 +129,20 @@ _COVERAGE_COLLECT_ORIGINAL = """  return coverage.collect(
     coverableLineCache: coverableLineCache,
   );"""
 
-_COVERAGE_COLLECT_PATCHED = """  return coverage.collect(
-    serviceUri, false, false, false, libraryNames,
-    serviceOverrideForTesting: serviceOverride?.service,
-    branchCoverage: branchCoverage,
-    coverableLineCache: coverableLineCache,
-    functionCoverage: true,
-  );"""
-
 def _patch_coverage_collector(repository_ctx):
     """Make `flutter test --coverage` also collect function coverage."""
     script_path = "flutter/packages/flutter_tools/lib/src/test/coverage_collector.dart"
     if not repository_ctx.path(script_path).exists:
         return
     content = repository_ctx.read(script_path)
-    if _COVERAGE_COLLECT_ORIGINAL not in content:
+
+    # Dart's formatter changed the positional arguments to one per line.
+    modern = _COVERAGE_COLLECT_ORIGINAL.replace(
+        "    serviceUri, false, false, false, libraryNames,",
+        "    serviceUri,\n    false,\n    false,\n    false,\n    libraryNames,",
+    )
+    original = modern if modern in content else _COVERAGE_COLLECT_ORIGINAL
+    if original not in content:
         # Layout changed upstream; fail loudly rather than shipping an
         # unpatched collector.
         fail("rules_flutter: unable to patch {} for Flutter {}: unexpected script content. ".format(
@@ -130,7 +151,10 @@ def _patch_coverage_collector(repository_ctx):
         ) + "Update _COVERAGE_COLLECT_ORIGINAL in flutter/repositories.bzl.")
     repository_ctx.file(
         script_path,
-        content.replace(_COVERAGE_COLLECT_ORIGINAL, _COVERAGE_COLLECT_PATCHED),
+        content.replace(original, original.replace(
+            "    coverableLineCache: coverableLineCache,",
+            "    coverableLineCache: coverableLineCache,\n    functionCoverage: true,",
+        )),
         legacy_utf8 = False,
     )
 

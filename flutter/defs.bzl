@@ -2393,7 +2393,7 @@ if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ] && [ "$BRANCH_COVERAGE" = "1" ]; then
 fi
 
 # Package scoping via flutter's native repeatable --coverage-package flag.
-if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ] && [ -n "$COVERAGE_PACKAGES" ]; then
+if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ]; then
     for coverage_package in ${{COVERAGE_PACKAGES[@]+"${{COVERAGE_PACKAGES[@]}}"}}; do
         CMD+=("$coverage_package")
     done
@@ -2471,7 +2471,21 @@ popd >/dev/null
 if [ -n "${{COVERAGE_OUTPUT_FILE:-}}" ]; then
     if [ -f "$RUNTIME_WORKSPACE/coverage/lcov.info" ]; then
         mkdir -p "$(dirname "$COVERAGE_OUTPUT_FILE")"
-        cp "$RUNTIME_WORKSPACE/coverage/lcov.info" "$COVERAGE_OUTPUT_FILE"
+        # Flutter reports paths relative to its temporary package. Bazel merges
+        # by SF name, so rebase to the embedded library's original package.
+        "$PYTHON_BIN" - "$RUNTIME_WORKSPACE/coverage/lcov.info" "$COVERAGE_OUTPUT_FILE" {coverage_source_root} <<'PY'
+import posixpath
+import sys
+
+source, destination, package = sys.argv[1:]
+with open(source) as src, open(destination, "w") as dest:
+    for line in src:
+        if line.startswith("SF:"):
+            path = line[3:].rstrip("\\n")
+            path = posixpath.normpath(posixpath.join(package, path))
+            line = "SF:" + path + "\\n"
+        dest.write(line)
+PY
     else
         echo "⚠ --coverage requested but coverage/lcov.info was not produced" >&2
     fi
@@ -2491,6 +2505,7 @@ exit "$RESULT"
         branch_coverage = "1" if ctx.attr.branch_coverage else "",
         extra_args = extra_args_literal,
         coverage_packages = coverage_packages_literal,
+        coverage_source_root = _shell_quote(paths.dirname(library_info.pubspec.short_path)),
     )
 
     ctx.actions.write(

@@ -735,6 +735,7 @@ bazel test //my_app:all
 runs a target under coverage (setting `COVERAGE_OUTPUT_FILE`), the runner
 passes `--coverage` to `flutter test` and copies the produced
 `coverage/lcov.info` to the location Bazel's coverage machinery expects, so
+source paths are rebased to the embedded library’s workspace location and
 the combined report contains real Dart lcov (including function records —
 `FN`/`FNDA`/`FNF`/`FNH` — enabled by a fetch-time flutter_tools patch).
 
@@ -765,6 +766,21 @@ flutter_test(
 ```bash
 bazel coverage //my_app:lib_test --combined_report=lcov
 ```
+
+Coverage CI runs the native test fixtures under `e2e/smoke/coverage_fixtures`
+against the pinned, README, and newest supported SDK versions. It verifies
+separate source paths and hit counts, default and opt-in coverage options, and
+cache invalidation after source and runner changes. To run a matrix leg locally:
+
+```bash
+cd e2e/smoke
+bazel run //:coverage_ci -- pinned
+# Other selectors: documented, latest, or an explicit supported version.
+```
+
+The driver stages a temporary source checkout and invokes Bazel outside any
+test action. Downloads are confined to repository fetching; the Flutter tests
+use their declared inputs and normal Bazel sandboxing and caching.
 
 ## Write-back helpers
 
