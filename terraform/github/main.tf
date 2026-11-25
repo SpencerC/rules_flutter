@@ -40,12 +40,17 @@ locals {
   ci             = yamldecode(file("${path.module}/../../.github/workflows/ci.yaml"))
   test_matrix    = local.ci.jobs.test.strategy.matrix
   example_matrix = local.ci.jobs.example.strategy.matrix
+  # Allow this configuration to land before the coverage job is introduced.
+  coverage_matrix = try(local.ci.jobs.coverage.strategy.matrix, { os = [], sdk = [] })
   required_checks = toset(concat(
     [for axes in setproduct(local.test_matrix.os, local.test_matrix.bazel, local.test_matrix.folder) :
       format("test (%s, %s, %s)", axes[0], axes[1], axes[2])
     ],
     [for axes in setproduct(local.example_matrix.os, local.example_matrix.bazel) :
       format("example (%s, %s)", axes[0], axes[1])
+    ],
+    [for axes in setproduct(local.coverage_matrix.os, local.coverage_matrix.sdk) :
+      format("coverage (%s, %s)", axes[0], axes[1])
     ],
     ["docs", "pre-commit", "conclusion"],
   ))
