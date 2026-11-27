@@ -3,8 +3,9 @@
 This Terraform root manages `SpencerC/rules_flutter` and adopts its existing
 `Main` ruleset (ID `9014601`). It enables:
 
-- Required checks for every test and example matrix job in
+- Required checks for every test, example, and coverage matrix job in
   `.github/workflows/ci.yaml`, plus `docs`, `pre-commit`, and `conclusion`.
+  The coverage matrix is optional until its CI job is introduced.
   Checks must come from GitHub Actions; no actor has a bypass.
 - Pull requests with squash merges, linear history, and protection against
   deleting or force-pushing the default branch. The existing zero-review
@@ -38,7 +39,11 @@ moving to a different machine. Do not commit state or saved plans. The checked-i
 import blocks also allow a new administrator to adopt the resources again.
 
 When changing the CI matrix, review and apply the updated Terraform plan with
-that change. The required check names are derived from the workflow, rather
+that change, from a checkout containing the merged workflow. Do not apply new
+coverage requirements before those jobs are published. The Terraform change can
+land first: an absent coverage job contributes no required checks.
+
+The required check names are derived from the workflow, rather
 than a separate version list. The explicit final CI gate rejects failed,
 cancelled, skipped, or missing job results.
 
