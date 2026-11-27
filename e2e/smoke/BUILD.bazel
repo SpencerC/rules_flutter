@@ -128,6 +128,7 @@ test_suite(
         "//flutter_app:lib_test_reference_cache",
         "//flutter_app:lib_test_sharded",
         "//flutter_app:web_build_args_test",
+        "//hook_assets:hook_assets_workspace_test",
         "//proto_service:proto_generation_test",
         "//shell_example:test_access",
     ],

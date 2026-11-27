@@ -1,0 +1,10 @@
+{
+  "packages": [
+    {
+      "name": "hook_assets_app",
+      "dependency": "root",
+      "source": "root",
+      "version": "1.0.0"
+    }
+  ]
+}

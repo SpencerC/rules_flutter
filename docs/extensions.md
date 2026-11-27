@@ -44,6 +44,7 @@ flutter.toolchain(<a href="#flutter.toolchain-name">name</a>, <a href="#flutter.
 <pre>
 pub = use_extension("@rules_flutter//flutter:extensions.bzl", "pub")
 pub.from_file(<a href="#pub.from_file-pub_deps">pub_deps</a>)
+pub.hook_assets(<a href="#pub.hook_assets-package">package</a>, <a href="#pub.hook_assets-variant">variant</a>)
 pub.package(<a href="#pub.package-name">name</a>, <a href="#pub.package-package">package</a>, <a href="#pub.package-version">version</a>)
 </pre>
 
@@ -68,6 +69,37 @@ root module's declarations are read.
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pub.from_file-pub_deps"></a>pub_deps |  The `pub_deps.json` report, e.g. `//app:pub_deps.json`.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+<a id="pub.hook_assets"></a>
+
+### hook_assets
+
+Downloads a pub package's build-hook assets through Bazel.
+
+Some packages' build hooks download native binaries from GitHub in every
+Flutter build and test action, and fail the action when a download fails.
+This tag creates the repository `@pub_<package>_hook_assets`, which downloads the
+same files once (pinned by the sha256 values the package itself ships) and
+declares a `flutter_hook_assets` target of the same name. List it in a
+flutter_library's `hook_assets` to have the hook read the files instead:
+
+```starlark
+pub.hook_assets(package = "sqlite3")
+use_repo(pub, "pub_sqlite3_hook_assets")
+
+flutter_library(..., hook_assets = ["@pub_sqlite3_hook_assets"])
+```
+
+The downloads follow the package version that pub_deps.json pins, so a
+dependency update needs no change here. Supported packages: sqlite3.
+Only the root module's declarations are read.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pub.hook_assets-package"></a>package |  The pub package whose hook downloads to replace.   | String | required |  |
+| <a id="pub.hook_assets-variant"></a>variant |  Package-specific selection. For sqlite3, the library the app loads: `sqlite3` (default), `sqlite3mc` or `sqlcipher`, matching the hook's `source` user_define.   | String | optional |  `""`  |
 
 <a id="pub.package"></a>
 

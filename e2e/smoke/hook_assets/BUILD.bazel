@@ -1,0 +1,26 @@
+load("@rules_flutter//flutter:defs.bzl", "flutter_hook_assets", "flutter_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# A stand-in for a package whose build hook downloads libfixture.* unless
+# user_defines point it at a local directory.
+flutter_hook_assets(
+    name = "fixture_hook_assets",
+    srcs = ["prebuilt/libfixture.x64.linux.so"],
+    directory_define = "directory",
+    package = "fixture",
+    user_defines = {"source": "local"},
+)
+
+flutter_library(
+    name = "lib",
+    srcs = glob(["lib/**"]),
+    hook_assets = [":fixture_hook_assets"],
+    pubspec = "pubspec.yaml",
+    deps = ["@flutter_sdk//flutter/packages/flutter"],
+)
+
+sh_test(
+    name = "hook_assets_workspace_test",
+    srcs = ["hook_assets_workspace_test.sh"],
+    data = [":lib"],
+)

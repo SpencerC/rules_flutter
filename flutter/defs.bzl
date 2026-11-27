@@ -14,6 +14,16 @@ load(
     "flutter_stage_pub_package_action",
     "tree_output_execution_requirements",
 )
+load(
+    "//flutter/private:hook_assets.bzl",
+    "hook_assets_entries",
+    "render_hook_user_defines",
+    _FlutterHookAssetsInfo = "FlutterHookAssetsInfo",
+    _flutter_hook_assets = "flutter_hook_assets",
+)
+
+FlutterHookAssetsInfo = _FlutterHookAssetsInfo
+flutter_hook_assets = _flutter_hook_assets
 
 FlutterLibraryInfo = provider(
     doc = "Outputs from flutter_library needed to build or test Flutter targets.",
@@ -996,13 +1006,20 @@ def _flutter_library_impl(ctx):
             ),
         ]
 
+    hook_assets = [t[FlutterHookAssetsInfo] for t in ctx.attr.hook_assets]
+    pubspec_hooks = None
+    if hook_assets:
+        pubspec_hooks = ctx.actions.declare_file(ctx.label.name + "_pubspec_hooks.yaml")
+        ctx.actions.write(pubspec_hooks, render_hook_user_defines(hook_assets))
+
     working_dir, _ = create_flutter_working_dir(
         ctx,
         pubspec_file,
         dart_files,
         other_files,
         list(ctx.files.data),
-        extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs),
+        extra_entries = _generated_srcs_entries(ctx.attr.generated_srcs) + hook_assets_entries(hook_assets),
+        pubspec_hooks = pubspec_hooks,
         allow_remote_exec = _allow_remote_exec(ctx),
         remote_cache_trees = _remote_cache_trees(ctx),
     )
@@ -1078,6 +1095,15 @@ directory inside the Flutter workspace, e.g.
 `{"//protos/api/v1:api_dart_proto": "lib/generated/protos"}`. dart_proto_library
 targets mount each generated file at its proto-import-relative path under the
 destination; other targets mount flat by basename.""",
+        ),
+        "hook_assets": attr.label_list(
+            providers = [FlutterHookAssetsInfo],
+            doc = """flutter_hook_assets targets (e.g. `@pub_sqlite3_hook_assets` from
+`pub.hook_assets`) whose files the packages' build hooks read instead of
+downloading them. Each is mounted under `.rules_flutter/hook_assets/<package>/`
+and its user_defines are added to the workspace's pubspec.yaml as a `hooks:`
+section, so the source pubspec.yaml must not declare one. Downstream targets
+(flutter_test, flutter_app) build from this workspace and inherit both.""",
         ),
         "generator_commands": attr.string_list(
             doc = "List of one-shot generator commands to run via `dart run` (e.g., ['intl_utils:generate']).",

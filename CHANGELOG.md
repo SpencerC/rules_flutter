@@ -9,6 +9,14 @@ it reaches 1.0.
 
 ### Added
 
+- `pub.hook_assets(package = ...)` and `flutter_library(hook_assets = ...)`
+  stop a package's build hook from downloading native binaries in every build
+  and test action. Bazel downloads the files once at fetch time, pinned by the
+  sha256 values the package ships, and the library points the hook at them
+  through `hooks.user_defines` in its workspace's pubspec.yaml. `sqlite3` is
+  supported out of the box; `flutter_hook_assets` declares the files and
+  user_defines for other packages.
+
 - The Flutter SDK repository is declared reproducible, so Bazel 9 shares one
   copy of the SDK across workspaces through its repo contents cache instead of
   extracting it into every output base. With one output base per worktree,

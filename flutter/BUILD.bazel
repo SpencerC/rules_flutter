@@ -112,6 +112,7 @@ bzl_library(
     deps = [
         ":toolchain",
         "//flutter/private:flutter_actions",
+        "//flutter/private:hook_assets",
         "@bazel_skylib//lib:paths",
         "@bazel_skylib//rules:common_settings",
         "@protobuf//bazel/common:proto_common_bzl",
@@ -125,6 +126,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         ":repositories",
+        "//flutter/private:hook_assets_repository",
         "//flutter/private:pub_repository",
         "//flutter/private:version_select",
         "//flutter/private:versions",
