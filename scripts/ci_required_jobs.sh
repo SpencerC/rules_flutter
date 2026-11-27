@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-    echo "Expected results for test, example, docs, and pre-commit" >&2
+if [[ $# -ne 5 ]]; then
+    echo "Expected results for test, example, docs, pre-commit, and coverage" >&2
     exit 1
 fi
 for result in "$@"; do

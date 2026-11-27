@@ -5,6 +5,7 @@ Add a basic smoke-test target below.
 load("@bazel_gazelle//:def.bzl", "gazelle", "gazelle_binary")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@rules_flutter//flutter:defs.bzl", "dart_library")
+load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_python//python:py_test.bzl", "py_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
@@ -33,6 +34,15 @@ gazelle(
 filegroup(
     name = "gazelle_app_fixture",
     srcs = glob(["gazelle_app/**"]),
+)
+
+# Native flutter_test actions own their declared inputs and cache keys.
+py_binary(
+    name = "coverage_ci",
+    srcs = ["coverage_ci.py"],
+    args = ["$(rootpath @pub_extension_test_bazel//:bazel)"],
+    data = ["@pub_extension_test_bazel//:bazel"],
+    deps = ["@rules_python//python/runfiles"],
 )
 
 py_test(
@@ -116,6 +126,8 @@ test_suite(
         ":smoke_test",
         "//codegen_app:codegen_build_test",
         "//codegen_app:lib_test",
+        "//coverage_fixtures/a:lib_test",
+        "//coverage_fixtures/b:lib_test",
         "//dart_package:dart_package_test",
         "//dart_package:lib_analyze",
         "//flutter_app:app_build_test",

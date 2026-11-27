@@ -120,7 +120,8 @@ to run every test under test_files (only safe when golden is the sole skip).
 <pre>
 load("@rules_flutter//flutter:defs.bzl", "flutter_test")
 
-flutter_test(<a href="#flutter_test-name">name</a>, <a href="#flutter_test-srcs">srcs</a>, <a href="#flutter_test-cpu">cpu</a>, <a href="#flutter_test-embed">embed</a>, <a href="#flutter_test-jobs">jobs</a>, <a href="#flutter_test-pub_cache_materialization">pub_cache_materialization</a>, <a href="#flutter_test-test_files">test_files</a>)
+flutter_test(<a href="#flutter_test-name">name</a>, <a href="#flutter_test-srcs">srcs</a>, <a href="#flutter_test-branch_coverage">branch_coverage</a>, <a href="#flutter_test-coverage_packages">coverage_packages</a>, <a href="#flutter_test-cpu">cpu</a>, <a href="#flutter_test-embed">embed</a>, <a href="#flutter_test-extra_args">extra_args</a>, <a href="#flutter_test-jobs">jobs</a>,
+             <a href="#flutter_test-pub_cache_materialization">pub_cache_materialization</a>, <a href="#flutter_test-test_files">test_files</a>)
 </pre>
 
 Runs Flutter tests using a prepared flutter_library workspace.
@@ -132,8 +133,11 @@ Runs Flutter tests using a prepared flutter_library workspace.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="flutter_test-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="flutter_test-srcs"></a>srcs |  Test source files to copy into the runtime workspace.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_test-branch_coverage"></a>branch_coverage |  Add --branch-coverage to `flutter test` under `bazel coverage`, emitting BRDA records. BRDA values are unreliable in the pinned 3.24.x SDKs (flutter#171580); treat them as a presence signal.   | Boolean | optional |  `False`  |
+| <a id="flutter_test-coverage_packages"></a>coverage_packages |  Regular expressions matching package names to include in the coverage report under `bazel coverage` (forwarded as repeatable --coverage-package flags). Unset keeps flutter's default: the runtime workspace's own package only.   | List of strings | optional |  `[]`  |
 | <a id="flutter_test-cpu"></a>cpu |  Local CPUs to reserve for this test (execution requirement `cpu:N`). 0 (default) declares nothing. Only useful together with `jobs`/sharding on large workers — reserving cores where none are spare just serializes tests that would otherwise overlap.   | Integer | optional |  `0`  |
 | <a id="flutter_test-embed"></a>embed |  flutter_library targets to embed for testing.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="flutter_test-extra_args"></a>extra_args |  Additional arguments forwarded to flutter test (e.g. --plain-name, --tags).   | List of strings | optional |  `[]`  |
 | <a id="flutter_test-jobs"></a>jobs |  Concurrency passed to `flutter test -j`. 0 (default) keeps flutter's own default (the number of cores). Cap this when several flutter_test targets run concurrently on one worker so their internal parallelism doesn't oversubscribe it.   | Integer | optional |  `0`  |
 | <a id="flutter_test-pub_cache_materialization"></a>pub_cache_materialization |  How the test materializes the (multi-GB) pub cache at run time. `auto` (default) APFS-clones it on macOS (fresh copy-on-write inodes, kept writable) and byte-copies elsewhere — behaviorally identical to `copy` everywhere. `copy` forces the historical byte copy. `hardlink` opts into linking the dereferenced files (near-instant, but the links share inodes with the Bazel-owned tree and stay read-only; falls back to a copy when linking isn't possible). `reference` skips materialization entirely and points the regenerated package config into the Bazel-provided cache read-only.   | String | optional |  `"auto"`  |
 | <a id="flutter_test-test_files"></a>test_files |  Test files or directories to run   | List of strings | optional |  `["test/"]`  |

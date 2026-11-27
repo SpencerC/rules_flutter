@@ -1,0 +1,24 @@
+load("@rules_flutter//flutter:defs.bzl", "flutter_library", "flutter_test")
+load("//coverage_fixtures:fixture.bzl", "sdk_test_deps")
+
+sdk_test_deps(
+    name = "deps",
+    package_name = "coverage_b",
+)
+
+flutter_library(
+    name = "lib",
+    srcs = ["lib/main.dart"],
+    pub_deps = ":deps",
+    pubspec = "pubspec.yaml",
+    deps = ["@flutter_sdk//flutter/packages/flutter_test"],
+)
+
+flutter_test(
+    name = "lib_test",
+    srcs = ["test/main_test.dart"],
+    branch_coverage = True,
+    coverage_packages = ["coverage_b"],
+    embed = [":lib"],
+    visibility = ["//visibility:public"],
+)
